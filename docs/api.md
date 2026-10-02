@@ -4,7 +4,8 @@
 
 - Base path: `/v1`
 - Content type: JSON unless an endpoint explicitly negotiates media or upload content.
-- Authentication: bearer access token with immutable user, organization, workspace, and role claims.
+- Authentication: bearer access token with immutable user, organization, workspace and role claims.
+- Public registration and booking routes are unauthenticated but resolve a published tenant resource by organization/workspace slug and never accept caller-supplied tenant IDs.
 - Create commands: `Idempotency-Key` is mandatory when a duplicate would be harmful.
 - Optimistic updates: `If-Match: <integer version>` is mandatory for versioned resources.
 - Success envelope: `{ "data": ..., "meta": { "requestId", "timestamp" } }`.
@@ -43,7 +44,7 @@
 | `PATCH` | `/v1/sessions/{id}` | update a session with `If-Match` |
 | `POST` | `/v1/sessions/{id}/publish` | move draft to scheduled |
 | `POST` | `/v1/sessions/{id}/start` | start draft or scheduled session |
-| `POST` | `/v1/sessions/{id}/end` | end a live session |
+| `POST` | `/v1/sessions/{id}/end` | end a live session and enqueue enabled memory artifacts |
 | `POST` | `/v1/sessions/{id}/cancel` | cancel draft or scheduled session |
 | `GET` | `/v1/sessions/{id}/agenda-items` | ordered agenda list |
 | `POST` | `/v1/sessions/{id}/agenda-items` | append an agenda item |
@@ -51,17 +52,84 @@
 | `POST` | `/v1/sessions/{id}/agenda-items/{itemId}/activate` | make item current and emit event |
 | `POST` | `/v1/sessions/{id}/media-token` | short-lived LiveKit room token |
 
+### Events and registrations
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/v1/events` | create event draft; idempotent |
+| `GET` | `/v1/events` | list workspace events and registration counts |
+| `GET` | `/v1/events/{id}` | event, linked webinar session and registration count |
+| `PATCH` | `/v1/events/{id}` | edit a draft with `If-Match` |
+| `POST` | `/v1/events/{id}/publish` | publish and atomically create scheduled webinar session |
+| `POST` | `/v1/events/{id}/cancel` | cancel event and cancel an eligible linked session |
+| `GET` | `/v1/events/{id}/registrations` | list registrations |
+| `PATCH` | `/v1/events/{eventId}/registrations/{registrationId}` | update attendance/registration status |
+| `GET` | `/v1/public/{orgSlug}/{workspaceSlug}/events/{eventSlug}` | public published event metadata |
+| `POST` | `/v1/public/{orgSlug}/{workspaceSlug}/events/{eventSlug}/registrations` | register or waitlist an attendee |
+
+### Booking pages and reservations
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/v1/bookings` | create booking page; idempotent |
+| `GET` | `/v1/bookings` | list pages and reservation counts |
+| `GET` | `/v1/bookings/{id}` | page details |
+| `PATCH` | `/v1/bookings/{id}` | update rules or active state with `If-Match` |
+| `GET` | `/v1/bookings/{id}/reservations` | list reservations and linked sessions |
+| `GET` | `/v1/public/{orgSlug}/{workspaceSlug}/bookings/{bookingSlug}` | public page metadata |
+| `GET` | `/v1/public/{orgSlug}/{workspaceSlug}/bookings/{bookingSlug}/slots` | generate available slots for a bounded date range |
+| `POST` | `/v1/public/{orgSlug}/{workspaceSlug}/bookings/{bookingSlug}/reservations` | lock a slot and atomically create reservation plus scheduled session |
+
+### In-session collaboration
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/v1/sessions/{id}/chat-messages` | list authorized durable messages |
+| `POST` | `/v1/sessions/{id}/chat-messages` | persist and broadcast a message |
+| `GET` | `/v1/sessions/{id}/polls` | list polls, options and response counts |
+| `POST` | `/v1/sessions/{id}/polls` | create poll |
+| `POST` | `/v1/sessions/{id}/polls/{pollId}/launch` | launch the only active poll |
+| `POST` | `/v1/sessions/{id}/polls/{pollId}/close` | close a live poll |
+| `POST` | `/v1/sessions/{id}/polls/{pollId}/answers` | idempotently record the current user's answer |
+| `GET` | `/v1/sessions/{id}/polls/{pollId}/results` | aggregate results with host-only text disclosure |
+| `GET` | `/v1/sessions/{id}/questions` | list questions visible to the principal |
+| `POST` | `/v1/sessions/{id}/questions` | submit question; webinar attendees enter moderation |
+| `POST` | `/v1/sessions/{id}/questions/{questionId}/vote` | toggle one vote per user |
+| `PATCH` | `/v1/sessions/{id}/questions/{questionId}` | host moderation and answer |
+
+### Memory and artifacts
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/v1/memory` | paginated memory library with optional title/transcript query |
+| `GET` | `/v1/memory/{sessionId}` | agenda, artifacts, transcript segments, chat, polls, Q&A and summary |
+| `POST` | `/v1/memory/{sessionId}/retry` | requeue failed recording, transcript and summary artifacts |
+| `GET` | `/v1/recordings/{sessionId}` | recording metadata and processing state |
+| `GET` | `/v1/transcripts/{sessionId}` | transcript metadata, text and ordered segments |
+
+## Realtime events
+
+Authenticated clients join `session:{sessionId}` through the `/realtime` Socket.IO namespace. Implemented server events include:
+
+- `participant.joined`, `participant.left`
+- `agenda.activated`
+- `chat.message.created`
+- `poll.created`, `poll.launched`, `poll.closed`, `poll.results.updated`
+- `question.created`, `question.updated`, `question.votes.updated`
+- `memory.updated`
+
+The current single-replica event bridge is in-process. A Redis/NATS adapter is a mandatory gate before horizontally scaling realtime API replicas.
+
 ## Planned endpoint families
 
-The following families define the contract direction; they are not claimed as implemented:
+The following families define the remaining contract direction; they are not claimed as implemented:
 
-- `/v1/events`, `/v1/events/{id}/publish`, `/registrations`, `/attendance`
-- `/v1/booking-pages`, `/availability`, `/slots`, `/reservations`
-- `/v1/recordings`, `/artifacts`, `/transcripts`, `/memory`, `/shares`
-- `/v1/polls`, `/answers`, `/questions`, `/chat-messages`, `/breakout-rooms`
+- `/v1/availability/connections`, `/calendar-connections`, `/reschedules`, `/cancellations`
+- `/v1/artifacts/{id}/playback`, `/shares`, `/retention`, `/exports`, `/deletions`
+- `/v1/whiteboards`, `/breakout-rooms`, `/attendance`, `/engagement-events`
 - `/v1/integrations`, `/oauth/connections`, `/webhooks`, `/api-keys`
 - `/v1/analytics`, `/usage`, `/exports`
-- `/v1/ai/jobs`, `/summaries`, `/actions`, `/follow-ups`
+- `/v1/ai/jobs`, `/agenda-drafts`, `/follow-ups`, `/evaluations`
 - `/v1/workspaces`, `/memberships`, `/invitations`, `/branding`, `/domains`
 - `/v1/plans`, `/subscriptions`, `/entitlements`, `/usage-reservations`
 
