@@ -8,6 +8,21 @@ export interface AgendaActivatedEvent {
   activatedAt: string;
 }
 
+export interface SessionRealtimeEvent {
+  sessionId: string;
+  eventName:
+    | 'chat.message.created'
+    | 'poll.created'
+    | 'poll.launched'
+    | 'poll.closed'
+    | 'poll.results.updated'
+    | 'question.created'
+    | 'question.updated'
+    | 'question.votes.updated'
+    | 'memory.updated';
+  payload: unknown;
+}
+
 /**
  * In-process bridge from committed application commands to the Socket.IO gateway.
  * A production multi-replica deployment must back this bridge with Redis/NATS so
@@ -16,14 +31,21 @@ export interface AgendaActivatedEvent {
 @Injectable()
 export class RealtimeEventsService implements OnModuleDestroy {
   private readonly agendaActivatedSubject = new Subject<AgendaActivatedEvent>();
+  private readonly sessionEventSubject = new Subject<SessionRealtimeEvent>();
 
   readonly agendaActivated$ = this.agendaActivatedSubject.asObservable();
+  readonly sessionEvents$ = this.sessionEventSubject.asObservable();
 
   publishAgendaActivated(event: AgendaActivatedEvent): void {
     this.agendaActivatedSubject.next(event);
   }
 
+  publishSessionEvent(event: SessionRealtimeEvent): void {
+    this.sessionEventSubject.next(event);
+  }
+
   onModuleDestroy(): void {
     this.agendaActivatedSubject.complete();
+    this.sessionEventSubject.complete();
   }
 }
