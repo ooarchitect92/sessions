@@ -22,6 +22,7 @@ jobs:
       - name: Apply recording architecture changes
         shell: bash
         run: |
+          # The patch is split into readable source files to keep this workflow auditable.
           cat scripts/recording-patch-part-*.txt > /tmp/apply-recording-existing.py
           python /tmp/apply-recording-existing.py
           rm -f scripts/recording-patch-part-*.txt
