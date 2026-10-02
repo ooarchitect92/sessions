@@ -289,33 +289,37 @@ export class AuthService {
       throw new UnauthorizedException('The MFA challenge is invalid or expired');
     }
 
+    const challengeId = claims.challengeId as string;
+    const challengeUserId = claims.sub as string;
+
     const result = await this.prisma.$transaction(async (transaction) => {
-      await transaction.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${claims.challengeId}, 0))`;
+      await transaction.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${challengeId}, 0))`;
       const challenge = await transaction.authChallenge.findUnique({
-        where: { id: claims.challengeId },
+        where: { id: challengeId },
         include: {
-          user: { include: { mfaFactor: true } },
+          user: true,
           workspace: { include: { organization: true } },
         },
       });
+      const factor = challenge
+        ? await transaction.userMfaFactor.findUnique({
+            where: { userId: challenge.userId },
+          })
+        : null;
       if (
         !challenge ||
-        challenge.userId !== claims.sub ||
+        challenge.userId !== challengeUserId ||
         challenge.purpose !== AuthChallengePurpose.MFA_LOGIN ||
         challenge.consumedAt ||
         challenge.expiresAt <= new Date() ||
         challenge.attempts >= MAX_LOGIN_ATTEMPTS ||
-        !challenge.user.mfaFactor?.verifiedAt ||
-        challenge.user.mfaFactor.disabledAt
+        !factor?.verifiedAt ||
+        factor.disabledAt
       ) {
         return { error: 'invalid_challenge' } as const;
       }
 
-      const verified = await this.verifyMfaCode(
-        transaction,
-        challenge.user.mfaFactor,
-        input.code,
-      );
+      const verified = await this.verifyMfaCode(transaction, factor, input.code);
       if (!verified) {
         const attempts = challenge.attempts + 1;
         await transaction.authChallenge.update({
@@ -355,11 +359,12 @@ export class AuthService {
     });
 
     if ('bundle' in result) return result.bundle;
-    if (result.error === 'workspace_access') {
+    const error = 'error' in result ? result.error : 'invalid_challenge';
+    if (error === 'workspace_access') {
       throw new ForbiddenException('Workspace access is no longer available');
     }
     throw new UnauthorizedException(
-      result.error === 'invalid_code'
+      error === 'invalid_code'
         ? 'The MFA code is invalid'
         : 'The MFA challenge is invalid or expired',
     );
@@ -1123,10 +1128,9 @@ export class AuthService {
     const secret = this.security.decryptMfaSecret(factor.encryptedSecret);
     if (/^\d{6}$/.test(code) && this.security.verifyTotp(secret, code)) return true;
 
-    const hashes = Array.isArray(factor.recoveryCodeHashes)
-      ? factor.recoveryCodeHashes.filter(
-          (value): value is string => typeof value === 'string',
-        )
+    const rawHashes: unknown = factor.recoveryCodeHashes;
+    const hashes = Array.isArray(rawHashes)
+      ? rawHashes.filter((value): value is string => typeof value === 'string')
       : [];
     const candidate = this.security.hashRecoveryCode(code);
     const index = hashes.indexOf(candidate);
@@ -1134,7 +1138,7 @@ export class AuthService {
     hashes.splice(index, 1);
     await transaction.userMfaFactor.update({
       where: { id: factor.id },
-      data: { recoveryCodeHashes: hashes },
+      data: { recoveryCodeHashes: hashes as Prisma.InputJsonValue },
     });
     return true;
   }
