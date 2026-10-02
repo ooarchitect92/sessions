@@ -21,9 +21,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
       - run: cp .env.example .env
       - run: npm install --no-audit --no-fund
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: generated-package-lock
+          path: package-lock.json
+          if-no-files-found: ignore
+          retention-days: 1
       - run: npm run db:generate
       - run: npm run format:check
       - run: npm run lint
@@ -56,7 +62,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
       - run: cp .env.example .env
       - run: npm install --no-audit --no-fund
       - run: npm run db:generate
