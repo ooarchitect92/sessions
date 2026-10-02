@@ -17,12 +17,12 @@ def replace_once(path: str, old: str, new: str) -> None:
         raise SystemExit(f'Expected block not found in {path}: {old[:120]!r}')
     target.write_text(source.replace(old, new, 1), encoding='utf-8')
 replace_once('backend/prisma/schema.prisma', 'enum ArtifactStatus {\n  PENDING\n  PROCESSING\n  READY\n  FAILED\n  DELETING\n  DELETED\n}\n\nenum ChatChannel {', 'enum ArtifactStatus {\n  PENDING\n  PROCESSING\n  READY\n  FAILED\n  DELETING\n  DELETED\n}\n\nenum RecordingConsentDecision {\n  GRANTED\n  DECLINED\n  REVOKED\n}\n\nenum ChatChannel {')
-for path, marker in [('backend/prisma/schema.prisma', '  recordings          Recording[]\\n')]:
+for path, marker in [('backend/prisma/schema.prisma', '  recordings          Recording[]\n')]:
     source = read(path)
     occurrences = source.count(marker)
     if occurrences < 2:
         raise SystemExit(f'Expected organization/workspace recording relations in {path}')
-    source = source.replace(marker, marker + '  recordingConsents   RecordingConsent[]\\n', 2)
+    source = source.replace(marker, marker + '  recordingConsents   RecordingConsent[]\n', 2)
     (ROOT / path).write_text(source, encoding='utf-8')
 replace_once('backend/prisma/schema.prisma', '  acceptedInvitations     WorkspaceInvitation[]    @relation("InvitationAcceptor")\n\n  @@index([status])', '  acceptedInvitations     WorkspaceInvitation[]    @relation("InvitationAcceptor")\n  recordingConsents       RecordingConsent[]\n\n  @@index([status])')
 replace_once('backend/prisma/schema.prisma', '  recording            Recording?\n  transcript           Transcript?\n  memorySummary        MemorySummary?\n  chatMessages         ChatMessage[]', '  recording            Recording?\n  recordingConsents    RecordingConsent[]\n  transcript           Transcript?\n  memorySummary        MemorySummary?\n  chatMessages         ChatMessage[]')
