@@ -1,0 +1,23 @@
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'sessions_api') THEN
+    GRANT USAGE ON SCHEMA public, app TO sessions_api;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO sessions_api;
+    GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO sessions_api;
+    ALTER DEFAULT PRIVILEGES FOR ROLE sessions IN SCHEMA public
+      GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO sessions_api;
+    ALTER DEFAULT PRIVILEGES FOR ROLE sessions IN SCHEMA public
+      GRANT USAGE, SELECT ON SEQUENCES TO sessions_api;
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'sessions_worker') THEN
+    GRANT USAGE ON SCHEMA public, app TO sessions_worker;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO sessions_worker;
+    GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO sessions_worker;
+    ALTER DEFAULT PRIVILEGES FOR ROLE sessions IN SCHEMA public
+      GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO sessions_worker;
+    ALTER DEFAULT PRIVILEGES FOR ROLE sessions IN SCHEMA public
+      GRANT USAGE, SELECT ON SEQUENCES TO sessions_worker;
+  END IF;
+END
+$$;

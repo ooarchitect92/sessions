@@ -1,0 +1,45 @@
+.session-workspace { height: 100vh; display: grid; grid-template-rows: 78px minmax(0,1fr); background: #101817; color: #eef4f1; overflow: hidden; }
+.session-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 0 24px; border-bottom: 1px solid rgba(255,255,255,.08); background: #121d1b; }
+.session-header-title { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.back-link { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 10px; border: 1px solid rgba(255,255,255,.12); color: #c6d3d0; }
+.session-header h1 { margin: 3px 0 0; font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.session-kicker { display: flex; gap: 8px; align-items: center; color: #8fa39e; font-size: 10px; }
+.session-header-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.meeting-layout { min-height: 0; display: grid; grid-template-columns: 250px minmax(0,1fr) 280px; }
+.agenda-rail, .meeting-side-panel { background: #14201e; min-height: 0; overflow: auto; }
+.agenda-rail { border-right: 1px solid rgba(255,255,255,.07); padding: 20px 14px; }
+.rail-heading { padding: 0 7px 15px; border-bottom: 1px solid rgba(255,255,255,.07); }
+.rail-heading h2 { display: inline; font-size: 17px; margin-right: 8px; }
+.rail-heading > span:last-child { color: #829591; font-size: 10px; }
+.rail-empty { text-align: center; color: #859793; padding: 45px 15px; }
+.rail-empty > span { display: block; font-size: 30px; margin-bottom: 12px; }
+.rail-empty p { color: #d6e0dd; font-weight: 700; font-size: 12px; margin-bottom: 6px; }
+.rail-empty small { line-height: 1.5; font-size: 10px; }
+.agenda-list { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 7px; }
+.agenda-item button { width: 100%; border: 1px solid transparent; background: transparent; color: #c6d3cf; border-radius: 11px; padding: 11px 8px; display: grid; grid-template-columns: 28px 1fr auto; gap: 8px; align-items: center; text-align: left; }
+.agenda-item button:hover { background: rgba(255,255,255,.05); }
+.agenda-item.active button { background: #25453e; border-color: #355c53; }
+.agenda-index { width: 25px; height: 25px; border-radius: 8px; display: grid; place-items: center; background: rgba(255,255,255,.06); font-size: 10px; font-weight: 800; }
+.agenda-copy strong { display: block; font-size: 11px; }
+.agenda-copy small { color: #839691; font-size: 9px; }
+.now-pill { background: #ee7b63; color: white; padding: 4px 6px; border-radius: 99px; font-size: 8px; font-weight: 800; }
+.meeting-stage { min-width: 0; min-height: 0; background: #0b1110; position: relative; }
+.meeting-stage [data-lk-theme='default'] { height: 100%; }
+.stage-placeholder { height: 100%; display: grid; place-content: center; justify-items: center; text-align: center; padding: 40px; }
+.stage-placeholder h2 { font-size: clamp(28px, 4vw, 46px); letter-spacing: -.04em; margin: 8px 0 12px; }
+.stage-placeholder p { color: #8fa19d; max-width: 620px; line-height: 1.7; font-size: 12px; }
+.stage-orbit { width: 104px; height: 104px; border-radius: 50%; display: grid; place-items: center; margin-bottom: 25px; border: 1px solid #29423d; box-shadow: 0 0 0 18px rgba(35,88,78,.1), 0 0 0 35px rgba(35,88,78,.05); }
+.stage-orbit span { width: 58px; height: 58px; border-radius: 19px; display: grid; place-items: center; background: linear-gradient(135deg,#ef9979,#e96756); font: 800 24px 'Manrope'; }
+.meeting-side-panel { border-left: 1px solid rgba(255,255,255,.07); display: flex; flex-direction: column; }
+.side-tabs { display: grid; grid-template-columns: repeat(3,1fr); border-bottom: 1px solid rgba(255,255,255,.07); padding: 9px 10px 0; }
+.side-tabs button { background: transparent; border: 0; color: #7f928e; padding: 11px 5px; font-size: 10px; font-weight: 800; border-bottom: 2px solid transparent; }
+.side-tabs button.active { color: #fff; border-bottom-color: #ee7b63; }
+.people-list { padding: 13px; }
+.person-row { display: grid; grid-template-columns: 36px 1fr auto; gap: 10px; align-items: center; padding: 10px; border-radius: 11px; background: rgba(255,255,255,.035); }
+.person-row strong { display: block; font-size: 11px; }
+.person-row small { color: #7f918d; font-size: 9px; }
+.person-row > span { color: #6f817d; font-size: 10px; }
+.side-panel-note { margin: auto 13px 13px; padding: 14px; border-radius: 12px; background: #1c2e2a; border: 1px solid #29423d; }
+.side-panel-note strong { font-size: 10px; }
+.side-panel-note p { color: #8ea09c; font-size: 9px; line-height: 1.5; margin: 6px 0 0; }
+

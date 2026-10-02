@@ -1,0 +1,57 @@
+/* Permanent rooms */
+.rooms-heading { align-items: end; }
+.feature-state-card { max-width: 360px; padding: 20px; border: 1px solid var(--line); border-radius: 18px; background: rgba(255,255,255,.64); display: grid; gap: 7px; }
+.feature-state-card span { color: var(--forest); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; font-weight: 800; }
+.feature-state-card strong { font-size: 16px; }
+.feature-state-card small { color: var(--muted); line-height: 1.5; }
+.rooms-layout { display: grid; grid-template-columns: minmax(0, 1fr) 350px; gap: 24px; align-items: start; }
+.room-list-panel, .room-create-panel { padding: 28px; }
+.panel-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+.panel-heading h2, .room-create-panel h2 { margin: 3px 0 0; font-size: 25px; letter-spacing: -.04em; }
+.count-pill { min-width: 36px; height: 30px; display: grid; place-items: center; border-radius: 999px; background: #f0eee8; color: var(--muted); font-size: 12px; font-weight: 800; }
+.empty-panel { min-height: 260px; display: grid; place-content: center; justify-items: center; text-align: center; color: var(--muted); }
+.empty-panel > span { font-size: 28px; }
+.empty-panel h3 { color: var(--ink); margin: 14px 0 6px; }
+.empty-panel p { max-width: 390px; margin: 0; line-height: 1.6; }
+.room-card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.room-card { overflow: hidden; border: 1px solid var(--line); border-radius: 20px; background: white; }
+.room-card-art { min-height: 128px; padding: 18px; display: flex; justify-content: space-between; align-items: flex-end; background: radial-gradient(circle at 72% 20%, rgba(207,248,93,.52), transparent 32%), linear-gradient(135deg, #12382d, #0a211b); color: white; }
+.room-card-art > span { width: 58px; height: 58px; display: grid; place-items: center; border-radius: 18px; background: #dff66e; color: #153027; font: 700 28px Georgia, serif; }
+.room-card-art small { color: rgba(255,255,255,.72); }
+.room-card-body { padding: 20px; }
+.room-card-body h3 { margin: 4px 0 16px; font-size: 19px; }
+.room-flags { display: flex; flex-wrap: wrap; gap: 7px; }
+.room-flags span { padding: 6px 8px; border-radius: 999px; background: #f0eee8; color: #8a9691; font-size: 9px; font-weight: 750; text-transform: uppercase; letter-spacing: .06em; }
+.room-flags span.enabled { background: #eaf7c9; color: #355126; }
+.room-card-actions { margin-top: 22px; display: flex; align-items: center; justify-content: space-between; }
+.text-danger-button { border: 0; background: transparent; color: #a34437; font-size: 12px; font-weight: 750; cursor: pointer; }
+.text-danger-button:disabled { opacity: .45; cursor: not-allowed; }
+.room-create-panel { position: sticky; top: 86px; }
+.room-create-panel > p { color: var(--muted); line-height: 1.6; margin-bottom: 24px; }
+.slug-input { display: flex; align-items: center; border: 1px solid #c8c8c0; border-radius: 11px; background: white; overflow: hidden; }
+.slug-input:focus-within { border-color: var(--forest-2); box-shadow: 0 0 0 3px rgba(48, 111, 85, .12); }
+.slug-input span { padding-left: 13px; color: var(--muted); font-size: 13px; }
+.slug-input input { border: 0 !important; box-shadow: none !important; padding-left: 2px !important; min-width: 0; }
+.compact-toggle { padding: 12px 0; }
+.full-width { width: 100%; }
+
+@media (max-width: 1100px) {
+  .rooms-layout { grid-template-columns: 1fr; }
+  .room-create-panel { position: static; }
+}
+
+@media (max-width: 720px) {
+  .rooms-heading { align-items: stretch; }
+  .room-card-grid { grid-template-columns: 1fr; }
+  .room-list-panel, .room-create-panel { padding: 20px; }
+}
+
+/* In-meeting agenda editor */
+.rail-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.agenda-add-button { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 9px; border: 1px solid rgba(255,255,255,.15); background: rgba(255,255,255,.08); color: #fff; font-size: 18px; }
+.agenda-inline-form { margin: 0 16px 16px; padding: 14px; border: 1px solid rgba(255,255,255,.12); border-radius: 14px; background: rgba(255,255,255,.06); display: grid; gap: 11px; }
+.agenda-inline-form label { display: grid; gap: 6px; color: #b9c9c4; font-size: 10px; font-weight: 750; }
+.agenda-inline-form input, .agenda-inline-form select { width: 100%; min-height: 36px; border: 1px solid rgba(255,255,255,.14); border-radius: 9px; padding: 0 10px; color: #f3f8f6; background: #17352f; outline: 0; }
+.agenda-inline-form input:focus, .agenda-inline-form select:focus { border-color: #a7d4c5; }
+.agenda-form-grid { display: grid; grid-template-columns: 78px minmax(0, 1fr); gap: 8px; }
+.agenda-inline-form .error-banner { margin: 0; padding: 9px; font-size: 10px; }

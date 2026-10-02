@@ -1,0 +1,54 @@
+{
+  "name": "@sessions/backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "build": "nest build",
+    "start": "node dist/main.js",
+    "start:dev": "nest start --watch",
+    "start:debug": "nest start --debug --watch",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "prisma:generate": "prisma generate --schema prisma/schema.prisma",
+    "prisma:migrate": "tsx scripts/migrate.ts",
+    "prisma:seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@fastify/helmet": "^13.1.1",
+    "@nestjs/common": "12.1.2",
+    "@nestjs/config": "^4.0.2",
+    "@nestjs/core": "12.1.2",
+    "@nestjs/jwt": "12.0.2",
+    "@nestjs/platform-fastify": "12.1.2",
+    "@nestjs/platform-socket.io": "12.1.2",
+    "@nestjs/schedule": "12.0.2",
+    "@nestjs/swagger": "12.0.2",
+    "@nestjs/websockets": "12.1.2",
+    "@prisma/client": "6.19.0",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.2",
+    "fastify": "^5.6.1",
+    "ioredis": "^5.8.2",
+    "livekit-server-sdk": "2.19.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "socket.io": "4.8.4",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "12.1.2",
+    "@nestjs/testing": "12.1.2",
+    "@types/node": "^24.7.0",
+    "prisma": "6.19.0",
+    "supertest": "^7.1.4",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "name": "@sessions/platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Clean-room all-in-one meetings, webinars, scheduling, collaboration, recording, and AI memory platform.",
+  "workspaces": [
+    "backend",
+    "frontend",
+    "website",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n api,app,site -c auto \"npm run dev:backend\" \"npm run dev:frontend\" \"npm run dev:website\"",
+    "dev:backend": "dotenv -e .env -- npm run start:dev --workspace @sessions/backend",
+    "dev:frontend": "dotenv -e .env -- npm run dev --workspace @sessions/frontend",
+    "dev:website": "dotenv -e .env -- npm run dev --workspace @sessions/website",
+    "build": "npm run build:contracts && npm run build --workspace @sessions/backend && dotenv -e .env -- npm run build --workspace @sessions/frontend && dotenv -e .env -- npm run build --workspace @sessions/website",
+    "lint": "npm run build:contracts && npm run lint --workspace @sessions/contracts && npm run lint --workspace @sessions/backend && npm run lint --workspace @sessions/frontend && npm run lint --workspace @sessions/website",
+    "test": "npm run build:contracts && npm run test --workspace @sessions/contracts && npm run test --workspace @sessions/backend && npm run test --workspace @sessions/frontend && npm run test --workspace @sessions/website",
+    "typecheck": "npm run build:contracts && npm run typecheck --workspace @sessions/contracts && npm run typecheck --workspace @sessions/backend && npm run typecheck --workspace @sessions/frontend && npm run typecheck --workspace @sessions/website",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "db:generate": "dotenv -e .env -- npm run prisma:generate --workspace @sessions/backend",
+    "db:migrate": "dotenv -e .env -- npm run prisma:migrate --workspace @sessions/backend",
+    "db:seed": "dotenv -e .env -- npm run prisma:seed --workspace @sessions/backend",
+    "compose:up": "docker compose up -d --build",
+    "compose:down": "docker compose down",
+    "compose:logs": "docker compose logs -f",
+    "predev": "npm run build:contracts",
+    "build:contracts": "npm run build --workspace @sessions/contracts"
+  },
+  "engines": {
+    "node": ">=22 <23",
+    "npm": ">=10"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "dotenv-cli": "^8.0.0",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.3"
+  }
+}
