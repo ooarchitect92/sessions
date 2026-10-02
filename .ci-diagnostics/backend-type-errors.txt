@@ -1,0 +1,14 @@
+
+> @sessions/backend@0.1.0 lint
+> tsc -p tsconfig.json --noEmit
+
+src/auth/auth.service.ts(1025,11): error TS2345: Argument of type 'string' is not assignable to parameter of type '`${string}-${string}-${string}-${string}-${string}`'.
+npm error Lifecycle script `lint` failed with error:
+npm error code 2
+npm error path /home/runner/work/sessions/sessions/backend
+npm error workspace @sessions/backend@0.1.0
+npm error location /home/runner/work/sessions/sessions/backend
+npm error command failed
+npm error command sh -c tsc -p tsconfig.json --noEmit
+
+EXIT_STATUS=2
