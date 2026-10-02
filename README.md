@@ -15,9 +15,9 @@ The repository now contains runnable vertical slices rather than placeholder-onl
 - **Booking pages:** workspace page management, IANA-timezone availability, minimum notice, buffers, bounded slot generation, conflict filtering, advisory locking, and atomic reservation plus scheduled-session creation.
 - **Governed recording and meeting memory:** durable per-participant recording consent, media-token enforcement, LiveKit room-composite egress, private S3-compatible storage, short-lived signed playback/download grants, retention and deletion processing, transcript/summary state models, searchable memory and controlled retries.
 - **Public journeys:** original public event-registration and booking interfaces in the website application.
-- **Operations:** Docker Compose for PostgreSQL, Redis, MinIO, and LiveKit; database migrations; deterministic seed data; CI migration smoke tests; quality gates; architecture, API, testing, security, and delivery-status documentation.
+- **Operations:** Docker Compose for PostgreSQL, Redis, MinIO, LiveKit, and LiveKit Egress; database migrations; deterministic seed data; CI migration smoke tests; quality gates; architecture, API, testing, security, and delivery-status documentation.
 
-Provider-dependent work is deliberately not represented as complete. LiveKit egress, speech-to-text execution, LLM execution, calendar OAuth, reminder delivery, signed artifact playback, external OIDC/SAML identity providers, custom domains, analytics, billing, and enterprise controls remain explicit delivery gates. See [`docs/implementation-status.md`](docs/implementation-status.md) and [`docs/backlog.md`](docs/backlog.md).
+Provider-dependent runtime qualification is deliberately not represented as complete. The local stack now contains LiveKit egress and signed recording access, but multi-node media/egress load qualification, provider webhook reconciliation, operational recovery, and disaster-recovery exercises remain release gates. Speech-to-text execution, LLM execution, calendar OAuth, reminder delivery, external OIDC/SAML identity providers, custom domains, analytics, billing, and enterprise controls also remain explicit delivery gates. See [`docs/implementation-status.md`](docs/implementation-status.md) and [`docs/backlog.md`](docs/backlog.md).
 
 ## Architecture at a glance
 
@@ -64,11 +64,13 @@ cp .env.example .env
 npm install
 npm run db:generate
 
-docker compose up -d postgres redis minio minio-create-bucket livekit
+docker compose up -d postgres redis minio minio-create-bucket livekit egress
 npm run db:migrate
 npm run db:seed
 npm run dev
 ```
+
+When the API runs directly through `npm run dev`, set `LIVEKIT_EGRESS_ENABLED=true` in `.env` to run the recording worker. The complete Docker Compose stack sets this value for the API container automatically.
 
 Open:
 
@@ -115,10 +117,11 @@ The CI workflow also deploys all migrations against a fresh PostgreSQL service.
 1. Open the product application.
 2. Create a scheduled or instant session.
 3. Add agenda items.
-4. Start the session and open the LiveKit media stage.
-5. Use the Chat, Polls, and Q&A tabs.
-6. End a session with recording or transcription enabled to create durable artifact-processing requests.
-7. Open Memory to inspect processing state and the complete session context.
+4. Start the session.
+5. For a recording-enabled session, accept the versioned recording notice before requesting LiveKit media access.
+6. Open the LiveKit media stage and use the Chat, Polls, and Q&A tabs.
+7. End the session; the recording worker stops and reconciles the room-composite egress job.
+8. Open Memory to inspect processing state and request a short-lived playback or download grant when the recording is ready.
 
 ### Publish an event
 
@@ -149,17 +152,17 @@ See [`docs/api.md`](docs/api.md) for the implemented endpoint inventory.
 
 ## Security baseline
 
-The platform uses verified tenant claims, application authorization, separate API/worker/migration database roles, forced RLS on tenant-owned tables, signed short-lived media grants, private object-storage intent, audit evidence, environment validation, recording-consent requirements, bounded public endpoints, and explicit failure states. See [`SECURITY.md`](SECURITY.md), [`docs/architecture.md`](docs/architecture.md), and [`docs/testing.md`](docs/testing.md).
+The platform uses verified tenant claims, application authorization, separate API/worker/migration database roles, forced RLS on tenant-owned tables, signed short-lived media grants, private object-storage access, audit evidence, environment validation, recording-consent requirements, bounded public endpoints, and explicit failure states. See [`SECURITY.md`](SECURITY.md), [`docs/architecture.md`](docs/architecture.md), and [`docs/testing.md`](docs/testing.md).
 
 ## Delivery order from here
 
-1. External OIDC/SAML, enterprise SSO, SCIM, step-up policies, and identity-provider operational qualification.
-2. LiveKit egress, consent ledger, signed playback, retention, deletion, and artifact workers.
-3. STT provider abstraction, live captions, diarization, transcript correction, and indexed search.
-4. Calendar OAuth/busy-time sync, booking reschedule/cancel, ICS, notifications, and reminder reconciliation.
-5. Whiteboards, breakouts, rich content blocks, safe embeds, file quarantine, and malware scanning.
-6. Provider-abstracted AI generation, human review, grounded citations, evaluation, and approved follow-up actions.
-7. Webhook/API-key administration, integrations, analytics, branding/domains, billing, enterprise controls, scale, and disaster recovery.
+1. STT provider abstraction, recording-to-audio preparation, live captions, diarization, transcript correction, and indexed search.
+2. External OIDC/SAML, enterprise SSO, SCIM, step-up policies, and identity-provider operational qualification.
+3. Calendar OAuth/busy-time sync, booking reschedule/cancel, ICS, notifications, and reminder reconciliation.
+4. Whiteboards, breakouts, rich content blocks, safe embeds, file quarantine, and malware scanning.
+5. Provider-abstracted AI generation, human review, grounded citations, evaluation, and approved follow-up actions.
+6. Webhook/API-key administration, connector credentials, replay controls, and integration qualification.
+7. Analytics, branding/domains, localization, billing, enterprise policy, load qualification, observability, backups, and disaster recovery.
 
 ## License
 
