@@ -15,8 +15,8 @@ import type { AgendaItem, WorkspaceRole } from '@prisma/client';
 import type { Server, Socket } from 'socket.io';
 import type { Subscription } from 'rxjs';
 import { z } from 'zod';
-import type { AccessTokenClaims, Principal } from '../common/auth/principal';
 import { AgendasService } from '../agendas/agendas.service';
+import type { AccessTokenClaims, Principal } from '../common/auth/principal';
 import { RealtimeEventsService } from '../infrastructure/realtime-events.service';
 import { SessionsService } from '../sessions/sessions.service';
 
@@ -56,6 +56,7 @@ export class RealtimeGateway
 {
   private readonly logger = new Logger(RealtimeGateway.name);
   private agendaSubscription?: Subscription;
+  private sessionEventSubscription?: Subscription;
 
   @WebSocketServer()
   server!: Server;
@@ -72,10 +73,14 @@ export class RealtimeGateway
     this.agendaSubscription = this.realtimeEvents.agendaActivated$.subscribe((event) => {
       server.to(this.roomName(event.sessionId)).emit('agenda.activated', event);
     });
+    this.sessionEventSubscription = this.realtimeEvents.sessionEvents$.subscribe((event) => {
+      server.to(this.roomName(event.sessionId)).emit(event.eventName, event.payload);
+    });
   }
 
   onModuleDestroy(): void {
     this.agendaSubscription?.unsubscribe();
+    this.sessionEventSubscription?.unsubscribe();
   }
 
   async handleConnection(client: AuthenticatedSocket): Promise<void> {

@@ -33,9 +33,44 @@ export const AgendaItemTypeSchema = z.enum([
   'SCREEN_SHARE',
 ]);
 
+export const EventStatusSchema = z.enum(['DRAFT', 'PUBLISHED', 'LIVE', 'ENDED', 'CANCELLED']);
+export const RegistrationStatusSchema = z.enum([
+  'REGISTERED',
+  'WAITLISTED',
+  'CANCELLED',
+  'ATTENDED',
+  'NO_SHOW',
+]);
+export const BookingStatusSchema = z.enum(['CONFIRMED', 'CANCELLED', 'COMPLETED', 'NO_SHOW']);
+export const ArtifactStatusSchema = z.enum([
+  'PENDING',
+  'PROCESSING',
+  'READY',
+  'FAILED',
+  'DELETING',
+  'DELETED',
+]);
+export const ChatChannelSchema = z.enum(['EVERYONE', 'HOSTS']);
+export const PollTypeSchema = z.enum([
+  'SINGLE_CHOICE',
+  'MULTIPLE_CHOICE',
+  'OPEN_TEXT',
+  'NPS',
+  'WORD_CLOUD',
+]);
+export const PollStatusSchema = z.enum(['DRAFT', 'LIVE', 'CLOSED']);
+export const QuestionStatusSchema = z.enum(['PENDING', 'APPROVED', 'ANSWERED', 'HIDDEN']);
+
+const SlugSchema = z
+  .string()
+  .trim()
+  .min(2)
+  .max(100)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+
 export const CreateRoomSchema = z.object({
   title: z.string().trim().min(1).max(160),
-  slug: z.string().trim().min(2).max(100).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+  slug: SlugSchema,
   settings: z.record(z.string(), z.unknown()).default({}),
 });
 
@@ -96,6 +131,120 @@ export const SessionSchema = z.object({
   updatedAt: z.iso.datetime(),
 });
 
+export const CreateEventSchema = z.object({
+  slug: SlugSchema,
+  title: z.string().trim().min(1).max(160),
+  description: z.string().trim().max(10000).optional(),
+  startsAt: z.iso.datetime(),
+  durationMinutes: z.number().int().min(5).max(1440),
+  timezone: z.string().trim().min(1).max(100),
+  capacity: z.number().int().positive().max(100000).nullable().optional(),
+  registrationFields: z.array(z.record(z.string(), z.unknown())).default([]),
+  branding: z.record(z.string(), z.unknown()).default({}),
+});
+
+export const EventSchema = z.object({
+  id: z.uuid(),
+  organizationId: z.uuid(),
+  workspaceId: z.uuid(),
+  sessionId: z.uuid().nullable(),
+  slug: z.string(),
+  title: z.string(),
+  description: z.string().nullable(),
+  startsAt: z.iso.datetime(),
+  durationMinutes: z.number().int(),
+  timezone: z.string(),
+  capacity: z.number().int().nullable(),
+  status: EventStatusSchema,
+  registrationFields: z.array(z.record(z.string(), z.unknown())),
+  branding: z.record(z.string(), z.unknown()),
+  publishedAt: z.iso.datetime().nullable(),
+  version: z.number().int().positive(),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+});
+
+export const RegisterForEventSchema = z.object({
+  name: z.string().trim().min(1).max(160),
+  email: z.email(),
+  answers: z.record(z.string(), z.unknown()).default({}),
+});
+
+export const AvailabilityRuleSchema = z.object({
+  weekday: z.number().int().min(0).max(6),
+  startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+  endTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+});
+
+export const CreateBookingPageSchema = z.object({
+  slug: SlugSchema,
+  title: z.string().trim().min(1).max(160),
+  description: z.string().trim().max(5000).optional(),
+  durationMinutes: z.number().int().min(5).max(480),
+  timezone: z.string().trim().min(1).max(100),
+  minimumNoticeMinutes: z.number().int().min(0).max(525600).default(60),
+  bufferBeforeMinutes: z.number().int().min(0).max(1440).default(0),
+  bufferAfterMinutes: z.number().int().min(0).max(1440).default(0),
+  availabilityRules: z.array(AvailabilityRuleSchema).min(1),
+  intakeFields: z.array(z.record(z.string(), z.unknown())).default([]),
+});
+
+export const BookingPageSchema = z.object({
+  id: z.uuid(),
+  organizationId: z.uuid(),
+  workspaceId: z.uuid(),
+  slug: z.string(),
+  title: z.string(),
+  description: z.string().nullable(),
+  durationMinutes: z.number().int(),
+  timezone: z.string(),
+  minimumNoticeMinutes: z.number().int(),
+  bufferBeforeMinutes: z.number().int(),
+  bufferAfterMinutes: z.number().int(),
+  availabilityRules: z.array(AvailabilityRuleSchema),
+  intakeFields: z.array(z.record(z.string(), z.unknown())),
+  active: z.boolean(),
+  version: z.number().int().positive(),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+});
+
+export const ReserveBookingSchema = z.object({
+  name: z.string().trim().min(1).max(160),
+  email: z.email(),
+  startsAt: z.iso.datetime(),
+  timezone: z.string().trim().min(1).max(100),
+  answers: z.record(z.string(), z.unknown()).default({}),
+});
+
+export const ChatMessageSchema = z.object({
+  id: z.uuid(),
+  sessionId: z.uuid(),
+  authorUserId: z.uuid(),
+  channel: ChatChannelSchema,
+  body: z.string(),
+  editedAt: z.iso.datetime().nullable(),
+  deletedAt: z.iso.datetime().nullable(),
+  createdAt: z.iso.datetime(),
+});
+
+export const CreatePollSchema = z.object({
+  question: z.string().trim().min(1).max(1000),
+  type: PollTypeSchema,
+  anonymous: z.boolean().default(false),
+  options: z.array(z.string().trim().min(1).max(500)).max(20).default([]),
+});
+
+export const SubmitPollAnswerSchema = z.object({
+  selectedOptionIds: z.array(z.uuid()).max(20).default([]),
+  textAnswer: z.string().trim().max(5000).optional(),
+});
+
+export const CreateQuestionSchema = z.object({
+  body: z.string().trim().min(1).max(5000),
+  isAnonymous: z.boolean().default(false),
+});
+
 export type WorkspaceRole = z.infer<typeof WorkspaceRoleSchema>;
 export type CreateRoomInput = z.infer<typeof CreateRoomSchema>;
 export type UpdateRoomInput = z.infer<typeof UpdateRoomSchema>;
@@ -107,6 +256,24 @@ export type CreateSessionInput = z.infer<typeof CreateSessionSchema>;
 export type UpdateSessionInput = z.infer<typeof UpdateSessionSchema>;
 export type CreateAgendaItemInput = z.infer<typeof CreateAgendaItemSchema>;
 export type Session = z.infer<typeof SessionSchema>;
+export type EventStatus = z.infer<typeof EventStatusSchema>;
+export type CreateEventInput = z.infer<typeof CreateEventSchema>;
+export type Event = z.infer<typeof EventSchema>;
+export type RegisterForEventInput = z.infer<typeof RegisterForEventSchema>;
+export type BookingStatus = z.infer<typeof BookingStatusSchema>;
+export type AvailabilityRule = z.infer<typeof AvailabilityRuleSchema>;
+export type CreateBookingPageInput = z.infer<typeof CreateBookingPageSchema>;
+export type BookingPage = z.infer<typeof BookingPageSchema>;
+export type ReserveBookingInput = z.infer<typeof ReserveBookingSchema>;
+export type ArtifactStatus = z.infer<typeof ArtifactStatusSchema>;
+export type ChatChannel = z.infer<typeof ChatChannelSchema>;
+export type ChatMessage = z.infer<typeof ChatMessageSchema>;
+export type PollType = z.infer<typeof PollTypeSchema>;
+export type PollStatus = z.infer<typeof PollStatusSchema>;
+export type CreatePollInput = z.infer<typeof CreatePollSchema>;
+export type SubmitPollAnswerInput = z.infer<typeof SubmitPollAnswerSchema>;
+export type QuestionStatus = z.infer<typeof QuestionStatusSchema>;
+export type CreateQuestionInput = z.infer<typeof CreateQuestionSchema>;
 
 export interface ApiEnvelope<T> {
   data: T;

@@ -8,6 +8,7 @@ import './styles/dashboard.css';
 import './styles/meeting.css';
 import './styles/responsive.css';
 import './styles/rooms.css';
+import './styles/workflows.css';
 
 const queryClient = new QueryClient({
   defaultOptions: {

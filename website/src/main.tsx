@@ -1,126 +1,351 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { PublicBookingPage } from './PublicBookingPage';
+import { PublicEventPage } from './PublicEventPage';
 import './styles.css';
+import './public.css';
 
 const appUrl = import.meta.env.VITE_APP_URL ?? 'http://localhost:3000';
 
 const capabilities = [
-  {
-    number: '01',
-    title: 'Run the meeting, not the meeting software.',
-    copy: 'Video, screen sharing, participant controls, and a shared stage stay connected to the session plan.',
-  },
-  {
-    number: '02',
-    title: 'Give every conversation a visible shape.',
-    copy: 'Time-boxed agenda items can drive presentations, demonstrations, polls, whiteboards, Q&A, and breakouts.',
-  },
-  {
-    number: '03',
-    title: 'Make the outcome reusable.',
-    copy: 'Recordings, transcripts, decisions, actions, and approved AI drafts become a governed meeting memory.',
-  },
+  [
+    '01',
+    'Plan',
+    'Build a timed agenda, attach the right content, and make ownership explicit before anyone joins.',
+  ],
+  [
+    '02',
+    'Run',
+    'Bring video, screen share, interactive agenda, and participation tools into one guided workspace.',
+  ],
+  [
+    '03',
+    'Remember',
+    'Turn recordings, transcripts, decisions, and actions into a searchable record after the call.',
+  ],
 ];
 
-function App() {
+const architecture = [
+  [
+    'Control plane',
+    'Identity, workspaces, roles, rooms, scheduling, events, policy and billing.',
+  ],
+  [
+    'Realtime plane',
+    'WebSocket state for presence, agenda, chat, polls, Q&A and collaborative tools.',
+  ],
+  [
+    'Media plane',
+    'LiveKit SFU, TURN, adaptive WebRTC, egress and region-aware capacity.',
+  ],
+  [
+    'Memory plane',
+    'Private object storage, transcription, search, retention and opt-in AI workflows.',
+  ],
+];
+
+function MarketingPage() {
   return (
-    <main>
-      <header className="site-header">
-        <a className="brand" href="#top" aria-label="Sessions home">
+    <div className="site">
+      <header className="nav shell">
+        <a className="logo" href="#top" aria-label="Sessions home">
           <span>S</span>
-          <strong>Sessions</strong>
+          Sessions
         </a>
-        <nav aria-label="Primary">
+        <nav>
           <a href="#product">Product</a>
-          <a href="#workflows">Workflows</a>
           <a href="#architecture">Architecture</a>
+          <a href="#principles">Principles</a>
         </nav>
-        <a className="button small" href={appUrl}>Open workspace</a>
+        <a className="nav-cta" href={appUrl}>
+          Open workspace <span>↗</span>
+        </a>
       </header>
 
-      <section className="hero" id="top">
-        <div className="hero-copy">
-          <span className="kicker">Meetings with a memory</span>
-          <h1>One place to prepare, meet, and move the work forward.</h1>
-          <p>
-            Sessions unifies live meetings, interactive agendas, webinars, scheduling, and post-meeting memory without forcing teams to stitch together five different tools.
-          </p>
-          <div className="hero-actions">
-            <a className="button" href={appUrl}>Enter the product</a>
-            <a className="text-link" href="#architecture">See the system design →</a>
+      <main id="top">
+        <section className="hero shell">
+          <div className="hero-copy">
+            <span className="kicker">A meeting operating system</span>
+            <h1>Meetings that move work forward.</h1>
+            <p>
+              Plan the room. Guide the conversation. Keep the decisions. Sessions brings live
+              collaboration, scheduling, events, and trustworthy meeting memory into one workspace.
+            </p>
+            <div className="hero-actions">
+              <a className="primary" href={appUrl}>
+                Start a session <span>→</span>
+              </a>
+              <a className="secondary" href="#architecture">
+                Explore the system
+              </a>
+            </div>
+            <div className="hero-proof">
+              <div>
+                <strong>Original by design</strong>
+                <span>Independent clean-room product</span>
+              </div>
+              <div>
+                <strong>Secure by default</strong>
+                <span>Tenant isolation and auditability</span>
+              </div>
+            </div>
           </div>
-        </div>
-        <div className="hero-visual" aria-label="Illustrated meeting workspace">
-          <div className="agenda-card">
-            <span>Shared agenda</span>
-            <strong>Customer onboarding</strong>
-            <ol>
-              <li className="done"><b>01</b><span>Welcome and context</span><em>3 min</em></li>
-              <li className="active"><b>02</b><span>Product walkthrough</span><em>15 min</em></li>
-              <li><b>03</b><span>Live questions</span><em>10 min</em></li>
-            </ol>
+          <div className="hero-visual" aria-label="Session workspace preview">
+            <div className="visual-window">
+              <div className="window-top">
+                <span />
+                <span />
+                <span />
+                <small>Product discovery · Live</small>
+              </div>
+              <div className="window-body">
+                <aside>
+                  <small>Agenda · 42 min</small>
+                  <ol>
+                    <li className="completed">
+                      <span>1</span>
+                      <div>
+                        <strong>Context</strong>
+                        <small>5 min</small>
+                      </div>
+                    </li>
+                    <li className="current">
+                      <span>2</span>
+                      <div>
+                        <strong>Prototype</strong>
+                        <small>18 min</small>
+                      </div>
+                    </li>
+                    <li>
+                      <span>3</span>
+                      <div>
+                        <strong>Decision</strong>
+                        <small>10 min</small>
+                      </div>
+                    </li>
+                    <li>
+                      <span>4</span>
+                      <div>
+                        <strong>Actions</strong>
+                        <small>9 min</small>
+                      </div>
+                    </li>
+                  </ol>
+                </aside>
+                <section className="visual-stage">
+                  <div className="stage-copy">
+                    <span>Now presenting</span>
+                    <strong>Customer journey prototype</strong>
+                    <small>Embedded content · Controlled by host</small>
+                  </div>
+                  <div className="cursor one">AR</div>
+                  <div className="cursor two">PM</div>
+                  <div className="participant-strip">
+                    <div>AM</div>
+                    <div>SK</div>
+                    <div>JR</div>
+                    <span>+8</span>
+                  </div>
+                </section>
+              </div>
+              <div className="window-controls">
+                <button>◉</button>
+                <button>⌁</button>
+                <button className="share">Share</button>
+                <button>✧</button>
+                <button className="leave">Leave</button>
+              </div>
+            </div>
+            <div className="floating-note note-one">
+              <span>✦</span>
+              <div>
+                <strong>Decision captured</strong>
+                <small>Move beta launch to 18 Oct</small>
+              </div>
+            </div>
+            <div className="floating-note note-two">
+              <span>03</span>
+              <div>
+                <strong>Actions found</strong>
+                <small>Ready for review</small>
+              </div>
+            </div>
           </div>
-          <div className="meeting-card">
-            <div className="meeting-top"><span>Live · 8 people</span><span>•••</span></div>
-            <div className="speaker"><span>AM</span><small>Presenting</small></div>
-            <div className="participant-strip"><span>SO</span><span>KR</span><span>LM</span><span>+5</span></div>
+        </section>
+
+        <section className="statement">
+          <div className="shell statement-grid">
+            <span className="section-number">01 — Product</span>
+            <h2>One continuous workflow, not a pile of disconnected tools.</h2>
+            <p>A session begins before the call and keeps creating value after everyone leaves.</p>
           </div>
-          <div className="memory-card"><span>After the call</span><strong>Summary ready for review</strong><small>5 decisions · 7 actions · transcript linked</small></div>
-        </div>
-      </section>
+        </section>
 
-      <section className="capability-grid" id="product">
-        {capabilities.map((capability) => (
-          <article key={capability.number}>
-            <span>{capability.number}</span>
-            <h2>{capability.title}</h2>
-            <p>{capability.copy}</p>
-          </article>
-        ))}
-      </section>
+        <section className="capabilities shell" id="product">
+          {capabilities.map(([number, title, copy]) => (
+            <article key={number}>
+              <span>{number}</span>
+              <div>
+                <h3>{title}</h3>
+                <p>{copy}</p>
+              </div>
+              <small>↗</small>
+            </article>
+          ))}
+        </section>
 
-      <section className="workflow-section" id="workflows">
-        <div className="section-heading">
-          <span className="kicker">Connected workflows</span>
-          <h2>From a booking link to a searchable outcome.</h2>
-        </div>
-        <div className="workflow-line">
-          <article><b>Schedule</b><p>Calendar-connected booking pages, event registration, reminders, and reliable timezone rules.</p></article>
-          <article><b>Facilitate</b><p>Permanent rooms, host controls, agenda navigation, embedded content, polls, Q&A, and breakouts.</p></article>
-          <article><b>Remember</b><p>Recording, transcription, playback, search, summaries, decisions, and human-approved follow-up drafts.</p></article>
-          <article><b>Integrate</b><p>Scoped API keys, signed webhooks, OAuth connectors, CRM updates, and governed exports.</p></article>
-        </div>
-      </section>
+        <section className="agenda-feature shell">
+          <div className="agenda-demo">
+            <div className="agenda-demo-top">
+              <span>Run of show</span>
+              <small>Host view</small>
+            </div>
+            <div className="agenda-time">
+              <strong>12:38</strong>
+              <span>remaining</span>
+            </div>
+            <div className="agenda-active">
+              <span>02</span>
+              <div>
+                <small>CURRENT</small>
+                <strong>Walk through the prototype</strong>
+                <p>Website embed · Host controlled</p>
+              </div>
+            </div>
+            <div className="agenda-next">
+              <span>Next</span>
+              <strong>Prioritize open decisions</strong>
+              <small>10 min</small>
+            </div>
+          </div>
+          <div className="feature-copy">
+            <span className="section-number">02 — Guided flow</span>
+            <h2>The agenda is part of the meeting, not a document nobody opens.</h2>
+            <p>
+              Time-boxed items drive the stage. Move from context to content, polls, Q&A and
+              decisions without sending participants into a maze of tabs.
+            </p>
+            <ul>
+              <li>
+                <span>✓</span> Shared, realtime agenda state
+              </li>
+              <li>
+                <span>✓</span> Content-aware meeting segments
+              </li>
+              <li>
+                <span>✓</span> Durable audit and event history
+              </li>
+            </ul>
+          </div>
+        </section>
 
-      <section className="architecture-section" id="architecture">
-        <div>
-          <span className="kicker light">Built for isolation and recovery</span>
-          <h2>A meeting platform is a distributed system before it is a video screen.</h2>
-          <p>
-            The implementation separates durable commands, realtime collaboration, WebRTC media, asynchronous processing, and object storage. Tenant identity comes from verified claims, PostgreSQL row-level security provides a second boundary, and externally visible changes are backed by audit and outbox records.
-          </p>
-          <a className="button inverted" href={`${appUrl}/rooms`}>Explore the foundation</a>
-        </div>
-        <div className="architecture-map" aria-label="Architecture layers">
-          <span>React web applications</span>
-          <i>HTTPS · WebSocket · WebRTC</i>
-          <span>NestJS API and collaboration gateway</span>
-          <i>Transactions · outbox · scoped tokens</i>
-          <div><span>PostgreSQL + RLS</span><span>Redis streams</span><span>LiveKit SFU</span><span>Object storage</span></div>
-        </div>
-      </section>
+        <section className="architecture" id="architecture">
+          <div className="shell architecture-heading">
+            <span className="section-number light">03 — Architecture</span>
+            <h2>Designed as a system of clear boundaries.</h2>
+            <p>
+              Media, realtime collaboration, durable business state and AI workloads have different
+              reliability needs. Sessions treats them that way.
+            </p>
+          </div>
+          <div className="shell architecture-grid">
+            {architecture.map(([title, copy], index) => (
+              <article key={title}>
+                <span>0{index + 1}</span>
+                <h3>{title}</h3>
+                <p>{copy}</p>
+              </article>
+            ))}
+          </div>
+        </section>
 
-      <footer>
-        <div className="brand"><span>S</span><strong>Sessions</strong></div>
-        <p>Independent clean-room implementation. No proprietary source code, assets, or undocumented behavior are reused.</p>
-        <a href={appUrl}>Open workspace →</a>
+        <section className="principles shell" id="principles">
+          <div>
+            <span className="section-number">04 — Principles</span>
+            <h2>Trust is a product feature.</h2>
+          </div>
+          <div className="principle-list">
+            <article>
+              <strong>Tenant boundaries</strong>
+              <p>
+                Verified identity claims, application checks and forced PostgreSQL row-level
+                security.
+              </p>
+            </article>
+            <article>
+              <strong>Consent before capture</strong>
+              <p>
+                Recording and transcription require visible disclosure, policy and auditable
+                consent.
+              </p>
+            </article>
+            <article>
+              <strong>AI with a human in control</strong>
+              <p>
+                Suggestions are labeled, editable and reviewed before external actions are taken.
+              </p>
+            </article>
+            <article>
+              <strong>Honest delivery status</strong>
+              <p>Planned capability is never presented as implemented production functionality.</p>
+            </article>
+          </div>
+        </section>
+
+        <section className="cta-section">
+          <div className="shell cta-inner">
+            <span>Sessions</span>
+            <h2>Make the next meeting worth everyone’s time.</h2>
+            <a href={appUrl}>
+              Open the workspace <span>→</span>
+            </a>
+          </div>
+        </section>
+      </main>
+
+      <footer className="shell">
+        <div className="logo footer-logo">
+          <span>S</span>Sessions
+        </div>
+        <p>Independent clean-room meeting platform.</p>
+        <small>© 2026 Sessions</small>
       </footer>
-    </main>
+    </div>
   );
+}
+
+function RoutedPage() {
+  const [route, organizationSlug, workspaceSlug, resourceSlug, ...rest] =
+    window.location.pathname.split('/').filter(Boolean);
+  const completePublicRoute =
+    rest.length === 0 &&
+    organizationSlug !== undefined &&
+    workspaceSlug !== undefined &&
+    resourceSlug !== undefined;
+
+  if (route === 'events' && completePublicRoute) {
+    return (
+      <PublicEventPage
+        organizationSlug={organizationSlug}
+        workspaceSlug={workspaceSlug}
+        eventSlug={resourceSlug}
+      />
+    );
+  }
+  if (route === 'book' && completePublicRoute) {
+    return (
+      <PublicBookingPage
+        organizationSlug={organizationSlug}
+        workspaceSlug={workspaceSlug}
+        bookingSlug={resourceSlug}
+      />
+    );
+  }
+  return <MarketingPage />;
 }
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <RoutedPage />
   </StrictMode>,
 );
