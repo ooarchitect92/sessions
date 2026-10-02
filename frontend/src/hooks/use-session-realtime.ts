@@ -35,6 +35,34 @@ export function useSessionRealtime(sessionId: string): void {
       socket.on('participant.left', () => {
         void queryClient.invalidateQueries({ queryKey: ['session-presence', sessionId] });
       });
+      socket.on('chat.message.created', () => {
+        void queryClient.invalidateQueries({ queryKey: ['chat', sessionId] });
+      });
+      for (const eventName of [
+        'poll.created',
+        'poll.launched',
+        'poll.closed',
+        'poll.results.updated',
+      ]) {
+        socket.on(eventName, () => {
+          void queryClient.invalidateQueries({ queryKey: ['polls', sessionId] });
+        });
+      }
+      for (const eventName of [
+        'question.created',
+        'question.updated',
+        'question.votes.updated',
+      ]) {
+        socket.on(eventName, () => {
+          void queryClient.invalidateQueries({ queryKey: ['questions', sessionId] });
+        });
+      }
+      socket.on('memory.updated', () => {
+        void queryClient.invalidateQueries({ queryKey: ['memory'] });
+        void queryClient.invalidateQueries({
+          queryKey: ['memory-detail', sessionId],
+        });
+      });
     };
 
     void connect();

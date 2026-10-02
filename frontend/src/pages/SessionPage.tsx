@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FormEvent, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api, type MediaToken } from '../api/client';
+import { SessionCollaborationPanel } from '../components/SessionCollaborationPanel';
 import { useSessionRealtime } from '../hooks/use-session-realtime';
 
 function formatTime(value: string): string {
@@ -20,7 +21,17 @@ export function SessionPage() {
   const [agendaEditorOpen, setAgendaEditorOpen] = useState(false);
   const [agendaTitle, setAgendaTitle] = useState('');
   const [agendaDuration, setAgendaDuration] = useState(10);
-  const [agendaType, setAgendaType] = useState<'TEXT' | 'PRESENTATION' | 'WEBSITE' | 'VIDEO' | 'POLL' | 'WHITEBOARD' | 'BREAKOUT' | 'QA' | 'SCREEN_SHARE'>('TEXT');
+  const [agendaType, setAgendaType] = useState<
+    | 'TEXT'
+    | 'PRESENTATION'
+    | 'WEBSITE'
+    | 'VIDEO'
+    | 'POLL'
+    | 'WHITEBOARD'
+    | 'BREAKOUT'
+    | 'QA'
+    | 'SCREEN_SHARE'
+  >('TEXT');
   useSessionRealtime(sessionId);
 
   const session = useQuery({
@@ -37,6 +48,7 @@ export function SessionPage() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
       await queryClient.invalidateQueries({ queryKey: ['sessions'] });
+      await queryClient.invalidateQueries({ queryKey: ['memory'] });
     },
   });
 
@@ -51,7 +63,6 @@ export function SessionPage() {
       await queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
     },
   });
-
 
   const createAgendaItem = useMutation({
     mutationFn: () =>
@@ -80,8 +91,14 @@ export function SessionPage() {
     return (
       <div className="full-page-state error-state">
         <h1>Session unavailable</h1>
-        <p>{session.error instanceof Error ? session.error.message : 'The session could not be loaded.'}</p>
-        <Link to="/" className="button secondary">Return to overview</Link>
+        <p>
+          {session.error instanceof Error
+            ? session.error.message
+            : 'The session could not be loaded.'}
+        </p>
+        <Link to="/" className="button secondary">
+          Return to overview
+        </Link>
       </div>
     );
   }
@@ -94,10 +111,14 @@ export function SessionPage() {
     <div className="session-workspace">
       <header className="session-header">
         <div className="session-header-title">
-          <Link to="/" className="back-link" aria-label="Back to overview">←</Link>
+          <Link to="/" className="back-link" aria-label="Back to overview">
+            ←
+          </Link>
           <div>
             <div className="session-kicker">
-              <span className={`status-badge status-${current.status.toLowerCase()}`}>{current.status.toLowerCase()}</span>
+              <span className={`status-badge status-${current.status.toLowerCase()}`}>
+                {current.status.toLowerCase()}
+              </span>
               <span>{formatTime(current.startsAt)}</span>
             </div>
             <h1>{current.title}</h1>
@@ -105,17 +126,33 @@ export function SessionPage() {
         </div>
         <div className="session-header-actions">
           {canStart ? (
-            <button className="button secondary" onClick={() => transition.mutate('start')} disabled={transition.isPending}>
+            <button
+              className="button secondary"
+              onClick={() => transition.mutate('start')}
+              disabled={transition.isPending}
+            >
               Start session
             </button>
           ) : null}
           {canEnd ? (
-            <button className="button danger" onClick={() => transition.mutate('end')} disabled={transition.isPending}>
+            <button
+              className="button danger"
+              onClick={() => transition.mutate('end')}
+              disabled={transition.isPending}
+            >
               End session
             </button>
           ) : null}
-          <button className="button primary" onClick={() => join.mutate()} disabled={join.isPending}>
-            {join.isPending ? 'Opening stage…' : media ? 'Reconnect media' : 'Join media stage'}
+          <button
+            className="button primary"
+            onClick={() => join.mutate()}
+            disabled={join.isPending}
+          >
+            {join.isPending
+              ? 'Opening stage…'
+              : media
+                ? 'Reconnect media'
+                : 'Join media stage'}
           </button>
         </div>
       </header>
@@ -163,7 +200,10 @@ export function SessionPage() {
                 </label>
                 <label>
                   Content
-                  <select value={agendaType} onChange={(event) => setAgendaType(event.target.value as typeof agendaType)}>
+                  <select
+                    value={agendaType}
+                    onChange={(event) => setAgendaType(event.target.value as typeof agendaType)}
+                  >
                     <option value="TEXT">Discussion</option>
                     <option value="PRESENTATION">Presentation</option>
                     <option value="WEBSITE">Website</option>
@@ -176,8 +216,13 @@ export function SessionPage() {
                   </select>
                 </label>
               </div>
-              {createAgendaItem.error ? <div className="error-banner">{createAgendaItem.error.message}</div> : null}
-              <button className="button primary full-width" disabled={createAgendaItem.isPending || !agendaTitle.trim()}>
+              {createAgendaItem.error ? (
+                <div className="error-banner">{createAgendaItem.error.message}</div>
+              ) : null}
+              <button
+                className="button primary full-width"
+                disabled={createAgendaItem.isPending || !agendaTitle.trim()}
+              >
                 {createAgendaItem.isPending ? 'Adding…' : 'Add agenda item'}
               </button>
             </form>
@@ -194,11 +239,17 @@ export function SessionPage() {
                 const active = current.currentAgendaItemId === item.id;
                 return (
                   <li key={item.id} className={active ? 'agenda-item active' : 'agenda-item'}>
-                    <button onClick={() => activate.mutate(item.id)} disabled={activate.isPending}>
+                    <button
+                      onClick={() => activate.mutate(item.id)}
+                      disabled={activate.isPending}
+                    >
                       <span className="agenda-index">{item.position + 1}</span>
                       <span className="agenda-copy">
                         <strong>{item.title}</strong>
-                        <small>{Math.round(item.durationSeconds / 60)} min · {item.type.toLowerCase().replace('_', ' ')}</small>
+                        <small>
+                          {Math.round(item.durationSeconds / 60)} min ·{' '}
+                          {item.type.toLowerCase().replace('_', ' ')}
+                        </small>
                       </span>
                       {active ? <span className="now-pill">Now</span> : null}
                     </button>
@@ -224,31 +275,31 @@ export function SessionPage() {
             </LiveKitRoom>
           ) : (
             <div className="stage-placeholder">
-              <div className="stage-orbit"><span>S</span></div>
+              <div className="stage-orbit">
+                <span>S</span>
+              </div>
               <span className="eyebrow">Secure media stage</span>
               <h2>Ready when your participants are.</h2>
               <p>
-                Joining requests a short-lived, room-scoped token from the backend. LiveKit handles camera,
-                microphone, screen sharing, adaptive subscriptions, and reconnect behavior.
+                Joining requests a short-lived, room-scoped token from the backend. LiveKit
+                handles camera, microphone, screen sharing, adaptive subscriptions, and
+                reconnect behavior.
               </p>
-              <button className="button primary large" onClick={() => join.mutate()} disabled={join.isPending}>
+              <button
+                className="button primary large"
+                onClick={() => join.mutate()}
+                disabled={join.isPending}
+              >
                 {join.isPending ? 'Preparing room…' : 'Check devices and join'}
               </button>
-              {join.error ? <div className="error-banner compact-error">{join.error.message}</div> : null}
+              {join.error ? (
+                <div className="error-banner compact-error">{join.error.message}</div>
+              ) : null}
             </div>
           )}
         </section>
 
-        <aside className="meeting-side-panel">
-          <div className="side-tabs"><button className="active">People</button><button disabled>Chat</button><button disabled>Q&A</button></div>
-          <div className="people-list">
-            <div className="person-row"><div className="avatar">LO</div><div><strong>Local Owner</strong><small>Host · you</small></div><span>•••</span></div>
-          </div>
-          <div className="side-panel-note">
-            <strong>Realtime foundation active</strong>
-            <p>Presence and agenda activation use authenticated Socket.IO rooms. Durable chat and Q&A are intentionally not claimed yet.</p>
-          </div>
-        </aside>
+        <SessionCollaborationPanel sessionId={sessionId} />
       </div>
     </div>
   );
