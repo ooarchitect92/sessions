@@ -2,7 +2,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api/client';
 
-function ArtifactState({ label, status }: { label: string; status?: string }) {
+function ArtifactState({
+  label,
+  status,
+}: {
+  label: string;
+  status: string | undefined;
+}) {
   return (
     <div className="artifact-state">
       <span>{label}</span>
@@ -21,23 +27,56 @@ export function MemoryDetailPage() {
   });
   const retry = useMutation({
     mutationFn: () => api.retryMemory(sessionId),
-    onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['memory-detail', sessionId] }),
+    onSuccess: async () =>
+      queryClient.invalidateQueries({ queryKey: ['memory-detail', sessionId] }),
   });
 
-  if (memory.isLoading) return <div className="full-page-state">Loading session memory…</div>;
+  if (memory.isLoading)
+    return <div className="full-page-state">Loading session memory…</div>;
   if (memory.error || !memory.data) {
-    return <div className="full-page-state error-state"><h1>Memory unavailable</h1><p>{memory.error?.message}</p><Link className="button secondary" to="/memory">Back to memory</Link></div>;
+    return (
+      <div className="full-page-state error-state">
+        <h1>Memory unavailable</h1>
+        <p>{memory.error?.message}</p>
+        <Link className="button secondary" to="/memory">
+          Back to memory
+        </Link>
+      </div>
+    );
   }
 
   const item = memory.data;
-  const hasFailure = [item.recording?.status, item.transcript?.status, item.memorySummary?.status].includes('FAILED');
+  const hasFailure = [
+    item.recording?.status,
+    item.transcript?.status,
+    item.memorySummary?.status,
+  ].includes('FAILED');
 
   return (
     <div className="memory-detail-page">
       <header className="memory-detail-header">
-        <Link className="back-link light-back" to="/memory">←</Link>
-        <div><span className="eyebrow light">Meeting memory</span><h1>{item.title}</h1><p>{new Intl.DateTimeFormat(undefined, { dateStyle: 'full', timeStyle: 'short' }).format(new Date(item.startsAt))}</p></div>
-        {hasFailure ? <button className="button ghost" onClick={() => retry.mutate()} disabled={retry.isPending}>{retry.isPending ? 'Retrying…' : 'Retry failed jobs'}</button> : null}
+        <Link className="back-link light-back" to="/memory">
+          ←
+        </Link>
+        <div>
+          <span className="eyebrow light">Meeting memory</span>
+          <h1>{item.title}</h1>
+          <p>
+            {new Intl.DateTimeFormat(undefined, {
+              dateStyle: 'full',
+              timeStyle: 'short',
+            }).format(new Date(item.startsAt))}
+          </p>
+        </div>
+        {hasFailure ? (
+          <button
+            className="button ghost"
+            onClick={() => retry.mutate()}
+            disabled={retry.isPending}
+          >
+            {retry.isPending ? 'Retrying…' : 'Retry failed jobs'}
+          </button>
+        ) : null}
       </header>
       <main className="memory-detail-content">
         <section className="artifact-state-grid">
@@ -50,7 +89,14 @@ export function MemoryDetailPage() {
           <section className="panel memory-summary-panel">
             <span className="eyebrow">Reviewed output</span>
             <h2>Summary</h2>
-            {item.memorySummary?.summaryText ? <p className="summary-copy">{item.memorySummary.summaryText}</p> : <div className="artifact-placeholder">Summary generation is pending or was not requested. External actions remain blocked until a user reviews generated output.</div>}
+            {item.memorySummary?.summaryText ? (
+              <p className="summary-copy">{item.memorySummary.summaryText}</p>
+            ) : (
+              <div className="artifact-placeholder">
+                Summary generation is pending or was not requested. External actions remain
+                blocked until a user reviews generated output.
+              </div>
+            )}
             <h3>Decisions</h3>
             <pre>{JSON.stringify(item.memorySummary?.decisions ?? [], null, 2)}</pre>
             <h3>Action items</h3>
@@ -63,10 +109,20 @@ export function MemoryDetailPage() {
             {item.transcript?.segments?.length ? (
               <div className="transcript-segments">
                 {item.transcript.segments.map((segment) => (
-                  <article key={segment.id}><span>{segment.speakerLabel ?? 'Speaker'} · {Math.floor(segment.startMs / 1000)}s</span><p>{segment.text}</p></article>
+                  <article key={segment.id}>
+                    <span>
+                      {segment.speakerLabel ?? 'Speaker'} ·{' '}
+                      {Math.floor(segment.startMs / 1000)}s
+                    </span>
+                    <p>{segment.text}</p>
+                  </article>
                 ))}
               </div>
-            ) : <div className="artifact-placeholder">Transcript segments will appear after the configured STT worker completes.</div>}
+            ) : (
+              <div className="artifact-placeholder">
+                Transcript segments will appear after the configured STT worker completes.
+              </div>
+            )}
           </section>
         </div>
       </main>
