@@ -87,6 +87,12 @@ enum ArtifactStatus {
   DELETED
 }
 
+enum RecordingConsentDecision {
+  GRANTED
+  DECLINED
+  REVOKED
+}
+
 enum ChatChannel {
   EVERYONE
   HOSTS
@@ -128,6 +134,7 @@ model Organization {
   bookingPages        BookingPage[]
   bookingReservations BookingReservation[]
   recordings          Recording[]
+  recordingConsents   RecordingConsent[]
   transcripts         Transcript[]
   transcriptSegments  TranscriptSegment[]
   memorySummaries     MemorySummary[]
@@ -163,6 +170,7 @@ model Workspace {
   bookingPages        BookingPage[]
   bookingReservations BookingReservation[]
   recordings          Recording[]
+  recordingConsents   RecordingConsent[]
   transcripts         Transcript[]
   transcriptSegments  TranscriptSegment[]
   memorySummaries     MemorySummary[]
@@ -208,6 +216,7 @@ model User {
   passwordResetTokens     PasswordResetToken[]
   sentInvitations         WorkspaceInvitation[]    @relation("InvitationSender")
   acceptedInvitations     WorkspaceInvitation[]    @relation("InvitationAcceptor")
+  recordingConsents       RecordingConsent[]
 
   @@index([status])
   @@map("users")
@@ -278,6 +287,7 @@ model Session {
   event                Event?
   bookingReservations  BookingReservation[]
   recording            Recording?
+  recordingConsents    RecordingConsent[]
   transcript           Transcript?
   memorySummary        MemorySummary?
   chatMessages         ChatMessage[]
@@ -428,6 +438,12 @@ model Recording {
   objectKey         String?        @map("object_key") @db.Text
   playbackObjectKey String?        @map("playback_object_key") @db.Text
   durationSeconds   Int?           @map("duration_seconds")
+  mimeType         String?        @map("mime_type") @db.VarChar(160)
+  sizeBytes        String?        @map("size_bytes") @db.VarChar(32)
+  retentionUntil   DateTime?      @map("retention_until") @db.Timestamptz(6)
+  stopRequestedAt  DateTime?      @map("stop_requested_at") @db.Timestamptz(6)
+  deletionRequestedAt DateTime?   @map("deletion_requested_at") @db.Timestamptz(6)
+  deletedAt        DateTime?      @map("deleted_at") @db.Timestamptz(6)
   startedAt         DateTime?      @map("started_at") @db.Timestamptz(6)
   completedAt       DateTime?      @map("completed_at") @db.Timestamptz(6)
   failureCode       String?        @map("failure_code") @db.VarChar(160)
@@ -442,6 +458,30 @@ model Recording {
 
   @@index([organizationId, workspaceId, status])
   @@map("recordings")
+}
+
+model RecordingConsent {
+  id             String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String                   @map("organization_id") @db.Uuid
+  workspaceId    String                   @map("workspace_id") @db.Uuid
+  sessionId      String                   @map("session_id") @db.Uuid
+  userId         String                   @map("user_id") @db.Uuid
+  decision       RecordingConsentDecision
+  policyVersion  String                   @map("policy_version") @db.VarChar(64)
+  noticeVersion  String                   @map("notice_version") @db.VarChar(64)
+  grantedAt      DateTime?                @map("granted_at") @db.Timestamptz(6)
+  revokedAt      DateTime?                @map("revoked_at") @db.Timestamptz(6)
+  createdAt      DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  session        Session                  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user           User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, userId])
+  @@index([organizationId, workspaceId, sessionId, decision])
+  @@index([userId, updatedAt])
+  @@map("recording_consents")
 }
 
 model Transcript {

@@ -40,6 +40,29 @@ export function SessionPage() {
     enabled: Boolean(sessionId),
   });
 
+  const recordingConsent = useQuery({
+    queryKey: ['recording-consent', sessionId],
+    queryFn: () => api.getRecordingConsent(sessionId),
+    enabled: Boolean(sessionId && session.data?.recordingEnabled),
+  });
+
+  const updateRecordingConsent = useMutation({
+    mutationFn: (decision: 'GRANTED' | 'DECLINED' | 'REVOKED') => {
+      const status = recordingConsent.data;
+      return api.recordRecordingConsent(
+        sessionId,
+        decision,
+        status?.policyVersion ?? 'recording-policy-v1',
+        status?.noticeVersion ?? 'recording-notice-v1',
+      );
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ['recording-consent', sessionId],
+      });
+    },
+  });
+
   const transition = useMutation({
     mutationFn: (action: 'start' | 'end' | 'cancel') => {
       if (!session.data) throw new Error('Session is unavailable');
@@ -106,6 +129,9 @@ export function SessionPage() {
   const current = session.data;
   const canStart = ['DRAFT', 'SCHEDULED'].includes(current.status);
   const canEnd = current.status === 'LIVE';
+  const consentGranted =
+    !current.recordingEnabled ||
+    recordingConsent.data?.currentDecision === 'GRANTED';
 
   return (
     <div className="session-workspace">
@@ -146,16 +172,63 @@ export function SessionPage() {
           <button
             className="button primary"
             onClick={() => join.mutate()}
-            disabled={join.isPending}
+            disabled={join.isPending || !consentGranted}
           >
-            {join.isPending
-              ? 'Opening stage…'
-              : media
-                ? 'Reconnect media'
-                : 'Join media stage'}
+            {!consentGranted
+              ? 'Recording consent required'
+              : join.isPending
+                ? 'Opening stage…'
+                : media
+                  ? 'Reconnect media'
+                  : 'Join media stage'}
           </button>
         </div>
       </header>
+
+      {current.recordingEnabled ? (
+        <section className="recording-consent-banner" aria-live="polite">
+          <div>
+            <span className="recording-dot" aria-hidden="true" />
+            <strong>This session is configured for cloud recording.</strong>
+            <p>
+              Recording may include audio, video, screen sharing, chat, polls, and
+              agenda activity. A consent decision is required before media access is
+              issued.
+            </p>
+          </div>
+          <div className="recording-consent-actions">
+            <button
+              className="button primary"
+              type="button"
+              disabled={updateRecordingConsent.isPending}
+              onClick={() => updateRecordingConsent.mutate('GRANTED')}
+            >
+              {recordingConsent.data?.currentDecision === 'GRANTED'
+                ? 'Consent granted'
+                : 'I consent'}
+            </button>
+            <button
+              className="button secondary"
+              type="button"
+              disabled={updateRecordingConsent.isPending}
+              onClick={() => updateRecordingConsent.mutate('DECLINED')}
+            >
+              Decline
+            </button>
+          </div>
+          {recordingConsent.data?.currentDecision === 'DECLINED' ? (
+            <small>
+              You declined recording. Media access remains blocked until you grant
+              consent.
+            </small>
+          ) : null}
+          {updateRecordingConsent.error ? (
+            <div className="error-banner compact-error">
+              {updateRecordingConsent.error.message}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       <div className="meeting-layout">
         <aside className="agenda-rail">
@@ -288,9 +361,13 @@ export function SessionPage() {
               <button
                 className="button primary large"
                 onClick={() => join.mutate()}
-                disabled={join.isPending}
+                disabled={join.isPending || !consentGranted}
               >
-                {join.isPending ? 'Preparing room…' : 'Check devices and join'}
+                {!consentGranted
+                  ? 'Grant consent to join'
+                  : join.isPending
+                    ? 'Preparing room…'
+                    : 'Check devices and join'}
               </button>
               {join.error ? (
                 <div className="error-banner compact-error">{join.error.message}</div>

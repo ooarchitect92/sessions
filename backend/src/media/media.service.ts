@@ -7,6 +7,7 @@ import {
   hasAnyRole,
   type Principal,
 } from '../common/auth/principal';
+import { RecordingsService } from '../recordings/recordings.service';
 import { SessionsService } from '../sessions/sessions.service';
 
 const JOINABLE_SESSION_STATUSES = new Set<SessionStatus>([
@@ -20,6 +21,7 @@ export class MediaService {
   constructor(
     private readonly config: ConfigService,
     private readonly sessions: SessionsService,
+    private readonly recordings: RecordingsService,
   ) {}
 
   async createJoinToken(
@@ -36,6 +38,8 @@ export class MediaService {
         `Media access is unavailable while session is ${session.status}`,
       );
     }
+
+    await this.recordings.assertConsentAndPrepare(principal, session);
 
     const canPublish =
       isHost ||

@@ -50,6 +50,11 @@ export const ArtifactStatusSchema = z.enum([
   'DELETING',
   'DELETED',
 ]);
+export const RecordingConsentDecisionSchema = z.enum([
+  'GRANTED',
+  'DECLINED',
+  'REVOKED',
+]);
 export const ChatChannelSchema = z.enum(['EVERYONE', 'HOSTS']);
 export const PollTypeSchema = z.enum([
   'SINGLE_CHOICE',
@@ -266,6 +271,9 @@ export type CreateBookingPageInput = z.infer<typeof CreateBookingPageSchema>;
 export type BookingPage = z.infer<typeof BookingPageSchema>;
 export type ReserveBookingInput = z.infer<typeof ReserveBookingSchema>;
 export type ArtifactStatus = z.infer<typeof ArtifactStatusSchema>;
+export type RecordingConsentDecision = z.infer<
+  typeof RecordingConsentDecisionSchema
+>;
 export type ChatChannel = z.infer<typeof ChatChannelSchema>;
 export type ChatMessage = z.infer<typeof ChatMessageSchema>;
 export type PollType = z.infer<typeof PollTypeSchema>;

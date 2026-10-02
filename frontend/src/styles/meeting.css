@@ -43,3 +43,85 @@
 .side-panel-note strong { font-size: 10px; }
 .side-panel-note p { color: #8ea09c; font-size: 9px; line-height: 1.5; margin: 6px 0 0; }
 
+
+
+.recording-consent-banner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 88%, #ff4d4f 12%);
+}
+
+.recording-consent-banner p {
+  margin: 0.35rem 0 0;
+  max-width: 78ch;
+  color: var(--text-muted);
+}
+
+.recording-consent-banner > small {
+  grid-column: 1 / -1;
+  color: var(--text-muted);
+}
+
+.recording-dot {
+  display: inline-block;
+  width: 0.65rem;
+  height: 0.65rem;
+  margin-right: 0.55rem;
+  border-radius: 50%;
+  background: #d92d20;
+  box-shadow: 0 0 0 0.25rem rgba(217, 45, 32, 0.14);
+}
+
+.recording-consent-actions,
+.recording-ready-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.recording-playback-panel {
+  margin-bottom: 1.25rem;
+}
+
+.recording-panel-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.recording-panel-heading h2 {
+  margin-bottom: 0;
+}
+
+.recording-panel-heading > strong {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.recording-player {
+  display: block;
+  width: 100%;
+  max-height: 42rem;
+  margin-top: 1rem;
+  border-radius: 0.9rem;
+  background: #0c111d;
+}
+
+.recording-ready-actions {
+  margin-top: 1rem;
+}
+
+@media (max-width: 760px) {
+  .recording-consent-banner {
+    grid-template-columns: 1fr;
+  }
+
+  .recording-panel-heading {
+    flex-direction: column;
+  }
+}

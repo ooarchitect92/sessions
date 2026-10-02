@@ -193,3 +193,34 @@ A model row or pending request is not evidence that provider processing succeede
 4. Introduce regional cells for blast-radius and residency control.
 5. Extract a domain only when measured scaling, runtime, security, ownership, or release constraints justify it.
 6. Qualify backup restoration, regional recovery, load, packet loss, reconnect, and chaos behavior before enterprise release.
+
+
+## Governed recording pipeline
+
+```mermaid
+sequenceDiagram
+  participant U as Participant
+  participant API as NestJS API
+  participant DB as PostgreSQL/RLS
+  participant W as Recording Worker
+  participant LK as LiveKit Egress
+  participant S3 as Private Object Storage
+
+  U->>API: Grant/decline recording consent
+  API->>DB: Upsert consent + audit/outbox
+  U->>API: Request media token
+  API->>DB: Verify GRANTED decision
+  API->>DB: Create pending recording with consent snapshot
+  API-->>U: Room-scoped media token
+  W->>DB: Claim pending recording for LIVE session
+  W->>LK: Start room-composite MP4 egress
+  LK->>S3: Upload private recording
+  W->>LK: Stop after session ends
+  W->>DB: Reconcile COMPLETE/FAILED status
+  U->>API: Request playback
+  API-->>U: Short-lived S3 SigV4 URL
+  W->>S3: Delete after retention expiry/request
+  W->>DB: Mark recording DELETED
+```
+
+Consent is a durable per-user decision rather than a UI-only checkbox. Recording access never exposes long-lived storage credentials or raw object keys. Retention is enforced asynchronously and deletion remains idempotent.

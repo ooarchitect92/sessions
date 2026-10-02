@@ -15,6 +15,7 @@ import type {
   PollStatus,
   PollType,
   QuestionStatus,
+  RecordingConsentDecision,
   Room,
   Session,
   SessionStatus,
@@ -176,8 +177,32 @@ export interface RecordingRecord {
   playbackObjectKey: string | null;
   durationSeconds: number | null;
   failureCode: string | null;
+  mimeType: string | null;
+  sizeBytes: string | null;
+  retentionUntil: string | null;
+  deletionRequestedAt: string | null;
+  deletedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface RecordingConsentStatus {
+  sessionId: string;
+  required: boolean;
+  currentDecision: RecordingConsentDecision | null;
+  policyVersion: string;
+  noticeVersion: string;
+  counts: { granted: number; declined: number; revoked: number };
+  updatedAt: string | null;
+}
+
+export interface RecordingPlaybackGrant {
+  recordingId: string;
+  sessionId: string;
+  url: string;
+  disposition: 'inline' | 'attachment';
+  expiresAt: string;
+  mimeType: string;
 }
 
 export interface TranscriptRecord {
@@ -620,10 +645,59 @@ export const api = {
     });
   },
 
+  getRecordingConsent(sessionId: string): Promise<RecordingConsentStatus> {
+    return request<RecordingConsentStatus>(
+      `/sessions/${sessionId}/recording-consent`,
+    );
+  },
+
+  recordRecordingConsent(
+    sessionId: string,
+    decision: RecordingConsentDecision,
+    policyVersion: string,
+    noticeVersion: string,
+  ): Promise<{
+    sessionId: string;
+    decision: RecordingConsentDecision;
+    policyVersion: string;
+    noticeVersion: string;
+    updatedAt: string;
+  }> {
+    return request(`/sessions/${sessionId}/recording-consent`, {
+      method: "POST",
+      body: JSON.stringify({ decision, policyVersion, noticeVersion }),
+    });
+  },
+
   createMediaToken(sessionId: string): Promise<MediaToken> {
     return request<MediaToken>(`/sessions/${sessionId}/media-token`, {
       method: "POST",
     });
+  },
+
+  createRecordingPlaybackGrant(
+    sessionId: string,
+    disposition: "inline" | "attachment" = "inline",
+  ): Promise<RecordingPlaybackGrant> {
+    return request<RecordingPlaybackGrant>(
+      `/recordings/${sessionId}/playback?disposition=${disposition}`,
+    );
+  },
+
+  updateRecordingRetention(
+    sessionId: string,
+    retentionUntil: string | null,
+  ): Promise<RecordingRecord> {
+    return request<RecordingRecord>(`/recordings/${sessionId}/retention`, {
+      method: "PATCH",
+      body: JSON.stringify({ retentionUntil }),
+    });
+  },
+
+  deleteRecording(
+    sessionId: string,
+  ): Promise<{ recordingId: string; sessionId: string; accepted: true }> {
+    return request(`/recordings/${sessionId}`, { method: "DELETE" });
   },
 
   listEvents(): Promise<EventRecord[]> {

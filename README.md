@@ -13,7 +13,7 @@ The repository now contains runnable vertical slices rather than placeholder-onl
 - **Durable collaboration:** authenticated presence, persisted public/host chat, polls with launch/answer/results/close lifecycle, moderated Q&A, voting, and realtime committed-event broadcasts.
 - **Webinars and events:** event drafts, publish/cancel lifecycle, atomic webinar-session creation, public event pages, registration, capacity handling, waitlisting, and registration administration.
 - **Booking pages:** workspace page management, IANA-timezone availability, minimum notice, buffers, bounded slot generation, conflict filtering, advisory locking, and atomic reservation plus scheduled-session creation.
-- **Meeting memory foundation:** recording, transcript, transcript-segment, and reviewed-summary state models; post-session work requests; a searchable memory library; a memory detail page; and controlled retry of failed jobs.
+- **Governed recording and meeting memory:** durable per-participant recording consent, media-token enforcement, LiveKit room-composite egress, private S3-compatible storage, short-lived signed playback/download grants, retention and deletion processing, transcript/summary state models, searchable memory and controlled retries.
 - **Public journeys:** original public event-registration and booking interfaces in the website application.
 - **Operations:** Docker Compose for PostgreSQL, Redis, MinIO, and LiveKit; database migrations; deterministic seed data; CI migration smoke tests; quality gates; architecture, API, testing, security, and delivery-status documentation.
 

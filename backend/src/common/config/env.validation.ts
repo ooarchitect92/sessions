@@ -34,9 +34,23 @@ const environmentSchema = z
     DEV_USER_EMAIL: z.string().email().default('owner@sessions.local'),
     DEV_USER_PASSWORD: z.string().min(12).default('LocalOwner#2026'),
     LIVEKIT_URL: z.string().min(1).default('ws://localhost:7880'),
+    LIVEKIT_API_URL: z.string().url().default('http://localhost:7880'),
     LIVEKIT_API_KEY: z.string().min(1),
     LIVEKIT_API_SECRET: z.string().min(16),
     LIVEKIT_TOKEN_TTL_SECONDS: z.coerce.number().int().min(300).max(86400).default(21600),
+    LIVEKIT_EGRESS_ENABLED: optionalBoolean.default(false),
+    LIVEKIT_EGRESS_LAYOUT: z.string().min(1).max(100).default('grid-dark'),
+    RECORDING_RETENTION_DAYS: z.coerce.number().int().min(1).max(3650).default(30),
+    RECORDING_PLAYBACK_TTL_SECONDS: z.coerce.number().int().min(30).max(3600).default(300),
+    RECORDING_POLICY_VERSION: z.string().min(1).max(64).default('recording-policy-v1'),
+    RECORDING_NOTICE_VERSION: z.string().min(1).max(64).default('recording-notice-v1'),
+    S3_ENDPOINT: z.string().url(),
+    S3_PUBLIC_ENDPOINT: z.string().url().default('http://localhost:9000'),
+    S3_REGION: z.string().min(1).max(100),
+    S3_BUCKET: z.string().min(3).max(255),
+    S3_ACCESS_KEY: z.string().min(1),
+    S3_SECRET_KEY: z.string().min(1),
+    S3_FORCE_PATH_STYLE: optionalBoolean.default(true),
     OUTBOX_POLL_MS: z.coerce.number().int().min(250).max(60000).default(1000),
   })
   .superRefine((value, context) => {
@@ -96,6 +110,21 @@ const environmentSchema = z
     }
     if (!value.LIVEKIT_URL.startsWith('wss://')) {
       productionIssue('LIVEKIT_URL', 'LIVEKIT_URL must use WSS in production');
+    }
+    if (!value.LIVEKIT_API_URL.startsWith('https://')) {
+      productionIssue(
+        'LIVEKIT_API_URL',
+        'LIVEKIT_API_URL must use HTTPS in production',
+      );
+    }
+    if (!value.S3_ENDPOINT.startsWith('https://')) {
+      productionIssue('S3_ENDPOINT', 'S3_ENDPOINT must use HTTPS in production');
+    }
+    if (!value.S3_PUBLIC_ENDPOINT.startsWith('https://')) {
+      productionIssue(
+        'S3_PUBLIC_ENDPOINT',
+        'S3_PUBLIC_ENDPOINT must use HTTPS in production',
+      );
     }
   });
 

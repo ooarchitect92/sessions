@@ -183,3 +183,14 @@ HTTP failures are normalized to:
 ```
 
 Validation details must never leak secrets or cross-tenant resource existence. Provider failures map to stable internal codes and retain raw details only in restricted logs.
+
+
+## Recording consent and governed playback
+
+- `GET /v1/sessions/:sessionId/recording-consent` returns the current participant decision, policy/notice versions and aggregate decision counts.
+- `POST /v1/sessions/:sessionId/recording-consent` records `GRANTED`, `DECLINED` or `REVOKED` with an audit event. A room-scoped media token is not issued for a recording-enabled session until the current user has granted consent.
+- `GET /v1/recordings/:sessionId/playback?disposition=inline|attachment` returns a short-lived SigV4 URL only for a ready, retained recording.
+- `PATCH /v1/recordings/:sessionId/retention` changes the retention deadline; a past deadline schedules deletion.
+- `DELETE /v1/recordings/:sessionId` schedules permanent object deletion and is restricted to host roles.
+
+LiveKit egress lifecycle changes are performed by the bounded recording worker. Provider job IDs and object keys remain server-side; the browser receives only expiring access grants.
