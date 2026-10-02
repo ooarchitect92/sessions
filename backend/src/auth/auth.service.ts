@@ -1040,8 +1040,8 @@ export class AuthService {
     user: Pick<User, 'id' | 'email' | 'displayName'>,
     membership: MembershipWithWorkspace,
     metadata: AuthRequestMetadata,
-    familyId = randomUUID(),
-    sessionId = randomUUID(),
+    familyId: string = randomUUID(),
+    sessionId: string = randomUUID(),
   ): Promise<TokenBundle> {
     const refresh = this.security.createOpaqueToken(sessionId);
     const accessTokenExpiresIn = this.config.get<number>(
