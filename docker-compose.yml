@@ -76,15 +76,14 @@ services:
       dockerfile: backend/Dockerfile
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://sessions:sessions@postgres:5432/sessions?schema=public
-      MIGRATION_DATABASE_URL: postgresql://sessions:sessions@postgres:5432/sessions?schema=public
-      WORKER_DATABASE_URL: postgresql://sessions_worker:sessions_worker@postgres:5432/sessions?schema=public
+      DATABASE_URL: postgresql://sessions_migrator:sessions_migrator@postgres:5432/sessions?schema=public
+      MIGRATION_DATABASE_URL: postgresql://sessions_migrator:sessions_migrator@postgres:5432/sessions?schema=public
     command:
       - /bin/sh
       - -c
       - >-
-        ./node_modules/.bin/prisma migrate deploy --schema backend/prisma/schema.prisma &&
-        ./node_modules/.bin/tsx backend/prisma/seed.ts
+        ./node_modules/.bin/tsx backend/scripts/migrate.ts &&
+        DATABASE_URL=postgresql://sessions_worker:sessions_worker@postgres:5432/sessions?schema=public ./node_modules/.bin/tsx backend/prisma/seed.ts
     depends_on:
       postgres:
         condition: service_healthy
@@ -98,7 +97,6 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql://sessions_api:sessions_api@postgres:5432/sessions?schema=public
-      MIGRATION_DATABASE_URL: postgresql://sessions:sessions@postgres:5432/sessions?schema=public
       WORKER_DATABASE_URL: postgresql://sessions_worker:sessions_worker@postgres:5432/sessions?schema=public
       REDIS_URL: redis://redis:6379
       LIVEKIT_URL: ws://localhost:7880
@@ -135,8 +133,11 @@ services:
       dockerfile: website/Dockerfile
       args:
         VITE_APP_URL: http://localhost:3000
+        VITE_API_URL: http://localhost:4000/v1
     ports:
       - "3001:80"
+    depends_on:
+      - api
 
 volumes:
   postgres-data:
