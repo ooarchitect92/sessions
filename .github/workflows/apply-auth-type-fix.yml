@@ -1,0 +1,148 @@
+name: Apply auth type fixes
+
+on:
+  push:
+    branches:
+      - feature/identity-workspaces-foundation-20261002
+    paths:
+      - ".github/workflows/apply-auth-type-fix.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch authentication service
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('backend/src/auth/auth.service.ts')
+          source = path.read_text()
+
+          old_challenge = """    const result = await this.prisma.$transaction(async (transaction) => {
+              await transaction.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${claims.challengeId}, 0))`;
+              const challenge = await transaction.authChallenge.findUnique({
+                where: { id: claims.challengeId },
+                include: {
+                  user: { include: { mfaFactor: true } },
+                  workspace: { include: { organization: true } },
+                },
+              });
+              if (
+                !challenge ||
+                challenge.userId !== claims.sub ||
+                challenge.purpose !== AuthChallengePurpose.MFA_LOGIN ||
+                challenge.consumedAt ||
+                challenge.expiresAt <= new Date() ||
+                challenge.attempts >= MAX_LOGIN_ATTEMPTS ||
+                !challenge.user.mfaFactor?.verifiedAt ||
+                challenge.user.mfaFactor.disabledAt
+              ) {
+                return { error: 'invalid_challenge' } as const;
+              }
+
+              const verified = await this.verifyMfaCode(
+                transaction,
+                challenge.user.mfaFactor,
+                input.code,
+              );
+          """
+          new_challenge = """    const challengeId = claims.challengeId as string;
+              const challengeUserId = claims.sub as string;
+
+              const result = await this.prisma.$transaction(async (transaction) => {
+                await transaction.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${challengeId}, 0))`;
+                const challenge = await transaction.authChallenge.findUnique({
+                  where: { id: challengeId },
+                  include: {
+                    user: true,
+                    workspace: { include: { organization: true } },
+                  },
+                });
+                const factor = challenge
+                  ? await transaction.userMfaFactor.findUnique({
+                      where: { userId: challenge.userId },
+                    })
+                  : null;
+                if (
+                  !challenge ||
+                  challenge.userId !== challengeUserId ||
+                  challenge.purpose !== AuthChallengePurpose.MFA_LOGIN ||
+                  challenge.consumedAt ||
+                  challenge.expiresAt <= new Date() ||
+                  challenge.attempts >= MAX_LOGIN_ATTEMPTS ||
+                  !factor?.verifiedAt ||
+                  factor.disabledAt
+                ) {
+                  return { error: 'invalid_challenge' } as const;
+                }
+
+                const verified = await this.verifyMfaCode(transaction, factor, input.code);
+          """
+          if old_challenge not in source:
+              raise SystemExit('MFA challenge block was not found')
+          source = source.replace(old_challenge, new_challenge, 1)
+
+          old_result = """    if ('bundle' in result) return result.bundle;
+              if (result.error === 'workspace_access') {
+                throw new ForbiddenException('Workspace access is no longer available');
+              }
+              throw new UnauthorizedException(
+                result.error === 'invalid_code'
+                  ? 'The MFA code is invalid'
+                  : 'The MFA challenge is invalid or expired',
+              );
+          """
+          new_result = """    if ('bundle' in result) return result.bundle;
+              const error = 'error' in result ? result.error : 'invalid_challenge';
+              if (error === 'workspace_access') {
+                throw new ForbiddenException('Workspace access is no longer available');
+              }
+              throw new UnauthorizedException(
+                error === 'invalid_code'
+                  ? 'The MFA code is invalid'
+                  : 'The MFA challenge is invalid or expired',
+              );
+          """
+          if old_result not in source:
+              raise SystemExit('MFA result block was not found')
+          source = source.replace(old_result, new_result, 1)
+
+          old_hashes = """    const hashes = Array.isArray(factor.recoveryCodeHashes)
+              ? factor.recoveryCodeHashes.filter(
+                  (value): value is string => typeof value === 'string',
+                )
+              : [];
+          """
+          new_hashes = """    const rawHashes: unknown = factor.recoveryCodeHashes;
+              const hashes = Array.isArray(rawHashes)
+                ? rawHashes.filter((value): value is string => typeof value === 'string')
+                : [];
+          """
+          if old_hashes not in source:
+              raise SystemExit('Recovery-code block was not found')
+          source = source.replace(old_hashes, new_hashes, 1)
+          source = source.replace(
+              "      data: { recoveryCodeHashes: hashes },",
+              "      data: { recoveryCodeHashes: hashes as Prisma.InputJsonValue },",
+              1,
+          )
+
+          path.write_text(source)
+          PY
+
+          rm -f .github/workflows/apply-auth-type-fix.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: tighten authentication type handling"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
