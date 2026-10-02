@@ -11,7 +11,11 @@
 - [x] agenda editor and realtime activation
 - [x] LiveKit token issuance and browser meeting stage
 - [x] audit events, idempotency records and transactional outbox
-- [ ] production OIDC, invitations, role management, MFA and token revocation
+- [x] local email/password identity, email verification tokens and password recovery
+- [x] rotating refresh sessions, reuse detection, session inventory and revocation
+- [x] workspace invitations, owner-preserving role management and multi-workspace switching
+- [x] TOTP MFA with encrypted secrets and single-use recovery codes
+- [ ] production OIDC/SAML, IdP logout, SCIM, rate limiting and identity-provider qualification
 - [ ] device preflight, host moderation, reconnect and media qualification
 
 ## Phase 2 — collaboration and reliable capture

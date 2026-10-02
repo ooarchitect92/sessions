@@ -16,6 +16,17 @@ enum WorkspaceRole {
   GUEST
 }
 
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+enum AuthChallengePurpose {
+  MFA_LOGIN
+}
+
 enum SessionKind {
   MEETING
   WEBINAR
@@ -126,6 +137,9 @@ model Organization {
   pollAnswers         PollAnswer[]
   questions           Question[]
   questionVotes       QuestionVote[]
+  authSessions        AuthSession[]
+  authChallenges      AuthChallenge[]
+  workspaceInvitations WorkspaceInvitation[]
 
   @@map("organizations")
 }
@@ -158,6 +172,9 @@ model Workspace {
   pollAnswers         PollAnswer[]
   questions           Question[]
   questionVotes       QuestionVote[]
+  authSessions        AuthSession[]
+  authChallenges      AuthChallenge[]
+  workspaceInvitations WorkspaceInvitation[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -165,20 +182,34 @@ model Workspace {
 }
 
 model User {
-  id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  email               String                @unique @db.Citext
-  displayName         String                @map("display_name") @db.VarChar(160)
-  avatarUrl           String?               @map("avatar_url") @db.Text
-  createdAt           DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt           DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
-  memberships         WorkspaceMembership[]
-  createdSessions     Session[]             @relation("SessionCreator")
-  createdEvents       Event[]               @relation("EventCreator")
-  createdBookingPages BookingPage[]         @relation("BookingPageCreator")
-  chatMessages        ChatMessage[]         @relation("ChatMessageAuthor")
-  createdPolls        Poll[]                @relation("PollCreator")
-  submittedQuestions  Question[]            @relation("QuestionAuthor")
+  id                      String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email                   String                   @unique @db.Citext
+  displayName             String                   @map("display_name") @db.VarChar(160)
+  avatarUrl               String?                  @map("avatar_url") @db.Text
+  passwordHash            String?                  @map("password_hash") @db.Text
+  status                  UserStatus               @default(ACTIVE)
+  emailVerifiedAt         DateTime?                @map("email_verified_at") @db.Timestamptz(6)
+  failedLoginAttempts     Int                      @default(0) @map("failed_login_attempts")
+  lockedUntil             DateTime?                @map("locked_until") @db.Timestamptz(6)
+  lastLoginAt             DateTime?                @map("last_login_at") @db.Timestamptz(6)
+  createdAt               DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt               DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+  memberships             WorkspaceMembership[]
+  createdSessions         Session[]                @relation("SessionCreator")
+  createdEvents           Event[]                  @relation("EventCreator")
+  createdBookingPages     BookingPage[]            @relation("BookingPageCreator")
+  chatMessages            ChatMessage[]            @relation("ChatMessageAuthor")
+  createdPolls            Poll[]                   @relation("PollCreator")
+  submittedQuestions      Question[]               @relation("QuestionAuthor")
+  authSessions            AuthSession[]
+  authChallenges          AuthChallenge[]
+  mfaFactor               UserMfaFactor?
+  emailVerificationTokens EmailVerificationToken[]
+  passwordResetTokens     PasswordResetToken[]
+  sentInvitations         WorkspaceInvitation[]    @relation("InvitationSender")
+  acceptedInvitations     WorkspaceInvitation[]    @relation("InvitationAcceptor")
 
+  @@index([status])
   @@map("users")
 }
 
@@ -658,4 +689,114 @@ model AuditEvent {
   @@index([organizationId, workspaceId, createdAt])
   @@index([actorUserId, createdAt])
   @@map("audit_events")
+}
+
+
+model AuthSession {
+  id               String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId           String        @map("user_id") @db.Uuid
+  organizationId   String        @map("organization_id") @db.Uuid
+  workspaceId      String        @map("workspace_id") @db.Uuid
+  familyId         String        @map("family_id") @db.Uuid
+  refreshTokenHash String        @map("refresh_token_hash") @db.VarChar(64)
+  userAgent        String?       @map("user_agent") @db.VarChar(500)
+  ipHash           String?       @map("ip_hash") @db.VarChar(64)
+  expiresAt        DateTime      @map("expires_at") @db.Timestamptz(6)
+  lastUsedAt       DateTime      @default(now()) @map("last_used_at") @db.Timestamptz(6)
+  revokedAt        DateTime?     @map("revoked_at") @db.Timestamptz(6)
+  revokedReason    String?       @map("revoked_reason") @db.VarChar(160)
+  replacedById     String?       @map("replaced_by_id") @db.Uuid
+  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization     Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace        Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  replacedBy       AuthSession?  @relation("AuthSessionRotation", fields: [replacedById], references: [id], onDelete: SetNull)
+  previousSessions AuthSession[] @relation("AuthSessionRotation")
+
+  @@index([userId, revokedAt, expiresAt])
+  @@index([familyId])
+  @@index([organizationId, workspaceId])
+  @@map("auth_sessions")
+}
+
+model AuthChallenge {
+  id             String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String               @map("user_id") @db.Uuid
+  organizationId String               @map("organization_id") @db.Uuid
+  workspaceId    String               @map("workspace_id") @db.Uuid
+  purpose        AuthChallengePurpose
+  attempts       Int                  @default(0)
+  expiresAt      DateTime             @map("expires_at") @db.Timestamptz(6)
+  consumedAt     DateTime?            @map("consumed_at") @db.Timestamptz(6)
+  createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose, expiresAt])
+  @@map("auth_challenges")
+}
+
+model UserMfaFactor {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId             String    @unique @map("user_id") @db.Uuid
+  encryptedSecret    String    @map("encrypted_secret") @db.Text
+  recoveryCodeHashes Json      @default("[]") @map("recovery_code_hashes")
+  verifiedAt         DateTime? @map("verified_at") @db.Timestamptz(6)
+  disabledAt         DateTime? @map("disabled_at") @db.Timestamptz(6)
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_mfa_factors")
+}
+
+model EmailVerificationToken {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @map("token_hash") @db.VarChar(64)
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("email_verification_tokens")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @map("token_hash") @db.VarChar(64)
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("password_reset_tokens")
+}
+
+model WorkspaceInvitation {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String        @map("organization_id") @db.Uuid
+  workspaceId    String        @map("workspace_id") @db.Uuid
+  email          String        @db.Citext
+  role           WorkspaceRole @default(MEMBER)
+  tokenHash      String        @map("token_hash") @db.VarChar(64)
+  invitedById    String        @map("invited_by_id") @db.Uuid
+  acceptedById   String?       @map("accepted_by_id") @db.Uuid
+  expiresAt      DateTime      @map("expires_at") @db.Timestamptz(6)
+  acceptedAt     DateTime?     @map("accepted_at") @db.Timestamptz(6)
+  revokedAt      DateTime?     @map("revoked_at") @db.Timestamptz(6)
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  invitedBy      User          @relation("InvitationSender", fields: [invitedById], references: [id], onDelete: Restrict)
+  acceptedBy     User?         @relation("InvitationAcceptor", fields: [acceptedById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, workspaceId, createdAt])
+  @@index([workspaceId, email, acceptedAt, revokedAt])
+  @@map("workspace_invitations")
 }

@@ -7,6 +7,7 @@ export interface Principal {
   email: string;
   displayName: string;
   roles: WorkspaceRole[];
+  sessionId?: string;
 }
 
 export interface AccessTokenClaims {
@@ -16,6 +17,7 @@ export interface AccessTokenClaims {
   email: string;
   displayName: string;
   roles: WorkspaceRole[];
+  sid?: string;
   iss?: string;
   aud?: string | string[];
   iat?: number;

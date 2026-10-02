@@ -5,10 +5,11 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { JwtService } from '@nestjs/jwt';
 import { Reflector } from '@nestjs/core';
+import { JwtService } from '@nestjs/jwt';
 import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { AuthService } from '../../auth/auth.service';
 import { IS_PUBLIC_KEY } from './public.decorator';
 import type { AccessTokenClaims, Principal } from './principal';
 
@@ -19,6 +20,7 @@ const claimsSchema = z.object({
   email: z.string().email(),
   displayName: z.string().min(1).max(160),
   roles: z.array(z.enum(['OWNER', 'ADMIN', 'HOST', 'MEMBER', 'ANALYST', 'GUEST'])).min(1),
+  sid: z.string().uuid().optional(),
 });
 
 type RequestWithPrincipal = FastifyRequest & { principal?: Principal };
@@ -29,6 +31,7 @@ export class PrincipalGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
+    private readonly auth: AuthService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -52,17 +55,11 @@ export class PrincipalGuard implements CanActivate {
         issuer: this.config.getOrThrow<string>('JWT_ISSUER'),
         audience: this.config.getOrThrow<string>('JWT_AUDIENCE'),
       });
-      const parsed = claimsSchema.parse(claims);
-      request.principal = {
-        userId: parsed.sub,
-        organizationId: parsed.organizationId,
-        workspaceId: parsed.workspaceId,
-        email: parsed.email,
-        displayName: parsed.displayName,
-        roles: parsed.roles,
-      };
+      const parsed = claimsSchema.parse(claims) as AccessTokenClaims;
+      request.principal = await this.auth.resolvePrincipalFromClaims(parsed);
       return true;
-    } catch {
+    } catch (error: unknown) {
+      if (error instanceof UnauthorizedException) throw error;
       throw new UnauthorizedException('The access token is invalid or expired');
     }
   }

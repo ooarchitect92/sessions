@@ -3,12 +3,15 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { App } from './App';
+import { AuthProvider } from './auth/AuthContext';
 import './styles/base.css';
 import './styles/dashboard.css';
 import './styles/meeting.css';
 import './styles/responsive.css';
 import './styles/rooms.css';
 import './styles/workflows.css';
+import './styles/auth.css';
+import './styles/settings.css';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -25,7 +28,9 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <App />
+        <AuthProvider>
+          <App />
+        </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>
   </StrictMode>,

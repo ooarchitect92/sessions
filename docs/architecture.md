@@ -50,6 +50,12 @@ flowchart TD
   ArtifactRequests --> Memory[Meeting memory]
 ```
 
+## Identity and workspace control plane
+
+The first implemented identity boundary supports local email/password accounts, optional email verification, lockout, password reset, rotating opaque refresh tokens, token-family reuse detection, login-session inventory and revocation, TOTP MFA, recovery codes, expiring workspace invitations, role changes and multi-workspace switching. Access JWTs include `sid`; HTTP and Socket.IO authorization revalidate that session plus the current membership before constructing the principal. This prevents a stale token from retaining access after member removal, role change, password reset or explicit session revocation.
+
+Authentication-secret tables are not granted to the normal tenant API role. A separately governed control-plane connection handles identity flows and must scope every operation by verified token, user or invitation context. Public recovery and verification requests use indistinguishable responses to reduce account enumeration. External OIDC/SAML remains a separate provider adapter and operational qualification gate rather than being simulated by local authentication.
+
 ## Tenant model and isolation
 
 ```mermaid
@@ -161,7 +167,7 @@ A model row or pending request is not evidence that provider processing succeede
 ## Security boundaries
 
 - LiveKit API secrets never leave the backend; browsers receive short-lived room-scoped grants.
-- Production identity must use verified OIDC/SAML and revocable sessions; development JWT bootstrap is disabled in production.
+- Local identity uses short-lived JWTs bound to rotating, revocable database sessions; passwords use scrypt, MFA secrets use authenticated encryption, and role changes are re-read on every request. Deterministic bootstrap is disabled in production. Enterprise identity still requires qualified OIDC/SAML, IdP logout and SCIM.
 - Recording/transcription require visible disclosure, policy-driven consent, active indicators, audited access, retention, and deletion.
 - External content requires allow-listed origins, CSP, sandboxed iframes, upload quarantine, malware scanning, and explicit remote-control grants.
 - OAuth credentials and provider secrets belong in a managed vault with rotation and tenant ownership.

@@ -15,7 +15,22 @@ Production uses separate database identities:
 
 - **Migrator:** owns schema deployment and grants.
 - **API role:** normal authenticated tenant traffic, constrained by RLS.
-- **Worker role:** trusted bounded workers that may claim cross-tenant outbox rows and must re-establish tenant context before business-data access.
+- **Worker/control-plane role:** trusted identity and bounded-worker operations that must scope every lookup explicitly before touching tenant data.
+
+### Account and login security
+
+- `auth_sessions`
+- `auth_challenges`
+- `user_mfa_factors`
+- `email_verification_tokens`
+- `password_reset_tokens`
+- `workspace_invitations`
+
+Users are global identities and receive access through workspace memberships. Passwords are stored as versioned scrypt hashes with per-password salts. Access tokens are short-lived JWTs containing a login-session identifier; the guard re-reads the session, active user, workspace membership and current role. Refresh credentials are opaque `id.secret` values: only a SHA-256 digest of the secret is stored, each use rotates the session, and reuse of a revoked token revokes the surviving token family.
+
+TOTP secrets are encrypted with AES-256-GCM and recovery codes are stored only as one-way hashes. Login challenges have bounded attempts and expiry. Verification, password-reset and invitation tokens use opaque secrets, expiry, single-use state and advisory transaction locks to prevent concurrent replay. Invitations are workspace scoped, role scoped, expiring and revocable; a partial unique index prevents duplicate active invitations for the same email.
+
+The `sessions_api` role is explicitly denied access to authentication-secret tables. Identity operations use the separately governed control-plane connection, while normal business operations continue through forced tenant RLS. `workspace_invitations` retain tenant columns and forced RLS because they are also visible in workspace administration.
 
 ## Meetings and rooms
 
@@ -112,6 +127,10 @@ erDiagram
   ORGANIZATION ||--o{ WORKSPACE : contains
   USER ||--o{ WORKSPACE_MEMBERSHIP : has
   WORKSPACE ||--o{ WORKSPACE_MEMBERSHIP : grants
+  USER ||--o{ AUTH_SESSION : owns
+  USER ||--o{ AUTH_CHALLENGE : receives
+  USER ||--o| USER_MFA_FACTOR : secures
+  WORKSPACE ||--o{ WORKSPACE_INVITATION : issues
   WORKSPACE ||--o{ ROOM : owns
   WORKSPACE ||--o{ SESSION : owns
   ROOM ||--o{ SESSION : hosts
@@ -149,7 +168,7 @@ erDiagram
 
 The following remain planned or require deeper implementation:
 
-- invitations, login sessions, MFA factors, OIDC/SAML connections, SCIM and security events
+- OIDC/SAML connections, SCIM provisioning, step-up policy, organization lifecycle and richer security-event projections
 - attendance intervals, participant devices, reactions and private chat channels
 - whiteboards, snapshots, operation compaction, breakout rooms and assignments
 - content blocks, upload quarantine, asset provenance, embed connections and control grants
