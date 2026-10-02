@@ -17,6 +17,16 @@ import { OutboxService } from '../outbox/outbox.service';
 import { CreateAgendaItemDto } from './dto/create-agenda-item.dto';
 import { ReorderAgendaDto } from './dto/reorder-agenda.dto';
 
+const EDITABLE_SESSION_STATUSES = new Set<SessionStatus>([
+  SessionStatus.DRAFT,
+  SessionStatus.SCHEDULED,
+]);
+const ACTIVATABLE_SESSION_STATUSES = new Set<SessionStatus>([
+  SessionStatus.DRAFT,
+  SessionStatus.SCHEDULED,
+  SessionStatus.LIVE,
+]);
+
 @Injectable()
 export class AgendasService {
   constructor(
@@ -177,8 +187,10 @@ export class AgendasService {
       select: { status: true },
     });
     if (!session) throw new NotFoundException('Session not found');
-    if (![SessionStatus.DRAFT, SessionStatus.SCHEDULED].includes(session.status)) {
-      throw new BadRequestException(`Agenda cannot be edited while session is ${session.status}`);
+    if (!EDITABLE_SESSION_STATUSES.has(session.status)) {
+      throw new BadRequestException(
+        `Agenda cannot be edited while session is ${session.status}`,
+      );
     }
   }
 
@@ -191,12 +203,10 @@ export class AgendasService {
       select: { status: true },
     });
     if (!session) throw new NotFoundException('Session not found');
-    if (
-      ![SessionStatus.DRAFT, SessionStatus.SCHEDULED, SessionStatus.LIVE].includes(
-        session.status,
-      )
-    ) {
-      throw new BadRequestException(`Agenda cannot be activated while session is ${session.status}`);
+    if (!ACTIVATABLE_SESSION_STATUSES.has(session.status)) {
+      throw new BadRequestException(
+        `Agenda cannot be activated while session is ${session.status}`,
+      );
     }
   }
 

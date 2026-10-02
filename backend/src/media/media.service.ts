@@ -9,6 +9,12 @@ import {
 } from '../common/auth/principal';
 import { SessionsService } from '../sessions/sessions.service';
 
+const JOINABLE_SESSION_STATUSES = new Set<SessionStatus>([
+  SessionStatus.DRAFT,
+  SessionStatus.SCHEDULED,
+  SessionStatus.LIVE,
+]);
+
 @Injectable()
 export class MediaService {
   constructor(
@@ -25,12 +31,10 @@ export class MediaService {
     if (session.status === SessionStatus.DRAFT && !isHost) {
       throw new ForbiddenException('Only a host can join a draft session');
     }
-    if (
-      ![SessionStatus.DRAFT, SessionStatus.SCHEDULED, SessionStatus.LIVE].includes(
-        session.status,
-      )
-    ) {
-      throw new ConflictException(`Media access is unavailable while session is ${session.status}`);
+    if (!JOINABLE_SESSION_STATUSES.has(session.status)) {
+      throw new ConflictException(
+        `Media access is unavailable while session is ${session.status}`,
+      );
     }
 
     const canPublish =
