@@ -1,0 +1,33 @@
+name: Apply recording egress slice
+
+on:
+  push:
+    branches:
+      - feature/recording-egress-consent-20261003
+    paths:
+      - ".github/workflows/apply-recording-existing.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply recording architecture changes
+        shell: bash
+        run: |
+          cat scripts/recording-patch-part-*.txt > /tmp/apply-recording-existing.py
+          python /tmp/apply-recording-existing.py
+          rm -f scripts/recording-patch-part-*.txt
+          rm -f .github/workflows/apply-recording-existing.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: integrate recording consent and egress architecture"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
