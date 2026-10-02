@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api/client';
 
@@ -20,6 +21,7 @@ function ArtifactState({
 export function MemoryDetailPage() {
   const { sessionId = '' } = useParams();
   const queryClient = useQueryClient();
+  const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
   const memory = useQuery({
     queryKey: ['memory-detail', sessionId],
     queryFn: () => api.getMemory(sessionId),
@@ -29,6 +31,27 @@ export function MemoryDetailPage() {
     mutationFn: () => api.retryMemory(sessionId),
     onSuccess: async () =>
       queryClient.invalidateQueries({ queryKey: ['memory-detail', sessionId] }),
+  });
+  const playback = useMutation({
+    mutationFn: (disposition: 'inline' | 'attachment') =>
+      api.createRecordingPlaybackGrant(sessionId, disposition),
+    onSuccess: (grant) => {
+      if (grant.disposition === 'attachment') {
+        window.location.assign(grant.url);
+      } else {
+        setPlaybackUrl(grant.url);
+      }
+    },
+  });
+  const removeRecording = useMutation({
+    mutationFn: () => api.deleteRecording(sessionId),
+    onSuccess: async () => {
+      setPlaybackUrl(null);
+      await queryClient.invalidateQueries({
+        queryKey: ['memory-detail', sessionId],
+      });
+      await queryClient.invalidateQueries({ queryKey: ['memory'] });
+    },
   });
 
   if (memory.isLoading)
@@ -83,6 +106,69 @@ export function MemoryDetailPage() {
           <ArtifactState label="Recording" status={item.recording?.status} />
           <ArtifactState label="Transcript" status={item.transcript?.status} />
           <ArtifactState label="AI summary" status={item.memorySummary?.status} />
+        </section>
+
+        <section className="panel recording-playback-panel">
+          <div className="recording-panel-heading">
+            <div>
+              <span className="eyebrow">Governed recording</span>
+              <h2>Playback and retention</h2>
+            </div>
+            <strong>
+              {item.recording?.retentionUntil
+                ? `Retained until ${new Intl.DateTimeFormat(undefined, {
+                    dateStyle: 'medium',
+                  }).format(new Date(item.recording.retentionUntil))}`
+                : 'No automatic expiry'}
+            </strong>
+          </div>
+          {playbackUrl ? (
+            <video className="recording-player" controls src={playbackUrl}>
+              Your browser does not support video playback.
+            </video>
+          ) : item.recording?.status === 'READY' ? (
+            <div className="recording-ready-actions">
+              <button
+                className="button primary"
+                onClick={() => playback.mutate('inline')}
+                disabled={playback.isPending}
+              >
+                {playback.isPending ? 'Authorizing…' : 'Play recording'}
+              </button>
+              <button
+                className="button secondary"
+                onClick={() => playback.mutate('attachment')}
+                disabled={playback.isPending}
+              >
+                Download
+              </button>
+              <button
+                className="button danger"
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      'Permanently delete the stored recording? This cannot be undone.',
+                    )
+                  ) {
+                    removeRecording.mutate();
+                  }
+                }}
+                disabled={removeRecording.isPending}
+              >
+                {removeRecording.isPending ? 'Scheduling deletion…' : 'Delete'}
+              </button>
+            </div>
+          ) : (
+            <div className="artifact-placeholder">
+              Playback becomes available after the egress worker finalizes the
+              recording. Deleting and expired recordings never receive signed URLs.
+            </div>
+          )}
+          {playback.error || removeRecording.error ? (
+            <div className="error-banner compact-error">
+              {(playback.error ?? removeRecording.error)?.message}
+            </div>
+          ) : null}
         </section>
 
         <div className="memory-detail-grid">

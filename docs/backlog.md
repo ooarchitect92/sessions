@@ -30,8 +30,8 @@
 - [ ] upload quarantine, malware scan and signed downloads
 - [x] recording, transcript and summary artifact state models
 - [x] post-session artifact requests, audit evidence and retry controls
-- [ ] LiveKit egress orchestration and recording finalization worker
-- [ ] recording consent ledger, playback authorization, retention and deletion
+- [x] LiveKit egress orchestration and recording finalization worker
+- [x] recording consent ledger, playback authorization, retention and deletion
 
 ## Phase 3 — scheduling and audience workflows
 
@@ -55,7 +55,7 @@
 - [x] reviewed summary, decision, action-item and citation model
 - [ ] recording/STT workers, streaming captions and diarization qualification
 - [ ] transcript correction, revision history and language policy
-- [ ] object-storage access, signed playback and secure download paths
+- [x] object-storage access, signed playback and secure download paths
 - [ ] PostgreSQL full-text index and optional vector retrieval with workspace filters
 - [ ] agenda generator and provider-abstracted AI execution gateway
 - [ ] summary/action editor, follow-up approval and CRM write controls

@@ -69,6 +69,20 @@ services:
       redis:
         condition: service_healthy
 
+  egress:
+    image: livekit/egress:v1.12.0
+    environment:
+      EGRESS_CONFIG_FILE: /etc/egress.yaml
+    volumes:
+      - ./infra/livekit/egress.yaml:/etc/egress.yaml:ro
+    cap_add:
+      - SYS_ADMIN
+    depends_on:
+      redis:
+        condition: service_healthy
+      livekit:
+        condition: service_started
+
   migrate-and-seed:
     image: sessions-api:local
     build:
@@ -100,6 +114,8 @@ services:
       WORKER_DATABASE_URL: postgresql://sessions_worker:sessions_worker@postgres:5432/sessions?schema=public
       REDIS_URL: redis://redis:6379
       LIVEKIT_URL: ws://localhost:7880
+      LIVEKIT_API_URL: http://livekit:7880
+      LIVEKIT_EGRESS_ENABLED: "true"
       S3_ENDPOINT: http://minio:9000
     ports:
       - "4000:4000"
@@ -109,6 +125,8 @@ services:
       redis:
         condition: service_healthy
       livekit:
+        condition: service_started
+      egress:
         condition: service_started
 
   app:

@@ -13,6 +13,12 @@ const base = {
   JWT_SECRET: 'unit-test-jwt-secret-that-is-at-least-thirty-two-characters',
   LIVEKIT_API_KEY: 'test-key',
   LIVEKIT_API_SECRET: 'test-secret-that-is-long-enough',
+  S3_ENDPOINT: 'http://localhost:9000',
+  S3_PUBLIC_ENDPOINT: 'http://localhost:9000',
+  S3_REGION: 'us-east-1',
+  S3_BUCKET: 'sessions-test',
+  S3_ACCESS_KEY: 'test-access',
+  S3_SECRET_KEY: 'test-secret',
 };
 
 describe('environment validation', () => {

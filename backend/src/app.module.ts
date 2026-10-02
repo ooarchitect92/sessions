@@ -18,6 +18,7 @@ import { MediaModule } from "./media/media.module";
 import { MemoryModule } from "./memory/memory.module";
 import { OutboxModule } from "./outbox/outbox.module";
 import { RealtimeModule } from "./realtime/realtime.module";
+import { RecordingsModule } from "./recordings/recordings.module";
 import { RoomsModule } from "./rooms/rooms.module";
 import { SessionsModule } from "./sessions/sessions.module";
 import { WorkspacesModule } from "./workspaces/workspaces.module";
@@ -37,6 +38,7 @@ import { WorkspacesModule } from "./workspaces/workspaces.module";
     HealthModule,
     OutboxModule,
     MemoryModule,
+    RecordingsModule,
     SessionsModule,
     RoomsModule,
     AgendasModule,
