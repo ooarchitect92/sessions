@@ -5,11 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  Prisma,
-  SessionStatus,
-  type Session,
-} from '@prisma/client';
+import { Prisma, SessionStatus, type Session } from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
 import { AuditService } from '../audit/audit.service';
 import {
@@ -18,6 +14,7 @@ import {
   type Principal,
 } from '../common/auth/principal';
 import { TenantDatabaseService } from '../database/tenant-database.service';
+import { MemoryService } from '../memory/memory.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { CreateSessionDto } from './dto/create-session.dto';
 import { ListSessionsQuery } from './dto/list-sessions.query';
@@ -34,6 +31,7 @@ export class SessionsService {
     private readonly database: TenantDatabaseService,
     private readonly audit: AuditService,
     private readonly outbox: OutboxService,
+    private readonly memory: MemoryService,
   ) {}
 
   async create(
@@ -286,9 +284,7 @@ export class SessionsService {
         if (current.version !== expectedVersion) {
           throw new ConflictException(`Version conflict. Current version is ${current.version}`);
         }
-        throw new ConflictException(
-          `Session cannot move from ${current.status} to ${to}`,
-        );
+        throw new ConflictException(`Session cannot move from ${current.status} to ${to}`);
       }
 
       const session = await transaction.session.findUniqueOrThrow({ where: { id } });
@@ -304,6 +300,9 @@ export class SessionsService {
         eventType,
         payload: this.toJson(session),
       });
+      if (to === SessionStatus.ENDED) {
+        await this.memory.ensureArtifactsForEndedSession(transaction, principal, session);
+      }
       return session;
     });
   }
