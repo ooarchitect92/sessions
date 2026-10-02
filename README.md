@@ -8,7 +8,7 @@ This repository intentionally does **not** copy proprietary source code, visual 
 
 The repository now contains runnable vertical slices rather than placeholder-only modules:
 
-- **Tenant-safe platform core:** organizations, workspaces, memberships, roles, deterministic development identity, separate database roles, forced PostgreSQL row-level security, audit records, idempotency records, optimistic concurrency, and a transactional outbox.
+- **Tenant-safe platform core:** organizations, multiple workspaces, role-scoped memberships, email/password accounts, expiring invitations, rotating login sessions, password recovery, optional TOTP MFA with recovery codes, deterministic development identity, separate database roles, forced PostgreSQL row-level security, audit records, idempotency records, optimistic concurrency, and a transactional outbox.
 - **Meetings and rooms:** reusable permanent rooms, session creation/scheduling, guarded lifecycle transitions, interactive agenda items, realtime agenda activation, LiveKit room tokens, and a browser meeting stage.
 - **Durable collaboration:** authenticated presence, persisted public/host chat, polls with launch/answer/results/close lifecycle, moderated Q&A, voting, and realtime committed-event broadcasts.
 - **Webinars and events:** event drafts, publish/cancel lifecycle, atomic webinar-session creation, public event pages, registration, capacity handling, waitlisting, and registration administration.
@@ -17,7 +17,7 @@ The repository now contains runnable vertical slices rather than placeholder-onl
 - **Public journeys:** original public event-registration and booking interfaces in the website application.
 - **Operations:** Docker Compose for PostgreSQL, Redis, MinIO, and LiveKit; database migrations; deterministic seed data; CI migration smoke tests; quality gates; architecture, API, testing, security, and delivery-status documentation.
 
-Provider-dependent work is deliberately not represented as complete. LiveKit egress, speech-to-text execution, LLM execution, calendar OAuth, reminder delivery, signed artifact playback, production identity, custom domains, analytics, billing, and enterprise controls remain explicit delivery gates. See [`docs/implementation-status.md`](docs/implementation-status.md) and [`docs/backlog.md`](docs/backlog.md).
+Provider-dependent work is deliberately not represented as complete. LiveKit egress, speech-to-text execution, LLM execution, calendar OAuth, reminder delivery, signed artifact playback, external OIDC/SAML identity providers, custom domains, analytics, billing, and enterprise controls remain explicit delivery gates. See [`docs/implementation-status.md`](docs/implementation-status.md) and [`docs/backlog.md`](docs/backlog.md).
 
 ## Architecture at a glance
 
@@ -78,7 +78,15 @@ Open:
 - LiveKit websocket: `ws://localhost:7880`
 - MinIO console: `http://localhost:9001`
 
-The seed creates the deterministic local organization `sessions-local`, workspace `product-team`, and owner identity described in `.env.example`. The frontend requests a short-lived development token only when `VITE_AUTH_MODE=development`; the API refuses development token issuance in production.
+The seed creates the deterministic local organization `sessions-local`, workspace `product-team`, and owner identity described in `.env.example`. Development bootstrap now creates the same rotating, revocable login-session records used by local authentication. The API refuses deterministic development bootstrap in production.
+
+### Authentication modes
+
+- `AUTH_MODE=development` and `VITE_AUTH_MODE=development`: deterministic seeded identity for rapid local work, backed by managed refresh sessions.
+- `AUTH_MODE=local` and `VITE_AUTH_MODE=local`: email/password signup and login, email verification policy, password recovery, TOTP MFA, recovery codes, workspace invitations, session rotation/revocation, and workspace switching.
+- `AUTH_MODE=oidc`: reserved boundary for an external OIDC/SAML identity provider. Provider redirect, callback, claims mapping, and SCIM are not yet represented as complete.
+
+The local seed password is controlled by `DEV_USER_PASSWORD`. Production local-auth deployments must use email verification and non-example JWT, auth-encryption, and IP-hashing secrets.
 
 ### Run the complete local stack in containers
 
@@ -145,7 +153,7 @@ The platform uses verified tenant claims, application authorization, separate AP
 
 ## Delivery order from here
 
-1. Production identity, invitations, MFA, session revocation, and workspace administration.
+1. External OIDC/SAML, enterprise SSO, SCIM, step-up policies, and identity-provider operational qualification.
 2. LiveKit egress, consent ledger, signed playback, retention, deletion, and artifact workers.
 3. STT provider abstraction, live captions, diarization, transcript correction, and indexed search.
 4. Calendar OAuth/busy-time sync, booking reschedule/cancel, ICS, notifications, and reminder reconciliation.

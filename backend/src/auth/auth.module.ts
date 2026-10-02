@@ -1,7 +1,11 @@
 import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
+import { AuditModule } from '../audit/audit.module';
+import { OutboxModule } from '../outbox/outbox.module';
 import { AuthController } from './auth.controller';
+import { AuthService } from './auth.service';
+import { SecurityService } from './security.service';
 
 @Global()
 @Module({
@@ -16,8 +20,11 @@ import { AuthController } from './auth.controller';
         },
       }),
     }),
+    AuditModule,
+    OutboxModule,
   ],
   controllers: [AuthController],
-  exports: [JwtModule],
+  providers: [AuthService, SecurityService],
+  exports: [JwtModule, AuthService, SecurityService],
 })
 export class AuthModule {}

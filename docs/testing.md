@@ -2,13 +2,13 @@
 
 ## Test layers
 
-- **Unit:** state machines, availability calculations, quota reservations, authorization decisions, prompt output parsers.
+- **Unit:** state machines, availability calculations, password hashing, opaque-token digests, TOTP vectors, recovery-code handling, quota reservations, authorization decisions, and prompt output parsers.
 - **Contract:** request/response schemas, provider adapters, webhook signatures, realtime event versions.
-- **Integration:** PostgreSQL RLS, migrations, outbox claiming, Redis fan-out, object storage, LiveKit token grants.
+- **Integration:** PostgreSQL RLS, migrations, signup/login, refresh rotation and reuse detection, MFA challenge limits, invitation races, owner-preservation rules, outbox claiming, Redis fan-out, object storage, and LiveKit token grants.
 - **End-to-end:** create and schedule session, join media, activate agenda, record, process transcript, review memory, share or delete.
 - **Media:** multiple simulated publishers/subscribers, packet loss, bandwidth changes, reconnects, device changes, screenshare, browser backgrounding.
 - **Load:** API commands, WebSocket connections, webinar fan-out, recording workers, notification bursts, search and analytics queries.
-- **Security:** cross-tenant access, broken object authorization, XSS/CSP, file upload, OAuth state, SSRF/egress, webhook replay, secret scanning.
+- **Security:** cross-tenant access, broken object authorization, account enumeration, password lockout, refresh replay, MFA recovery-code reuse, invitation replay, XSS/CSP, file upload, OAuth state, SSRF/egress, webhook replay, and secret scanning.
 - **Accessibility:** keyboard path, focus management, captions, contrast, screen-reader labels, reduced motion.
 - **Compatibility:** current Chrome, Edge, Firefox, Safari, responsive web, and supported mobile browsers.
 

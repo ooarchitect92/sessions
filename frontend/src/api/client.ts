@@ -20,12 +20,118 @@ import type {
   SessionStatus,
   SubmitPollAnswerInput,
   UpdateSessionInput,
-} from '@sessions/contracts';
+  WorkspaceRole,
+} from "@sessions/contracts";
 import {
   bootstrapAuthentication,
   clearAuthentication,
-  getAccessToken,
-} from '../auth/dev-auth';
+  getRefreshToken,
+  refreshAuthentication,
+  type StoredTokenBundle,
+} from "../auth/session";
+
+
+export interface AuthPrincipal {
+  userId: string;
+  organizationId: string;
+  workspaceId: string;
+  email: string;
+  displayName: string;
+  roles: WorkspaceRole[];
+  sessionId?: string;
+}
+
+export interface WorkspaceAccess {
+  membershipId: string;
+  organizationId: string;
+  organizationName: string;
+  organizationSlug: string;
+  workspaceId: string;
+  workspaceName: string;
+  workspaceSlug: string;
+  timezone: string;
+  role: WorkspaceRole;
+}
+
+export interface AuthTokenBundle extends StoredTokenBundle {
+  principal: AuthPrincipal;
+  workspaces: WorkspaceAccess[];
+}
+
+export interface AuthMe {
+  principal: AuthPrincipal;
+  profile: {
+    id: string;
+    email: string;
+    displayName: string;
+    avatarUrl: string | null;
+    emailVerifiedAt: string | null;
+    mfaEnabled: boolean;
+  };
+  workspaces: WorkspaceAccess[];
+}
+
+export interface WorkspaceRecord {
+  id: string;
+  organizationId: string;
+  name: string;
+  slug: string;
+  timezone: string;
+  settings: Record<string, unknown>;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  currentRole: WorkspaceRole;
+  organization: { id: string; name: string; slug: string };
+  _count: {
+    memberships: number;
+    rooms: number;
+    sessions: number;
+    events: number;
+    bookingPages: number;
+  };
+}
+
+export interface WorkspaceMember {
+  id: string;
+  role: WorkspaceRole;
+  createdAt: string;
+  user: {
+    id: string;
+    email: string;
+    displayName: string;
+    avatarUrl: string | null;
+    status: 'ACTIVE' | 'SUSPENDED' | 'DELETED';
+    emailVerifiedAt: string | null;
+    lastLoginAt: string | null;
+    mfaEnabled: boolean;
+  };
+}
+
+export interface WorkspaceInvitation {
+  id: string;
+  email: string;
+  role: WorkspaceRole;
+  status: 'PENDING' | 'ACCEPTED' | 'REVOKED' | 'EXPIRED';
+  expiresAt: string;
+  acceptedAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  invitedBy?: { id: string; displayName: string; email: string };
+  acceptedBy?: { id: string; displayName: string; email: string } | null;
+  developmentInvitationToken?: string;
+}
+
+export interface LoginSession {
+  id: string;
+  workspace: { id: string; name: string; organization: string };
+  userAgent: string | null;
+  createdAt: string;
+  lastUsedAt: string;
+  expiresAt: string;
+  current: boolean;
+}
 
 export interface AgendaItem {
   id: string;
@@ -179,33 +285,11 @@ export class ApiError extends Error {
     readonly requestId?: string,
   ) {
     super(message);
-    this.name = 'ApiError';
+    this.name = "ApiError";
   }
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  let token = getAccessToken() ?? (await bootstrapAuthentication());
-  const execute = () => {
-    const headers = new Headers(init.headers);
-    if (init.body !== undefined && !headers.has('content-type')) {
-      headers.set('content-type', 'application/json');
-    }
-    headers.set('authorization', `Bearer ${token}`);
-    headers.set('x-request-id', crypto.randomUUID());
-
-    return fetch(`${import.meta.env.VITE_API_URL}${path}`, {
-      ...init,
-      headers,
-    });
-  };
-
-  let response = await execute();
-  if (response.status === 401 && import.meta.env.VITE_AUTH_MODE === 'development') {
-    clearAuthentication();
-    token = await bootstrapAuthentication();
-    response = await execute();
-  }
-
+async function decodeResponse<T>(response: Response): Promise<T> {
   const requestId = response.headers.get('x-request-id') ?? undefined;
   const payload = (await response.json().catch(() => null)) as
     | ApiEnvelope<T>
@@ -227,28 +311,252 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return payload.data;
 }
 
+async function request<T>(
+  path: string,
+  init: RequestInit = {},
+  authenticated = true,
+): Promise<T> {
+  let token = authenticated ? await bootstrapAuthentication() : null;
+  const execute = (accessToken: string | null) => {
+    const headers = new Headers(init.headers);
+    if (init.body !== undefined && !headers.has('content-type')) {
+      headers.set('content-type', 'application/json');
+    }
+    if (accessToken) headers.set('authorization', `Bearer ${accessToken}`);
+    headers.set('x-request-id', crypto.randomUUID());
+    return fetch(`${import.meta.env.VITE_API_URL}${path}`, { ...init, headers });
+  };
+
+  let response = await execute(token);
+  if (authenticated && response.status === 401) {
+    try {
+      token = await refreshAuthentication();
+    } catch {
+      if (import.meta.env.VITE_AUTH_MODE !== 'development') {
+        clearAuthentication();
+        return decodeResponse<T>(response);
+      }
+      clearAuthentication();
+      token = await bootstrapAuthentication();
+    }
+    response = await execute(token);
+  }
+  return decodeResponse<T>(response);
+}
+
+function publicRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+  return request<T>(path, init, false);
+}
+
 export const api = {
-  listRooms(): Promise<Room[]> {
-    return request<Room[]>('/rooms');
+  signUp(input: {
+    email: string;
+    displayName: string;
+    password: string;
+    organizationName: string;
+    organizationSlug: string;
+    workspaceName: string;
+    workspaceSlug: string;
+    timezone: string;
+  }): Promise<AuthTokenBundle | { verificationRequired: true; email: string; developmentVerificationToken?: string }> {
+    return publicRequest('/auth/signup', { method: 'POST', body: JSON.stringify(input) });
   },
 
-  createRoom(input: CreateRoomInput): Promise<Room> {
-    return request<Room>('/rooms', {
+  login(input: { email: string; password: string; workspaceSlug?: string }): Promise<
+    | AuthTokenBundle
+    | { mfaRequired: true; challengeToken: string; expiresIn: number }
+  > {
+    return publicRequest('/auth/login', { method: 'POST', body: JSON.stringify(input) });
+  },
+
+  completeMfa(input: { challengeToken: string; code: string }): Promise<AuthTokenBundle> {
+    return publicRequest<AuthTokenBundle>('/auth/mfa/complete', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  verifyEmail(token: string): Promise<AuthTokenBundle> {
+    return publicRequest<AuthTokenBundle>('/auth/verify-email', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    });
+  },
+
+  requestEmailVerification(email: string): Promise<{
+    accepted: true;
+    developmentVerificationToken?: string;
+  }> {
+    return publicRequest('/auth/verify-email/request', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  },
+
+  requestPasswordReset(email: string): Promise<{ accepted: true; developmentResetToken?: string }> {
+    return publicRequest('/auth/password-reset/request', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  },
+
+  resetPassword(token: string, password: string): Promise<{ reset: true }> {
+    return publicRequest('/auth/password-reset/complete', {
+      method: 'POST',
+      body: JSON.stringify({ token, password }),
+    });
+  },
+
+  acceptInvitation(input: { token: string; displayName?: string; password: string }): Promise<
+    AuthTokenBundle | { mfaRequired: true; challengeToken: string; expiresIn: number }
+  > {
+    return publicRequest('/auth/invitations/accept', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  authMe(): Promise<AuthMe> {
+    return request<AuthMe>('/auth/me');
+  },
+
+  async switchWorkspace(workspaceId: string): Promise<AuthTokenBundle> {
+    await bootstrapAuthentication();
+    const refreshToken = getRefreshToken();
+    if (!refreshToken) {
+      throw new ApiError('A managed login session is required', 401);
+    }
+    return request<AuthTokenBundle>('/auth/workspace/switch', {
+      method: 'POST',
+      body: JSON.stringify({ workspaceId, refreshToken }),
+    });
+  },
+
+  logout(): Promise<{ loggedOut: true }> {
+    return request('/auth/logout', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  },
+
+  listLoginSessions(): Promise<LoginSession[]> {
+    return request<LoginSession[]>('/auth/sessions');
+  },
+
+  revokeLoginSession(sessionId: string): Promise<{ id: string; revoked: true }> {
+    return request(`/auth/sessions/${sessionId}`, { method: 'DELETE' });
+  },
+
+  changePassword(currentPassword: string, newPassword: string): Promise<{ changed: true }> {
+    return request('/auth/password', {
+      method: 'PATCH',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+  },
+
+  setupMfa(): Promise<{ secret: string; otpauthUri: string; recoveryCodes: string[] }> {
+    return request('/auth/mfa/setup', { method: 'POST' });
+  },
+
+  confirmMfa(code: string): Promise<{ enabled: true }> {
+    return request('/auth/mfa/confirm', { method: 'POST', body: JSON.stringify({ code }) });
+  },
+
+  disableMfa(code: string): Promise<{ enabled: false }> {
+    return request('/auth/mfa', { method: 'DELETE', body: JSON.stringify({ code }) });
+  },
+
+  listWorkspaces(): Promise<Array<{
+    membershipId: string;
+    role: WorkspaceRole;
+    organization: { id: string; name: string; slug: string };
+    workspace: {
+      id: string;
+      name: string;
+      slug: string;
+      timezone: string;
+      version: number;
+      memberCount: number;
+      sessionCount: number;
+    };
+    current: boolean;
+  }>> {
+    return request('/workspaces');
+  },
+
+  createWorkspace(input: { name: string; slug: string; timezone: string }): Promise<WorkspaceRecord> {
+    return request('/workspaces', {
       method: 'POST',
       headers: { 'idempotency-key': crypto.randomUUID() },
       body: JSON.stringify(input),
     });
   },
 
+  getCurrentWorkspace(): Promise<WorkspaceRecord> {
+    return request('/workspaces/current');
+  },
+
+  updateCurrentWorkspace(
+    version: number,
+    input: Partial<Pick<WorkspaceRecord, 'name' | 'slug' | 'timezone' | 'settings'>>,
+  ): Promise<WorkspaceRecord> {
+    return request('/workspaces/current', {
+      method: 'PATCH',
+      headers: { 'if-match': String(version) },
+      body: JSON.stringify(input),
+    });
+  },
+
+  listWorkspaceMembers(): Promise<WorkspaceMember[]> {
+    return request('/workspaces/current/members');
+  },
+
+  updateWorkspaceMemberRole(membershipId: string, role: WorkspaceRole): Promise<WorkspaceMember> {
+    return request(`/workspaces/current/members/${membershipId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ role }),
+    });
+  },
+
+  removeWorkspaceMember(membershipId: string): Promise<{ id: string; removed: true }> {
+    return request(`/workspaces/current/members/${membershipId}`, { method: 'DELETE' });
+  },
+
+  listWorkspaceInvitations(): Promise<WorkspaceInvitation[]> {
+    return request('/workspaces/current/invitations');
+  },
+
+  inviteWorkspaceMember(email: string, role: WorkspaceRole): Promise<WorkspaceInvitation> {
+    return request('/workspaces/current/invitations', {
+      method: 'POST',
+      body: JSON.stringify({ email, role }),
+    });
+  },
+
+  revokeWorkspaceInvitation(invitationId: string): Promise<{ id: string; revoked: true }> {
+    return request(`/workspaces/current/invitations/${invitationId}`, { method: 'DELETE' });
+  },
+  listRooms(): Promise<Room[]> {
+    return request<Room[]>("/rooms");
+  },
+
+  createRoom(input: CreateRoomInput): Promise<Room> {
+    return request<Room>("/rooms", {
+      method: "POST",
+      headers: { "idempotency-key": crypto.randomUUID() },
+      body: JSON.stringify(input),
+    });
+  },
+
   deleteRoom(roomId: string, version: number): Promise<{ id: string }> {
     return request<{ id: string }>(`/rooms/${roomId}`, {
-      method: 'DELETE',
-      headers: { 'if-match': String(version) },
+      method: "DELETE",
+      headers: { "if-match": String(version) },
     });
   },
 
   listSessions(status?: SessionStatus): Promise<Paginated<Session>> {
-    const query = status ? `?status=${encodeURIComponent(status)}` : '';
+    const query = status ? `?status=${encodeURIComponent(status)}` : "";
     return request<Paginated<Session>>(`/sessions${query}`);
   },
 
@@ -257,9 +565,9 @@ export const api = {
   },
 
   createSession(input: CreateSessionInput): Promise<Session> {
-    return request<Session>('/sessions', {
-      method: 'POST',
-      headers: { 'idempotency-key': crypto.randomUUID() },
+    return request<Session>("/sessions", {
+      method: "POST",
+      headers: { "idempotency-key": crypto.randomUUID() },
       body: JSON.stringify(input),
     });
   },
@@ -270,8 +578,8 @@ export const api = {
     input: UpdateSessionInput,
   ): Promise<Session> {
     return request<Session>(`/sessions/${sessionId}`, {
-      method: 'PATCH',
-      headers: { 'if-match': String(version) },
+      method: "PATCH",
+      headers: { "if-match": String(version) },
       body: JSON.stringify(input),
     });
   },
@@ -279,11 +587,11 @@ export const api = {
   transitionSession(
     sessionId: string,
     version: number,
-    action: 'publish' | 'start' | 'end' | 'cancel',
+    action: "publish" | "start" | "end" | "cancel",
   ): Promise<Session> {
     return request<Session>(`/sessions/${sessionId}/${action}`, {
-      method: 'POST',
-      headers: { 'if-match': String(version) },
+      method: "POST",
+      headers: { "if-match": String(version) },
     });
   },
 
@@ -297,58 +605,61 @@ export const api = {
     },
   ): Promise<AgendaItem> {
     return request<AgendaItem>(`/sessions/${sessionId}/agenda-items`, {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify(input),
     });
   },
 
   activateAgendaItem(sessionId: string, agendaItemId: string) {
-    return request<{ sessionId: string; agendaItem: AgendaItem; activatedAt: string }>(
-      `/sessions/${sessionId}/agenda-items/${agendaItemId}/activate`,
-      { method: 'POST' },
-    );
+    return request<{
+      sessionId: string;
+      agendaItem: AgendaItem;
+      activatedAt: string;
+    }>(`/sessions/${sessionId}/agenda-items/${agendaItemId}/activate`, {
+      method: "POST",
+    });
   },
 
   createMediaToken(sessionId: string): Promise<MediaToken> {
     return request<MediaToken>(`/sessions/${sessionId}/media-token`, {
-      method: 'POST',
+      method: "POST",
     });
   },
 
   listEvents(): Promise<EventRecord[]> {
-    return request<EventRecord[]>('/events');
+    return request<EventRecord[]>("/events");
   },
 
   createEvent(input: CreateEventInput): Promise<EventRecord> {
-    return request<EventRecord>('/events', {
-      method: 'POST',
-      headers: { 'idempotency-key': crypto.randomUUID() },
+    return request<EventRecord>("/events", {
+      method: "POST",
+      headers: { "idempotency-key": crypto.randomUUID() },
       body: JSON.stringify(input),
     });
   },
 
   publishEvent(eventId: string, version: number): Promise<EventRecord> {
     return request<EventRecord>(`/events/${eventId}/publish`, {
-      method: 'POST',
-      headers: { 'if-match': String(version) },
+      method: "POST",
+      headers: { "if-match": String(version) },
     });
   },
 
   cancelEvent(eventId: string, version: number): Promise<EventRecord> {
     return request<EventRecord>(`/events/${eventId}/cancel`, {
-      method: 'POST',
-      headers: { 'if-match': String(version) },
+      method: "POST",
+      headers: { "if-match": String(version) },
     });
   },
 
   listBookings(): Promise<BookingPageRecord[]> {
-    return request<BookingPageRecord[]>('/bookings');
+    return request<BookingPageRecord[]>("/bookings");
   },
 
   createBooking(input: CreateBookingPageInput): Promise<BookingPageRecord> {
-    return request<BookingPageRecord>('/bookings', {
-      method: 'POST',
-      headers: { 'idempotency-key': crypto.randomUUID() },
+    return request<BookingPageRecord>("/bookings", {
+      method: "POST",
+      headers: { "idempotency-key": crypto.randomUUID() },
       body: JSON.stringify(input),
     });
   },
@@ -359,14 +670,14 @@ export const api = {
     input: Partial<CreateBookingPageInput> & { active?: boolean },
   ): Promise<BookingPageRecord> {
     return request<BookingPageRecord>(`/bookings/${bookingId}`, {
-      method: 'PATCH',
-      headers: { 'if-match': String(version) },
+      method: "PATCH",
+      headers: { "if-match": String(version) },
       body: JSON.stringify(input),
     });
   },
 
   listMemory(query?: string): Promise<Paginated<MemoryListItem>> {
-    const search = query ? `?query=${encodeURIComponent(query)}` : '';
+    const search = query ? `?query=${encodeURIComponent(query)}` : "";
     return request<Paginated<MemoryListItem>>(`/memory${search}`);
   },
 
@@ -374,10 +685,15 @@ export const api = {
     return request<MemoryDetail>(`/memory/${sessionId}`);
   },
 
-  retryMemory(sessionId: string): Promise<{ sessionId: string; retried: string[] }> {
-    return request<{ sessionId: string; retried: string[] }>(`/memory/${sessionId}/retry`, {
-      method: 'POST',
-    });
+  retryMemory(
+    sessionId: string,
+  ): Promise<{ sessionId: string; retried: string[] }> {
+    return request<{ sessionId: string; retried: string[] }>(
+      `/memory/${sessionId}/retry`,
+      {
+        method: "POST",
+      },
+    );
   },
 
   listChat(sessionId: string): Promise<ChatMessageRecord[]> {
@@ -389,7 +705,7 @@ export const api = {
     input: { channel: ChatChannel; body: string },
   ): Promise<ChatMessageRecord> {
     return request<ChatMessageRecord>(`/sessions/${sessionId}/chat-messages`, {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify(input),
     });
   },
@@ -400,20 +716,23 @@ export const api = {
 
   createPoll(sessionId: string, input: CreatePollInput): Promise<PollRecord> {
     return request<PollRecord>(`/sessions/${sessionId}/polls`, {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify(input),
     });
   },
 
   launchPoll(sessionId: string, pollId: string): Promise<PollRecord> {
-    return request<PollRecord>(`/sessions/${sessionId}/polls/${pollId}/launch`, {
-      method: 'POST',
-    });
+    return request<PollRecord>(
+      `/sessions/${sessionId}/polls/${pollId}/launch`,
+      {
+        method: "POST",
+      },
+    );
   },
 
   closePoll(sessionId: string, pollId: string): Promise<PollRecord> {
     return request<PollRecord>(`/sessions/${sessionId}/polls/${pollId}/close`, {
-      method: 'POST',
+      method: "POST",
     });
   },
 
@@ -423,22 +742,27 @@ export const api = {
     input: SubmitPollAnswerInput,
   ): Promise<unknown> {
     return request(`/sessions/${sessionId}/polls/${pollId}/answers`, {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify(input),
     });
   },
 
   pollResults(sessionId: string, pollId: string): Promise<PollResults> {
-    return request<PollResults>(`/sessions/${sessionId}/polls/${pollId}/results`);
+    return request<PollResults>(
+      `/sessions/${sessionId}/polls/${pollId}/results`,
+    );
   },
 
   listQuestions(sessionId: string): Promise<QuestionRecord[]> {
     return request<QuestionRecord[]>(`/sessions/${sessionId}/questions`);
   },
 
-  createQuestion(sessionId: string, input: CreateQuestionInput): Promise<QuestionRecord> {
+  createQuestion(
+    sessionId: string,
+    input: CreateQuestionInput,
+  ): Promise<QuestionRecord> {
     return request<QuestionRecord>(`/sessions/${sessionId}/questions`, {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify(input),
     });
   },
@@ -448,7 +772,7 @@ export const api = {
     questionId: string,
   ): Promise<{ questionId: string; voted: boolean; voteCount: number }> {
     return request(`/sessions/${sessionId}/questions/${questionId}/vote`, {
-      method: 'POST',
+      method: "POST",
     });
   },
 
@@ -457,9 +781,12 @@ export const api = {
     questionId: string,
     input: { status: QuestionStatus; answerText?: string },
   ): Promise<QuestionRecord> {
-    return request<QuestionRecord>(`/sessions/${sessionId}/questions/${questionId}`, {
-      method: 'PATCH',
-      body: JSON.stringify(input),
-    });
+    return request<QuestionRecord>(
+      `/sessions/${sessionId}/questions/${questionId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(input),
+      },
+    );
   },
 };
