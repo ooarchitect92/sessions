@@ -29,7 +29,16 @@ export class MemoryService {
     return this.database.run(principal, async (transaction) => {
       const where: Prisma.SessionWhereInput = {
         OR: [
-          { status: { in: [SessionStatus.ENDED, SessionStatus.PROCESSING, SessionStatus.READY, SessionStatus.FAILED] } },
+          {
+            status: {
+              in: [
+                SessionStatus.ENDED,
+                SessionStatus.PROCESSING,
+                SessionStatus.READY,
+                SessionStatus.FAILED,
+              ],
+            },
+          },
           { recording: { isNot: null } },
           { transcript: { isNot: null } },
           { memorySummary: { isNot: null } },
@@ -40,10 +49,20 @@ export class MemoryService {
                 {
                   OR: [
                     { title: { contains: query.query, mode: 'insensitive' } },
-                    { description: { contains: query.query, mode: 'insensitive' } },
+                    {
+                      description: {
+                        contains: query.query,
+                        mode: 'insensitive',
+                      },
+                    },
                     {
                       transcript: {
-                        is: { fullText: { contains: query.query, mode: 'insensitive' } },
+                        is: {
+                          fullText: {
+                            contains: query.query,
+                            mode: 'insensitive',
+                          },
+                        },
                       },
                     },
                   ],
@@ -57,9 +76,18 @@ export class MemoryService {
           where,
           include: {
             recording: true,
-            transcript: { select: { id: true, status: true, language: true, completedAt: true } },
+            transcript: {
+              select: {
+                id: true,
+                status: true,
+                language: true,
+                completedAt: true,
+              },
+            },
             memorySummary: true,
-            _count: { select: { chatMessages: true, polls: true, questions: true } },
+            _count: {
+              select: { chatMessages: true, polls: true, questions: true },
+            },
           },
           orderBy: [{ startsAt: 'desc' }, { createdAt: 'desc' }],
           skip: (query.page - 1) * query.pageSize,
@@ -78,7 +106,9 @@ export class MemoryService {
         include: {
           agendaItems: { orderBy: { position: 'asc' } },
           recording: true,
-          transcript: { include: { segments: { orderBy: { position: 'asc' } } } },
+          transcript: {
+            include: { segments: { orderBy: { position: 'asc' } } },
+          },
           memorySummary: true,
           chatMessages: {
             where: { deletedAt: null },
@@ -106,7 +136,9 @@ export class MemoryService {
 
   async getRecording(principal: Principal, sessionId: string) {
     return this.database.run(principal, async (transaction) => {
-      const recording = await transaction.recording.findUnique({ where: { sessionId } });
+      const recording = await transaction.recording.findUnique({
+        where: { sessionId },
+      });
       if (!recording) throw new NotFoundException('Recording not found');
       return recording;
     });
@@ -126,30 +158,77 @@ export class MemoryService {
   async retryFailed(principal: Principal, sessionId: string) {
     this.assertHost(principal);
     const result = await this.database.run(principal, async (transaction) => {
-      const session = await transaction.session.findUnique({ where: { id: sessionId } });
+      const session = await transaction.session.findUnique({
+        where: { id: sessionId },
+      });
       if (!session) throw new NotFoundException('Session not found');
-      const recording = await transaction.recording.findUnique({ where: { sessionId } });
-      const transcript = await transaction.transcript.findUnique({ where: { sessionId } });
-      const summary = await transaction.memorySummary.findUnique({ where: { sessionId } });
+      const recording = await transaction.recording.findUnique({
+        where: { sessionId },
+      });
+      const transcript = await transaction.transcript.findUnique({
+        where: { sessionId },
+      });
+      const summary = await transaction.memorySummary.findUnique({
+        where: { sessionId },
+      });
       const retried: string[] = [];
+      const skipped: Array<{ artifact: string; reason: string }> = [];
 
       if (recording?.status === ArtifactStatus.FAILED) {
-        await transaction.recording.update({
-          where: { id: recording.id },
-          data: { status: ArtifactStatus.PENDING, failureCode: null, version: { increment: 1 } },
-        });
-        await this.outbox.enqueue(transaction, principal, {
-          aggregateType: 'recording',
-          aggregateId: recording.id,
-          eventType: 'recording.requested',
-          payload: { recordingId: recording.id, sessionId },
-        });
-        retried.push('recording');
+        if (recording.providerJobId) {
+          await transaction.recording.update({
+            where: { id: recording.id },
+            data: {
+              status: ArtifactStatus.PROCESSING,
+              failureCode: null,
+              completedAt: null,
+              version: { increment: 1 },
+            },
+          });
+          retried.push('recording-reconciliation');
+        } else if (session.status === SessionStatus.LIVE) {
+          await transaction.recording.update({
+            where: { id: recording.id },
+            data: {
+              status: ArtifactStatus.PENDING,
+              provider: null,
+              providerJobId: null,
+              objectKey: null,
+              playbackObjectKey: null,
+              mimeType: null,
+              sizeBytes: null,
+              durationSeconds: null,
+              startedAt: null,
+              completedAt: null,
+              stopRequestedAt: null,
+              deletionRequestedAt: null,
+              deletedAt: null,
+              failureCode: null,
+              version: { increment: 1 },
+            },
+          });
+          await this.outbox.enqueue(transaction, principal, {
+            aggregateType: 'recording',
+            aggregateId: recording.id,
+            eventType: 'recording.start.requested',
+            payload: { recordingId: recording.id, sessionId },
+          });
+          retried.push('recording');
+        } else {
+          skipped.push({
+            artifact: 'recording',
+            reason: 'live_media_is_no_longer_available',
+          });
+        }
       }
       if (transcript?.status === ArtifactStatus.FAILED) {
         await transaction.transcript.update({
           where: { id: transcript.id },
-          data: { status: ArtifactStatus.PENDING, failureCode: null, version: { increment: 1 } },
+          data: {
+            status: ArtifactStatus.PENDING,
+            failureCode: null,
+            version: { increment: 1 },
+          },
         });
         await this.outbox.enqueue(transaction, principal, {
           aggregateType: 'transcript',
@@ -162,7 +241,11 @@ export class MemoryService {
       if (summary?.status === ArtifactStatus.FAILED) {
         await transaction.memorySummary.update({
           where: { id: summary.id },
-          data: { status: ArtifactStatus.PENDING, failureCode: null, version: { increment: 1 } },
+          data: {
+            status: ArtifactStatus.PENDING,
+            failureCode: null,
+            version: { increment: 1 },
+          },
         });
         await this.outbox.enqueue(transaction, principal, {
           aggregateType: 'memory_summary',
@@ -176,9 +259,9 @@ export class MemoryService {
         action: 'memory.retry_requested',
         resourceType: 'session',
         resourceId: sessionId,
-        metadata: { retried },
+        metadata: { retried, skipped },
       });
-      return { sessionId, retried };
+      return { sessionId, retried, skipped };
     });
     this.realtime.publishSessionEvent({
       sessionId,
@@ -233,7 +316,11 @@ export class MemoryService {
         aggregateType: 'transcript',
         aggregateId: transcript.id,
         eventType: 'transcript.requested',
-        payload: { transcriptId: transcript.id, sessionId: session.id, recordingId },
+        payload: {
+          transcriptId: transcript.id,
+          sessionId: session.id,
+          recordingId,
+        },
       });
 
       const summary = await transaction.memorySummary.upsert({
