@@ -22,41 +22,21 @@ jobs:
       - name: Patch authentication service
         shell: bash
         run: |
+          set -euo pipefail
           python - <<'PY'
           from pathlib import Path
 
           path = Path('backend/src/auth/auth.service.ts')
           source = path.read_text()
 
-          old_challenge = """    const result = await this.prisma.$transaction(async (transaction) => {
-              await transaction.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${claims.challengeId}, 0))`;
-              const challenge = await transaction.authChallenge.findUnique({
-                where: { id: claims.challengeId },
-                include: {
-                  user: { include: { mfaFactor: true } },
-                  workspace: { include: { organization: true } },
-                },
-              });
-              if (
-                !challenge ||
-                challenge.userId !== claims.sub ||
-                challenge.purpose !== AuthChallengePurpose.MFA_LOGIN ||
-                challenge.consumedAt ||
-                challenge.expiresAt <= new Date() ||
-                challenge.attempts >= MAX_LOGIN_ATTEMPTS ||
-                !challenge.user.mfaFactor?.verifiedAt ||
-                challenge.user.mfaFactor.disabledAt
-              ) {
-                return { error: 'invalid_challenge' } as const;
-              }
+          method_start = source.index('  async completeMfa(')
+          transaction_start = source.index(
+              '    const result = await this.prisma.$transaction(async (transaction) => {',
+              method_start,
+          )
+          verified_if = source.index('      if (!verified) {', transaction_start)
 
-              const verified = await this.verifyMfaCode(
-                transaction,
-                challenge.user.mfaFactor,
-                input.code,
-              );
-          """
-          new_challenge = """    const challengeId = claims.challengeId as string;
+          challenge_block = """    const challengeId = claims.challengeId as string;
               const challengeUserId = claims.sub as string;
 
               const result = await this.prisma.$transaction(async (transaction) => {
@@ -88,21 +68,11 @@ jobs:
 
                 const verified = await this.verifyMfaCode(transaction, factor, input.code);
           """
-          if old_challenge not in source:
-              raise SystemExit('MFA challenge block was not found')
-          source = source.replace(old_challenge, new_challenge, 1)
+          source = source[:transaction_start] + challenge_block + source[verified_if:]
 
-          old_result = """    if ('bundle' in result) return result.bundle;
-              if (result.error === 'workspace_access') {
-                throw new ForbiddenException('Workspace access is no longer available');
-              }
-              throw new UnauthorizedException(
-                result.error === 'invalid_code'
-                  ? 'The MFA code is invalid'
-                  : 'The MFA challenge is invalid or expired',
-              );
-          """
-          new_result = """    if ('bundle' in result) return result.bundle;
+          result_start = source.index("    if ('bundle' in result) return result.bundle;", method_start)
+          method_end = source.index('  }\n\n  async refresh(', result_start)
+          result_block = """    if ('bundle' in result) return result.bundle;
               const error = 'error' in result ? result.error : 'invalid_challenge';
               if (error === 'workspace_access') {
                 throw new ForbiddenException('Workspace access is no longer available');
@@ -113,27 +83,27 @@ jobs:
                   : 'The MFA challenge is invalid or expired',
               );
           """
-          if old_result not in source:
-              raise SystemExit('MFA result block was not found')
-          source = source.replace(old_result, new_result, 1)
+          source = source[:result_start] + result_block + source[method_end:]
 
-          old_hashes = """    const hashes = Array.isArray(factor.recoveryCodeHashes)
-              ? factor.recoveryCodeHashes.filter(
-                  (value): value is string => typeof value === 'string',
-                )
-              : [];
-          """
-          new_hashes = """    const rawHashes: unknown = factor.recoveryCodeHashes;
+          recovery_method = source.index('  private async verifyMfaCode(')
+          hashes_start = source.index(
+              '    const hashes = Array.isArray(factor.recoveryCodeHashes)',
+              recovery_method,
+          )
+          candidate_start = source.index('    const candidate =', hashes_start)
+          hashes_block = """    const rawHashes: unknown = factor.recoveryCodeHashes;
               const hashes = Array.isArray(rawHashes)
                 ? rawHashes.filter((value): value is string => typeof value === 'string')
                 : [];
           """
-          if old_hashes not in source:
-              raise SystemExit('Recovery-code block was not found')
-          source = source.replace(old_hashes, new_hashes, 1)
+          source = source[:hashes_start] + hashes_block + source[candidate_start:]
+
+          old_data = '      data: { recoveryCodeHashes: hashes },'
+          if old_data not in source:
+              raise SystemExit('Recovery-code update statement was not found')
           source = source.replace(
-              "      data: { recoveryCodeHashes: hashes },",
-              "      data: { recoveryCodeHashes: hashes as Prisma.InputJsonValue },",
+              old_data,
+              '      data: { recoveryCodeHashes: hashes as Prisma.InputJsonValue },',
               1,
           )
 
