@@ -3,6 +3,14 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api/client';
 
+interface TranscriptDraftSegment {
+  position: number;
+  startMs: number;
+  endMs: number;
+  speakerLabel: string | null;
+  text: string;
+}
+
 function ArtifactState({
   label,
   status,
@@ -22,11 +30,20 @@ export function MemoryDetailPage() {
   const { sessionId = '' } = useParams();
   const queryClient = useQueryClient();
   const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
+  const [editingTranscript, setEditingTranscript] = useState(false);
+  const [transcriptDraft, setTranscriptDraft] = useState<TranscriptDraftSegment[]>([]);
+  const [transcriptReason, setTranscriptReason] = useState('');
   const memory = useQuery({
     queryKey: ['memory-detail', sessionId],
     queryFn: () => api.getMemory(sessionId),
     enabled: Boolean(sessionId),
   });
+  const revisions = useQuery({
+    queryKey: ['transcript-revisions', sessionId],
+    queryFn: () => api.listTranscriptRevisions(sessionId),
+    enabled: Boolean(sessionId && memory.data?.transcript),
+  });
+
   const retry = useMutation({
     mutationFn: () => api.retryMemory(sessionId),
     onSuccess: async () =>
@@ -43,6 +60,26 @@ export function MemoryDetailPage() {
       }
     },
   });
+  const saveTranscript = useMutation({
+    mutationFn: () =>
+      api.updateTranscript(sessionId, {
+        reason: transcriptReason.trim() || undefined,
+        segments: transcriptDraft,
+      }),
+    onSuccess: async () => {
+      setEditingTranscript(false);
+      setTranscriptDraft([]);
+      setTranscriptReason('');
+      await queryClient.invalidateQueries({
+        queryKey: ['memory-detail', sessionId],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ['transcript-revisions', sessionId],
+      });
+      await queryClient.invalidateQueries({ queryKey: ['memory'] });
+    },
+  });
+
   const removeRecording = useMutation({
     mutationFn: () => api.deleteRecording(sessionId),
     onSuccess: async () => {
@@ -190,9 +227,107 @@ export function MemoryDetailPage() {
           </section>
 
           <section className="panel transcript-panel">
-            <span className="eyebrow">Speaker-aware timeline</span>
-            <h2>Transcript</h2>
-            {item.transcript?.segments?.length ? (
+            <div className="transcript-panel-heading">
+              <div>
+                <span className="eyebrow">Speaker-aware timeline</span>
+                <h2>Transcript</h2>
+              </div>
+              {item.transcript?.status === 'READY' && item.transcript.segments?.length ? (
+                <button
+                  className="button secondary"
+                  type="button"
+                  onClick={() => {
+                    if (editingTranscript) {
+                      setEditingTranscript(false);
+                      setTranscriptDraft([]);
+                      setTranscriptReason('');
+                      return;
+                    }
+                    setTranscriptDraft(
+                      item.transcript!.segments!.map((segment) => ({
+                        position: segment.position,
+                        startMs: segment.startMs,
+                        endMs: segment.endMs,
+                        speakerLabel: segment.speakerLabel,
+                        text: segment.text,
+                      })),
+                    );
+                    setEditingTranscript(true);
+                  }}
+                >
+                  {editingTranscript ? 'Cancel editing' : 'Correct transcript'}
+                </button>
+              ) : null}
+            </div>
+
+            {editingTranscript ? (
+              <div className="transcript-editor">
+                <div className="transcript-edit-notice">
+                  Saving creates an immutable revision snapshot before replacing the current
+                  transcript. AI summaries are not automatically rewritten.
+                </div>
+                {transcriptDraft.map((segment, index) => (
+                  <div className="transcript-edit-row" key={segment.position}>
+                    <div className="transcript-edit-meta">
+                      <input
+                        aria-label={`Speaker for segment ${index + 1}`}
+                        value={segment.speakerLabel ?? ''}
+                        maxLength={160}
+                        placeholder="Speaker"
+                        onChange={(event) =>
+                          setTranscriptDraft((current) =>
+                            current.map((entry, entryIndex) =>
+                              entryIndex === index
+                                ? { ...entry, speakerLabel: event.target.value || null }
+                                : entry,
+                            ),
+                          )
+                        }
+                      />
+                      <span>{Math.floor(segment.startMs / 1000)}s</span>
+                    </div>
+                    <textarea
+                      aria-label={`Transcript text for segment ${index + 1}`}
+                      rows={3}
+                      maxLength={10000}
+                      value={segment.text}
+                      onChange={(event) =>
+                        setTranscriptDraft((current) =>
+                          current.map((entry, entryIndex) =>
+                            entryIndex === index
+                              ? { ...entry, text: event.target.value }
+                              : entry,
+                          ),
+                        )
+                      }
+                    />
+                  </div>
+                ))}
+                <label className="transcript-reason-field">
+                  Correction note
+                  <input
+                    value={transcriptReason}
+                    maxLength={1000}
+                    placeholder="Optional reason for this correction"
+                    onChange={(event) => setTranscriptReason(event.target.value)}
+                  />
+                </label>
+                {saveTranscript.error ? (
+                  <div className="error-banner">{saveTranscript.error.message}</div>
+                ) : null}
+                <button
+                  className="button primary"
+                  type="button"
+                  disabled={
+                    saveTranscript.isPending ||
+                    transcriptDraft.some((segment) => !segment.text.trim())
+                  }
+                  onClick={() => saveTranscript.mutate()}
+                >
+                  {saveTranscript.isPending ? 'Saving revision…' : 'Save corrected transcript'}
+                </button>
+              </div>
+            ) : item.transcript?.segments?.length ? (
               <div className="transcript-segments">
                 {item.transcript.segments.map((segment) => (
                   <article key={segment.id}>
@@ -209,6 +344,20 @@ export function MemoryDetailPage() {
                 Transcript segments will appear after the configured STT worker completes.
               </div>
             )}
+
+            {item.transcript ? (
+              <div className="transcript-revision-summary">
+                <strong>Version {item.transcript.version}</strong>
+                <span>
+                  {revisions.data?.length
+                    ? `${revisions.data.length} prior revision${revisions.data.length === 1 ? '' : 's'} retained`
+                    : 'No prior corrections'}
+                </span>
+                {revisions.data?.[0]?.reason ? (
+                  <small>Latest correction note: {revisions.data[0].reason}</small>
+                ) : null}
+              </div>
+            ) : null}
           </section>
         </div>
       </main>
