@@ -71,6 +71,9 @@ export function useSessionRealtime(sessionId: string): SessionRealtimeController
       socket.on('agenda.activated', () => {
         void queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
       });
+      socket.on('agenda.timer.updated', () => {
+        void queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+      });
       socket.on('presence.updated', (event: { sessionId: string }) => {
         if (event.sessionId !== sessionId) return;
         void queryClient.invalidateQueries({
