@@ -20,6 +20,12 @@ export const SessionStatusSchema = z.enum([
   'READY',
   'FAILED',
 ]);
+export const AgendaTimerStatusSchema = z.enum([
+  'IDLE',
+  'RUNNING',
+  'PAUSED',
+  'EXPIRED',
+]);
 
 export const AgendaItemTypeSchema = z.enum([
   'TEXT',
@@ -131,6 +137,10 @@ export const SessionSchema = z.object({
   recordingEnabled: z.boolean(),
   transcriptionEnabled: z.boolean(),
   currentAgendaItemId: z.uuid().nullable(),
+  agendaTimerStatus: AgendaTimerStatusSchema,
+  agendaTimerRemainingSeconds: z.number().int().nonnegative(),
+  agendaTimerEndsAt: z.iso.datetime().nullable(),
+  agendaTimerStartedAt: z.iso.datetime().nullable(),
   version: z.number().int().positive(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
@@ -297,6 +307,7 @@ export type UpdateRoomInput = z.infer<typeof UpdateRoomSchema>;
 export type Room = z.infer<typeof RoomSchema>;
 export type SessionKind = z.infer<typeof SessionKindSchema>;
 export type SessionStatus = z.infer<typeof SessionStatusSchema>;
+export type AgendaTimerStatus = z.infer<typeof AgendaTimerStatusSchema>;
 export type AgendaItemType = z.infer<typeof AgendaItemTypeSchema>;
 export type CreateSessionInput = z.infer<typeof CreateSessionSchema>;
 export type UpdateSessionInput = z.infer<typeof UpdateSessionSchema>;
