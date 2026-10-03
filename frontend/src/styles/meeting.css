@@ -845,3 +845,142 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+.breakout-broadcast-banner {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  margin: 0 1.25rem 1rem;
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff7dd;
+}
+
+.breakout-broadcast-banner strong {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.breakout-broadcast-banner span {
+  color: var(--muted);
+}
+
+.media-room-context {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.8rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
+}
+
+.media-room-context span {
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.media-room-context button {
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 0.4rem 0.65rem;
+  background: transparent;
+  cursor: pointer;
+}
+
+.five-tabs {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.breakout-panel {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.breakout-room-builder {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.breakout-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.breakout-actions-grid button {
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--paper);
+  cursor: pointer;
+}
+
+.breakout-room-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.breakout-room-card {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+}
+
+.breakout-room-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.breakout-room-heading span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.breakout-assignment-list,
+.breakout-unassigned {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.breakout-assignment-list > div,
+.breakout-unassigned > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.breakout-assignment-list select,
+.breakout-unassigned select {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+}
+
+.breakout-unassigned {
+  padding: 0.8rem;
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+}
+
+@media (max-width: 900px) {
+  .five-tabs {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .breakout-actions-grid {
+    grid-template-columns: 1fr;
+  }
+}
