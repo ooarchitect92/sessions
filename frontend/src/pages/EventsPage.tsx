@@ -1,5 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { CreateEventInput } from '@sessions/contracts';
+import type {
+  CreateEventInput,
+  EventRegistrationField,
+  EventRegistrationFieldType,
+} from '@sessions/contracts';
 import { FormEvent, useMemo, useState } from 'react';
 import { api, type EventRecord } from '../api/client';
 
@@ -32,6 +36,7 @@ export function EventsPage() {
   const [startsAt, setStartsAt] = useState(defaultStart);
   const [durationMinutes, setDurationMinutes] = useState(60);
   const [capacity, setCapacity] = useState('250');
+  const [registrationFields, setRegistrationFields] = useState<EventRegistrationField[]>([]);
 
   const events = useQuery({ queryKey: ['events'], queryFn: () => api.listEvents() });
   const create = useMutation({
@@ -40,6 +45,7 @@ export function EventsPage() {
       setTitle('');
       setSlug('');
       setSlugEdited(false);
+      setRegistrationFields([]);
       await queryClient.invalidateQueries({ queryKey: ['events'] });
     },
   });
@@ -66,7 +72,7 @@ export function EventsPage() {
       durationMinutes,
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       capacity: capacity.trim() ? Number(capacity) : null,
-      registrationFields: [],
+      registrationFields,
       branding: {},
     });
   };
@@ -85,7 +91,7 @@ export function EventsPage() {
         <div className="feature-state-card">
           <span>Implemented vertical slice</span>
           <strong>Event → registration → webinar</strong>
-          <small>Reminder delivery, speaker profiles, and the visual landing-page builder remain separate increments.</small>
+          <small>Dynamic registration fields are now validated and rendered end to end. Reminder delivery, speaker profiles, and the visual landing-page builder remain separate increments.</small>
         </div>
       </section>
 
@@ -145,6 +151,190 @@ export function EventsPage() {
               Starts at
               <input required type="datetime-local" value={startsAt} onChange={(event) => setStartsAt(event.target.value)} />
             </label>
+            <div className="event-form-builder">
+              <div className="event-form-builder-heading">
+                <div>
+                  <strong>Registration form</strong>
+                  <small>Add organizer-defined questions shown on the public event page.</small>
+                </div>
+                <button
+                  type="button"
+                  className="button secondary"
+                  onClick={() =>
+                    setRegistrationFields((current) => [
+                      ...current,
+                      {
+                        key: `field_${current.length + 1}`,
+                        label: 'New field',
+                        type: 'TEXT',
+                        required: false,
+                      },
+                    ])
+                  }
+                >
+                  + Add field
+                </button>
+              </div>
+              {registrationFields.length === 0 ? (
+                <div className="artifact-placeholder compact-placeholder">
+                  Registration currently asks only for name and email.
+                </div>
+              ) : null}
+              <div className="event-field-list">
+                {registrationFields.map((field, index) => (
+                  <article className="event-field-card" key={`${field.key}-${index}`}>
+                    <div className="form-grid">
+                      <label>
+                        Label
+                        <input
+                          required
+                          maxLength={160}
+                          value={field.label}
+                          onChange={(event) =>
+                            setRegistrationFields((current) =>
+                              current.map((entry, entryIndex) =>
+                                entryIndex === index
+                                  ? { ...entry, label: event.target.value }
+                                  : entry,
+                              ),
+                            )
+                          }
+                        />
+                      </label>
+                      <label>
+                        Field key
+                        <input
+                          required
+                          maxLength={64}
+                          pattern="[a-z][a-z0-9_]{0,63}"
+                          value={field.key}
+                          onChange={(event) => {
+                            const key = event.target.value
+                              .toLowerCase()
+                              .replace(/[^a-z0-9_]/g, '')
+                              .replace(/^[^a-z]+/, '');
+                            setRegistrationFields((current) =>
+                              current.map((entry, entryIndex) =>
+                                entryIndex === index ? { ...entry, key } : entry,
+                              ),
+                            );
+                          }}
+                        />
+                      </label>
+                    </div>
+                    <div className="form-grid">
+                      <label>
+                        Type
+                        <select
+                          value={field.type}
+                          onChange={(event) => {
+                            const type = event.target.value as EventRegistrationFieldType;
+                            setRegistrationFields((current) =>
+                              current.map((entry, entryIndex) =>
+                                entryIndex === index
+                                  ? {
+                                      ...entry,
+                                      type,
+                                      options:
+                                        type === 'SELECT'
+                                          ? entry.options?.length
+                                            ? entry.options
+                                            : ['Option 1']
+                                          : undefined,
+                                    }
+                                  : entry,
+                              ),
+                            );
+                          }}
+                        >
+                          <option value="TEXT">Single-line text</option>
+                          <option value="TEXTAREA">Long text</option>
+                          <option value="EMAIL">Email</option>
+                          <option value="SELECT">Dropdown</option>
+                          <option value="CHECKBOX">Checkbox</option>
+                          <option value="CONSENT">Consent</option>
+                        </select>
+                      </label>
+                      <label>
+                        Placeholder
+                        <input
+                          maxLength={200}
+                          disabled={field.type === 'CHECKBOX' || field.type === 'CONSENT'}
+                          value={field.placeholder ?? ''}
+                          onChange={(event) =>
+                            setRegistrationFields((current) =>
+                              current.map((entry, entryIndex) =>
+                                entryIndex === index
+                                  ? { ...entry, placeholder: event.target.value || undefined }
+                                  : entry,
+                              ),
+                            )
+                          }
+                        />
+                      </label>
+                    </div>
+                    {field.type === 'SELECT' ? (
+                      <label>
+                        Dropdown options
+                        <textarea
+                          rows={3}
+                          value={(field.options ?? []).join('\n')}
+                          onChange={(event) =>
+                            setRegistrationFields((current) =>
+                              current.map((entry, entryIndex) =>
+                                entryIndex === index
+                                  ? {
+                                      ...entry,
+                                      options: event.target.value
+                                        .split('\n')
+                                        .map((option) => option.trim())
+                                        .filter(Boolean),
+                                    }
+                                  : entry,
+                              ),
+                            )
+                          }
+                          placeholder={'Founder\nEngineering\nMarketing'}
+                        />
+                      </label>
+                    ) : null}
+                    <div className="event-field-actions">
+                      <label className="settings-toggle-row">
+                        <input
+                          type="checkbox"
+                          checked={field.required}
+                          onChange={(event) =>
+                            setRegistrationFields((current) =>
+                              current.map((entry, entryIndex) =>
+                                entryIndex === index
+                                  ? { ...entry, required: event.target.checked }
+                                  : entry,
+                              ),
+                            )
+                          }
+                        />
+                        <span>
+                          <strong>Required</strong>
+                          <small>Registrant must answer before submission.</small>
+                        </span>
+                      </label>
+                      <button
+                        type="button"
+                        className="button danger"
+                        onClick={() =>
+                          setRegistrationFields((current) =>
+                            current.filter((_, entryIndex) => entryIndex !== index),
+                          )
+                        }
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
+
             <div className="form-grid">
               <label>
                 Duration
