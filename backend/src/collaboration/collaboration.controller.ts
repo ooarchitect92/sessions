@@ -15,6 +15,14 @@ import { SubmitPollAnswerDto } from './dto/submit-poll-answer.dto';
 export class CollaborationController {
   constructor(private readonly collaboration: CollaborationService) {}
 
+  @Get('presence')
+  listPresence(
+    @CurrentPrincipal() principal: Principal,
+    @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
+  ) {
+    return this.collaboration.listPresence(principal, sessionId);
+  }
+
   @Get('chat-messages')
   listChat(
     @CurrentPrincipal() principal: Principal,
