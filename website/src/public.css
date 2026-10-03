@@ -167,18 +167,34 @@
   font-weight: 800;
 }
 
-.public-form input {
+.public-form input,
+.public-form textarea,
+.public-form select {
   width: 100%;
-  height: 45px;
   border: 1px solid #d4d3cc;
   border-radius: 11px;
   padding: 0 12px;
   outline: 0;
   background: #fff;
   color: #142421;
+  font: inherit;
 }
 
-.public-form input:focus {
+.public-form input,
+.public-form select {
+  height: 45px;
+}
+
+.public-form textarea {
+  min-height: 96px;
+  padding-top: 11px;
+  padding-bottom: 11px;
+  resize: vertical;
+}
+
+.public-form input:focus,
+.public-form textarea:focus,
+.public-form select:focus {
   border-color: #507b70;
   box-shadow: 0 0 0 3px rgba(48, 111, 85, 0.12);
 }
@@ -483,4 +499,21 @@
   border: 1px solid #d4d3cc;
   background: #fff;
   color: #40544f;
+}
+
+
+.public-form .public-checkbox-field {
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+}
+
+.public-form .public-checkbox-field input {
+  width: 18px;
+  height: 18px;
+  margin: 1px 0 0;
+}
+
+.public-form .public-checkbox-field span {
+  line-height: 1.5;
 }
