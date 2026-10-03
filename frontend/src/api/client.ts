@@ -245,6 +245,12 @@ export interface TranscriptRevisionRecord {
   createdAt: string;
 }
 
+export interface MemoryActionItemRecord {
+  title: string;
+  owner: string | null;
+  dueDate: string | null;
+}
+
 export interface MemorySummaryRecord {
   id: string;
   sessionId: string;
@@ -252,10 +258,22 @@ export interface MemorySummaryRecord {
   provider: string | null;
   model: string | null;
   summaryText: string | null;
-  decisions: unknown[];
-  actionItems: unknown[];
+  decisions: string[];
+  actionItems: MemoryActionItemRecord[];
   citations: unknown[];
+  reviewedAt: string | null;
+  reviewedByUserId: string | null;
+  reviewNote: string | null;
+  version: number;
   failureCode: string | null;
+}
+
+export interface MemorySummaryRevisionRecord {
+  id: string;
+  summaryVersion: number;
+  editedByUserId: string;
+  reviewNote: string | null;
+  createdAt: string;
 }
 
 export interface MemoryListItem extends Session {
@@ -790,6 +808,29 @@ export const api = {
 
   getMemory(sessionId: string): Promise<MemoryDetail> {
     return request<MemoryDetail>(`/memory/${sessionId}`);
+  },
+
+  listMemorySummaryRevisions(
+    sessionId: string,
+  ): Promise<MemorySummaryRevisionRecord[]> {
+    return request<MemorySummaryRevisionRecord[]>(
+      `/memory/${sessionId}/summary/revisions`,
+    );
+  },
+
+  updateMemorySummary(
+    sessionId: string,
+    input: {
+      summaryText: string;
+      decisions: string[];
+      actionItems: MemoryActionItemRecord[];
+      reviewNote?: string;
+    },
+  ): Promise<MemorySummaryRecord> {
+    return request<MemorySummaryRecord>(`/memory/${sessionId}/summary`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
   },
 
   listTranscriptRevisions(sessionId: string): Promise<TranscriptRevisionRecord[]> {
