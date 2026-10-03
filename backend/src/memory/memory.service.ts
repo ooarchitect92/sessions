@@ -17,6 +17,10 @@ import { RealtimeEventsService } from '../infrastructure/realtime-events.service
 import { OutboxService } from '../outbox/outbox.service';
 import { ListMemoryQuery } from './dto/list-memory.query';
 import { UpdateTranscriptDto } from './dto/update-transcript.dto';
+import {
+  normalizeTranscriptCorrection,
+  transcriptCorrectionError,
+} from './transcript-correction';
 
 @Injectable()
 export class MemoryService {
@@ -187,27 +191,10 @@ export class MemoryService {
   ) {
     this.assertHost(principal);
 
-    const normalized = [...input.segments]
-      .sort((left, right) => left.position - right.position)
-      .map((segment, position) => ({
-        position,
-        startMs: segment.startMs,
-        endMs: segment.endMs,
-        speakerLabel: segment.speakerLabel?.trim() || null,
-        text: segment.text.trim(),
-      }));
-
-    for (const segment of normalized) {
-      if (segment.endMs < segment.startMs) {
-        throw new BadRequestException(
-          `Transcript segment ${segment.position} ends before it starts`,
-        );
-      }
-      if (!segment.text) {
-        throw new BadRequestException(
-          `Transcript segment ${segment.position} cannot be empty`,
-        );
-      }
+    const normalized = normalizeTranscriptCorrection(input.segments);
+    const correctionError = transcriptCorrectionError(normalized);
+    if (correctionError) {
+      throw new BadRequestException(correctionError);
     }
 
     const result = await this.database.run(principal, async (transaction) => {
