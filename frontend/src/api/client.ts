@@ -32,6 +32,22 @@ import {
 } from "../auth/session";
 
 
+export interface ApiKeyRecord {
+  id: string;
+  name: string;
+  tokenPrefix: string;
+  scopes: Array<'read' | 'write'>;
+  lastUsedAt: string | null;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreatedApiKey extends ApiKeyRecord {
+  token: string;
+}
+
 export interface AuthPrincipal {
   userId: string;
   organizationId: string;
@@ -415,6 +431,27 @@ function publicRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
+  listApiKeys(): Promise<ApiKeyRecord[]> {
+    return request<ApiKeyRecord[]>('/api-keys');
+  },
+
+  createApiKey(input: {
+    name: string;
+    scopes: Array<'read' | 'write'>;
+    expiresInDays?: number;
+  }): Promise<CreatedApiKey> {
+    return request<CreatedApiKey>('/api-keys', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  revokeApiKey(id: string): Promise<{ id: string; revoked: true }> {
+    return request<{ id: string; revoked: true }>(`/api-keys/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
   signUp(input: {
     email: string;
     displayName: string;
