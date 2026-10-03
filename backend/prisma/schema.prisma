@@ -70,6 +70,13 @@ enum EventStatus {
   CANCELLED
 }
 
+enum EventStageRole {
+  ORGANIZER
+  HOST
+  COHOST
+  SPEAKER
+}
+
 enum RegistrationStatus {
   REGISTERED
   WAITLISTED
@@ -148,6 +155,7 @@ model Organization {
   agendaTemplates     AgendaTemplate[]
   agendaTemplateItems AgendaTemplateItem[]
   events              Event[]
+  eventSpeakers        EventSpeaker[]
   eventRegistrations  EventRegistration[]
   bookingPages        BookingPage[]
   bookingReservations BookingReservation[]
@@ -189,6 +197,7 @@ model Workspace {
   agendaTemplates     AgendaTemplate[]
   agendaTemplateItems AgendaTemplateItem[]
   events              Event[]
+  eventSpeakers        EventSpeaker[]
   eventRegistrations  EventRegistration[]
   bookingPages        BookingPage[]
   bookingReservations BookingReservation[]
@@ -232,6 +241,7 @@ model User {
   createdSessions         Session[]                @relation("SessionCreator")
   createdAgendaTemplates  AgendaTemplate[]         @relation("AgendaTemplateCreator")
   createdEvents           Event[]                  @relation("EventCreator")
+  eventStageProfiles      EventSpeaker[]
   createdBookingPages     BookingPage[]            @relation("BookingPageCreator")
   chatMessages            ChatMessage[]            @relation("ChatMessageAuthor")
   receivedChatMessages    ChatMessage[]            @relation("ChatMessageRecipient")
@@ -440,11 +450,40 @@ model Event {
   createdBy          User                @relation("EventCreator", fields: [createdById], references: [id], onDelete: Restrict)
   session            Session?            @relation(fields: [sessionId], references: [id], onDelete: SetNull)
   registrations      EventRegistration[]
+  speakers           EventSpeaker[]
 
   @@unique([workspaceId, slug])
   @@index([organizationId, workspaceId, startsAt])
   @@index([workspaceId, status, startsAt])
   @@map("events")
+}
+
+model EventSpeaker {
+  id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String         @map("organization_id") @db.Uuid
+  workspaceId    String         @map("workspace_id") @db.Uuid
+  eventId        String         @map("event_id") @db.Uuid
+  userId         String?        @map("user_id") @db.Uuid
+  role           EventStageRole @default(SPEAKER)
+  position       Int
+  displayName    String         @map("display_name") @db.VarChar(160)
+  email          String?        @db.Citext
+  title          String?        @db.VarChar(160)
+  bio            String?        @db.Text
+  avatarUrl      String?        @map("avatar_url") @db.Text
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  event          Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user           User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([eventId, position])
+  @@unique([eventId, userId])
+  @@unique([eventId, email])
+  @@index([organizationId, workspaceId, eventId])
+  @@index([workspaceId, userId])
+  @@map("event_speakers")
 }
 
 model EventRegistration {
