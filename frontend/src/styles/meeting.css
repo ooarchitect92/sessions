@@ -984,3 +984,56 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+.agenda-file-picker {
+  display: grid;
+  gap: 8px;
+}
+
+.agenda-file-picker input[type='file'],
+.agenda-file-picker select {
+  width: 100%;
+}
+
+.agenda-file-safety-note {
+  color: #7f928e;
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+.shared-file-stage {
+  min-height: 0;
+}
+
+.shared-file-placeholder {
+  min-height: 220px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 10px;
+  padding: 28px;
+  text-align: center;
+  color: #8fa19d;
+  background: #0b1110;
+}
+
+.shared-file-placeholder strong {
+  color: #dce7e4;
+  font-size: 14px;
+}
+
+.shared-file-placeholder span {
+  max-width: 58ch;
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.shared-file-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  object-fit: contain;
+  background: #080d0c;
+}
