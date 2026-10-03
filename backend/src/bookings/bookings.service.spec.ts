@@ -154,7 +154,7 @@ describe('booking availability', () => {
 
     expect(
       service.validateIntakeAnswers(
-        page({ intakeFields }),
+        page({ intakeFields: intakeFields as unknown as BookingPage['intakeFields'] }),
         {
           company: '  Acme  ',
           team_size: '11-50',
@@ -168,14 +168,14 @@ describe('booking availability', () => {
     });
 
     expect(() =>
-      service.validateIntakeAnswers(page({ intakeFields }), {
+      service.validateIntakeAnswers(page({ intakeFields: intakeFields as unknown as BookingPage['intakeFields'] }), {
         company: 'Acme',
         team_size: 'invalid',
         consent: true,
       }),
     ).toThrow(BadRequestException);
     expect(() =>
-      service.validateIntakeAnswers(page({ intakeFields }), {
+      service.validateIntakeAnswers(page({ intakeFields: intakeFields as unknown as BookingPage['intakeFields'] }), {
         company: 'Acme',
         team_size: '1-10',
         consent: false,
