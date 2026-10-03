@@ -18,6 +18,15 @@ interface RegistrationField {
   options?: string[];
 }
 
+interface PublicSpeaker {
+  id: string;
+  role: 'ORGANIZER' | 'HOST' | 'COHOST' | 'SPEAKER';
+  displayName: string;
+  title: string | null;
+  bio: string | null;
+  avatarUrl: string | null;
+}
+
 interface PublicEvent {
   id: string;
   slug: string;
@@ -31,6 +40,7 @@ interface PublicEvent {
   branding: Record<string, unknown>;
   status: 'PUBLISHED' | 'LIVE';
   registrationCount: number;
+  speakers: PublicSpeaker[];
 }
 
 interface Registration {
@@ -153,6 +163,42 @@ export function PublicEventPage({
               <small>{event.registrationCount} people registered</small>
             </article>
           </div>
+
+          {event.speakers.length > 0 ? (
+            <section className="public-speaker-section">
+              <span className="public-kicker">On stage</span>
+              <div className="public-speaker-grid">
+                {event.speakers.map((speaker) => (
+                  <article className="public-speaker-card" key={speaker.id}>
+                    {speaker.avatarUrl ? (
+                      <img
+                        src={speaker.avatarUrl}
+                        alt=""
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="public-speaker-initials" aria-hidden="true">
+                        {speaker.displayName
+                          .split(/\s+/)
+                          .slice(0, 2)
+                          .map((part) => part[0]?.toUpperCase() ?? '')
+                          .join('')}
+                      </div>
+                    )}
+                    <div>
+                      <span>
+                        {speaker.role.toLowerCase().replace('cohost', 'co-host')}
+                      </span>
+                      <strong>{speaker.displayName}</strong>
+                      {speaker.title ? <small>{speaker.title}</small> : null}
+                      {speaker.bio ? <p>{speaker.bio}</p> : null}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          ) : null}
         </section>
 
         <aside className="public-action-card">
