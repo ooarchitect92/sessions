@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Prisma, SessionKind, SessionStatus } from '@prisma/client';
+import { EventStageRole, Prisma, SessionKind, SessionStatus } from '@prisma/client';
 import { AccessToken, RoomServiceClient } from 'livekit-server-sdk';
 import { AuditService } from '../audit/audit.service';
 import {
@@ -18,7 +18,6 @@ import { TenantDatabaseService } from '../database/tenant-database.service';
 import { RealtimeEventsService } from '../infrastructure/realtime-events.service';
 import { RedisService } from '../infrastructure/redis.service';
 import { OutboxService } from '../outbox/outbox.service';
-import { TenantDatabaseService } from '../database/tenant-database.service';
 import { RecordingsService } from '../recordings/recordings.service';
 import { SessionsService } from '../sessions/sessions.service';
 
@@ -39,7 +38,6 @@ export class MediaService {
     private readonly database: TenantDatabaseService,
     private readonly sessions: SessionsService,
     private readonly recordings: RecordingsService,
-    private readonly database: TenantDatabaseService,
     private readonly audit: AuditService,
     private readonly outbox: OutboxService,
     private readonly realtimeEvents: RealtimeEventsService,
