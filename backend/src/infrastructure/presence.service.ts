@@ -23,9 +23,9 @@ export class PresenceService {
     socketId: string,
   ): Promise<{ participants: PresenceParticipant[]; firstConnection: boolean }> {
     const socketKey = this.socketKey(sessionId, principal.userId);
-    await this.redis.sadd(socketKey, socketId);
-    const socketCount = await this.redis.scard(socketKey);
-    await this.touch(sessionId, principal, socketKey);
+    await this.redis.zremrangebyscore(socketKey, 0, Date.now());
+    await this.touch(sessionId, principal, socketId);
+    const socketCount = await this.redis.zcard(socketKey);
 
     return {
       participants: await this.list(sessionId),
@@ -38,9 +38,7 @@ export class PresenceService {
     principal: Principal,
     socketId: string,
   ): Promise<void> {
-    const socketKey = this.socketKey(sessionId, principal.userId);
-    await this.redis.sadd(socketKey, socketId);
-    await this.touch(sessionId, principal, socketKey);
+    await this.touch(sessionId, principal, socketId);
   }
 
   async leave(
@@ -49,8 +47,9 @@ export class PresenceService {
     socketId: string,
   ): Promise<{ participants: PresenceParticipant[]; departed: boolean }> {
     const socketKey = this.socketKey(sessionId, userId);
-    await this.redis.srem(socketKey, socketId);
-    const remaining = await this.redis.scard(socketKey);
+    await this.redis.zrem(socketKey, socketId);
+    await this.redis.zremrangebyscore(socketKey, 0, Date.now());
+    const remaining = await this.redis.zcard(socketKey);
 
     if (remaining <= 0) {
       await this.redis
@@ -76,6 +75,7 @@ export class PresenceService {
     if (expired.length > 0) {
       const cleanup = this.redis.multi().zrem(expiryKey, ...expired);
       cleanup.hdel(membersKey, ...expired);
+      for (const userId of expired) cleanup.del(this.socketKey(sessionId, userId));
       await cleanup.exec();
     }
 
@@ -92,13 +92,15 @@ export class PresenceService {
   private async touch(
     sessionId: string,
     principal: Principal,
-    socketKey: string,
+    socketId: string,
   ): Promise<void> {
     const now = new Date();
     const membersKey = this.membersKey(sessionId);
     const expiryKey = this.expiryKey(sessionId);
+    const socketKey = this.socketKey(sessionId, principal.userId);
     const existing = await this.redis.hget(membersKey, principal.userId);
     const parsed = this.parse(existing);
+    const expiresAt = Date.now() + this.presenceTtlMs;
 
     const participant: PresenceParticipant = {
       userId: principal.userId,
@@ -111,7 +113,8 @@ export class PresenceService {
     await this.redis
       .multi()
       .hset(membersKey, principal.userId, JSON.stringify(participant))
-      .zadd(expiryKey, Date.now() + this.presenceTtlMs, principal.userId)
+      .zadd(expiryKey, expiresAt, principal.userId)
+      .zadd(socketKey, expiresAt, socketId)
       .expire(membersKey, this.keyTtlSeconds)
       .expire(expiryKey, this.keyTtlSeconds)
       .expire(socketKey, Math.ceil(this.presenceTtlMs / 1000) + 30)
@@ -134,7 +137,7 @@ export class PresenceService {
       return {
         userId: parsed.userId,
         displayName: parsed.displayName,
-        roles: parsed.roles.filter((role): role is string => typeof role === 'string'),
+        roles: parsed.roles.filter((role) => typeof role === 'string'),
         joinedAt: parsed.joinedAt,
         lastSeenAt: parsed.lastSeenAt,
       };
