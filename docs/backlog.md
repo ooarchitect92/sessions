@@ -49,9 +49,11 @@
 - [x] public event page, registration, capacity and waitlist handling
 - [x] typed booking intake form builder, public renderer and answer validation
 - [x] dynamic event registration form builder, public renderer, typed validation and answer enforcement
-- [ ] webinar stage roles, speaker profiles and landing-page builder
+- [x] webinar stage roles, linked speaker profiles, public speaker cards and media publish/moderation enforcement
+- [ ] visual webinar landing-page builder
 - [ ] notification templates, reminder jobs and delivery reconciliation
-- [ ] durable attendance intervals and engagement event model
+- [x] durable realtime attendance intervals, heartbeat recovery, attendee check-in and participant join/leave webhooks
+- [ ] unified engagement event model and long-term aggregation
 
 ## Phase 4 — memory and AI
 
