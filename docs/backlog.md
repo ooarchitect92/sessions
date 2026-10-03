@@ -46,7 +46,7 @@
 - [x] webinar/event draft, publish and cancellation lifecycle
 - [x] public event page, registration, capacity and waitlist handling
 - [x] typed booking intake form builder, public renderer and answer validation
-- [ ] dynamic event registration form builder and renderer
+- [x] dynamic event registration form builder, public renderer, typed validation and answer enforcement
 - [ ] webinar stage roles, speaker profiles and landing-page builder
 - [ ] notification templates, reminder jobs and delivery reconciliation
 - [ ] durable attendance intervals and engagement event model
