@@ -20,12 +20,19 @@ export const SessionStatusSchema = z.enum([
   'READY',
   'FAILED',
 ]);
+export const AgendaTimerStatusSchema = z.enum([
+  'IDLE',
+  'RUNNING',
+  'PAUSED',
+  'EXPIRED',
+]);
 
 export const AgendaItemTypeSchema = z.enum([
   'TEXT',
   'PRESENTATION',
   'WEBSITE',
   'VIDEO',
+  'FILE',
   'POLL',
   'WHITEBOARD',
   'BREAKOUT',
@@ -55,7 +62,7 @@ export const RecordingConsentDecisionSchema = z.enum([
   'DECLINED',
   'REVOKED',
 ]);
-export const ChatChannelSchema = z.enum(['EVERYONE', 'HOSTS']);
+export const ChatChannelSchema = z.enum(['EVERYONE', 'HOSTS', 'PRIVATE']);
 export const PollTypeSchema = z.enum([
   'SINGLE_CHOICE',
   'MULTIPLE_CHOICE',
@@ -131,9 +138,36 @@ export const SessionSchema = z.object({
   recordingEnabled: z.boolean(),
   transcriptionEnabled: z.boolean(),
   currentAgendaItemId: z.uuid().nullable(),
+  agendaTimerStatus: AgendaTimerStatusSchema,
+  agendaTimerRemainingSeconds: z.number().int().nonnegative(),
+  agendaTimerEndsAt: z.iso.datetime().nullable(),
+  agendaTimerStartedAt: z.iso.datetime().nullable(),
   version: z.number().int().positive(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
+});
+
+export const EventRegistrationFieldTypeSchema = z.enum([
+  'TEXT',
+  'TEXTAREA',
+  'EMAIL',
+  'SELECT',
+  'CHECKBOX',
+  'CONSENT',
+]);
+
+export const EventRegistrationFieldSchema = z.object({
+  key: z
+    .string()
+    .regex(/^[a-z][a-z0-9_]{0,63}$/)
+    .refine((key) => !['name', 'email'].includes(key), {
+      message: 'name and email are reserved registration keys',
+    }),
+  label: z.string().trim().min(1).max(160),
+  type: EventRegistrationFieldTypeSchema,
+  required: z.boolean().default(false),
+  placeholder: z.string().max(200).optional(),
+  options: z.array(z.string().trim().min(1).max(160)).max(50).optional(),
 });
 
 export const CreateEventSchema = z.object({
@@ -144,7 +178,7 @@ export const CreateEventSchema = z.object({
   durationMinutes: z.number().int().min(5).max(1440),
   timezone: z.string().trim().min(1).max(100),
   capacity: z.number().int().positive().max(100000).nullable().optional(),
-  registrationFields: z.array(z.record(z.string(), z.unknown())).default([]),
+  registrationFields: z.array(EventRegistrationFieldSchema).max(50).default([]),
   branding: z.record(z.string(), z.unknown()).default({}),
 });
 
@@ -161,7 +195,7 @@ export const EventSchema = z.object({
   timezone: z.string(),
   capacity: z.number().int().nullable(),
   status: EventStatusSchema,
-  registrationFields: z.array(z.record(z.string(), z.unknown())),
+  registrationFields: z.array(EventRegistrationFieldSchema),
   branding: z.record(z.string(), z.unknown()),
   publishedAt: z.iso.datetime().nullable(),
   version: z.number().int().positive(),
@@ -181,6 +215,24 @@ export const AvailabilityRuleSchema = z.object({
   endTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
 });
 
+export const IntakeFieldTypeSchema = z.enum([
+  'TEXT',
+  'TEXTAREA',
+  'EMAIL',
+  'SELECT',
+  'CHECKBOX',
+  'CONSENT',
+]);
+
+export const IntakeFieldSchema = z.object({
+  key: z.string().regex(/^[a-z][a-z0-9_]{0,63}$/),
+  label: z.string().trim().min(1).max(160),
+  type: IntakeFieldTypeSchema,
+  required: z.boolean().default(false),
+  placeholder: z.string().max(200).optional(),
+  options: z.array(z.string().trim().min(1).max(160)).max(50).optional(),
+});
+
 export const CreateBookingPageSchema = z.object({
   slug: SlugSchema,
   title: z.string().trim().min(1).max(160),
@@ -191,7 +243,7 @@ export const CreateBookingPageSchema = z.object({
   bufferBeforeMinutes: z.number().int().min(0).max(1440).default(0),
   bufferAfterMinutes: z.number().int().min(0).max(1440).default(0),
   availabilityRules: z.array(AvailabilityRuleSchema).min(1),
-  intakeFields: z.array(z.record(z.string(), z.unknown())).default([]),
+  intakeFields: z.array(IntakeFieldSchema).max(50).default([]),
 });
 
 export const BookingPageSchema = z.object({
@@ -256,17 +308,26 @@ export type UpdateRoomInput = z.infer<typeof UpdateRoomSchema>;
 export type Room = z.infer<typeof RoomSchema>;
 export type SessionKind = z.infer<typeof SessionKindSchema>;
 export type SessionStatus = z.infer<typeof SessionStatusSchema>;
+export type AgendaTimerStatus = z.infer<typeof AgendaTimerStatusSchema>;
 export type AgendaItemType = z.infer<typeof AgendaItemTypeSchema>;
 export type CreateSessionInput = z.infer<typeof CreateSessionSchema>;
 export type UpdateSessionInput = z.infer<typeof UpdateSessionSchema>;
 export type CreateAgendaItemInput = z.infer<typeof CreateAgendaItemSchema>;
 export type Session = z.infer<typeof SessionSchema>;
 export type EventStatus = z.infer<typeof EventStatusSchema>;
+export type EventRegistrationFieldType = z.infer<
+  typeof EventRegistrationFieldTypeSchema
+>;
+export type EventRegistrationField = z.infer<
+  typeof EventRegistrationFieldSchema
+>;
 export type CreateEventInput = z.infer<typeof CreateEventSchema>;
 export type Event = z.infer<typeof EventSchema>;
 export type RegisterForEventInput = z.infer<typeof RegisterForEventSchema>;
 export type BookingStatus = z.infer<typeof BookingStatusSchema>;
 export type AvailabilityRule = z.infer<typeof AvailabilityRuleSchema>;
+export type IntakeFieldType = z.infer<typeof IntakeFieldTypeSchema>;
+export type IntakeField = z.infer<typeof IntakeFieldSchema>;
 export type CreateBookingPageInput = z.infer<typeof CreateBookingPageSchema>;
 export type BookingPage = z.infer<typeof BookingPageSchema>;
 export type ReserveBookingInput = z.infer<typeof ReserveBookingSchema>;

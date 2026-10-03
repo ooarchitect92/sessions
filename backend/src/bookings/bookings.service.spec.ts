@@ -2,7 +2,11 @@ import { BadRequestException } from '@nestjs/common';
 import type { BookingPage } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
 import { BookingsService } from './bookings.service';
-import type { AvailabilityRuleDto } from './dto/create-booking-page.dto';
+import {
+  IntakeFieldType,
+  type AvailabilityRuleDto,
+  type IntakeFieldDto,
+} from './dto/create-booking-page.dto';
 
 interface Slot {
   startsAt: string;
@@ -18,6 +22,20 @@ interface AvailabilityHarness {
   ): Slot[];
   validateDateRange(dateFrom: string, dateTo: string): unknown;
   assertAvailabilityRules(rules: AvailabilityRuleDto[]): void;
+  assertIntakeFields(fields: IntakeFieldDto[]): void;
+  validateIntakeAnswers(
+    page: BookingPage,
+    answers: Record<string, unknown>,
+  ): Record<string, unknown>;
+  hashManagementToken(token: string): string;
+  buildCalendarFile(input: {
+    id: string;
+    title: string;
+    description: string | null;
+    startsAt: Date;
+    endsAt: Date;
+    status: 'CONFIRMED' | 'CANCELLED' | 'COMPLETED' | 'NO_SHOW';
+  }): { filename: string; contentType: string; content: string };
 }
 
 function createService(): AvailabilityHarness {
@@ -107,5 +125,112 @@ describe('booking availability', () => {
     expect(() => service.validateDateRange('2030-01-01', '2030-02-02')).toThrow(
       BadRequestException,
     );
+  });
+
+  it('validates dynamic intake field definitions and submitted answers', () => {
+    const service = createService();
+    const intakeFields: IntakeFieldDto[] = [
+      {
+        key: 'company',
+        label: 'Company',
+        type: IntakeFieldType.TEXT,
+        required: true,
+      },
+      {
+        key: 'team_size',
+        label: 'Team size',
+        type: IntakeFieldType.SELECT,
+        required: true,
+        options: ['1-10', '11-50'],
+      },
+      {
+        key: 'consent',
+        label: 'I agree to be contacted',
+        type: IntakeFieldType.CONSENT,
+        required: true,
+      },
+    ];
+    service.assertIntakeFields(intakeFields);
+
+    expect(
+      service.validateIntakeAnswers(
+        page({ intakeFields: intakeFields as unknown as BookingPage['intakeFields'] }),
+        {
+          company: '  Acme  ',
+          team_size: '11-50',
+          consent: true,
+        },
+      ),
+    ).toEqual({
+      company: 'Acme',
+      team_size: '11-50',
+      consent: true,
+    });
+
+    expect(() =>
+      service.validateIntakeAnswers(page({ intakeFields: intakeFields as unknown as BookingPage['intakeFields'] }), {
+        company: 'Acme',
+        team_size: 'invalid',
+        consent: true,
+      }),
+    ).toThrow(BadRequestException);
+    expect(() =>
+      service.validateIntakeAnswers(page({ intakeFields: intakeFields as unknown as BookingPage['intakeFields'] }), {
+        company: 'Acme',
+        team_size: '1-10',
+        consent: false,
+      }),
+    ).toThrow(BadRequestException);
+  });
+
+  it('rejects malformed intake field definitions', () => {
+    const service = createService();
+    expect(() =>
+      service.assertIntakeFields([
+        {
+          key: 'size',
+          label: 'Size',
+          type: IntakeFieldType.SELECT,
+          required: false,
+          options: [],
+        },
+      ]),
+    ).toThrow(BadRequestException);
+  });
+
+  it('hashes management tokens without exposing the raw credential', () => {
+    const service = createService();
+    const token = 'booking-management-token-0123456789';
+
+    expect(service.hashManagementToken(token)).toMatch(/^[a-f0-9]{64}$/);
+    expect(service.hashManagementToken(token)).not.toContain(token);
+  });
+
+  it('builds a standards-oriented calendar artifact for confirmed and cancelled bookings', () => {
+    const service = createService();
+    const confirmed = service.buildCalendarFile({
+      id: '10000000-0000-4000-8000-000000000010',
+      title: 'Discovery, call',
+      description: 'Discuss scope; next steps',
+      startsAt: new Date('2030-01-07T09:00:00.000Z'),
+      endsAt: new Date('2030-01-07T09:30:00.000Z'),
+      status: 'CONFIRMED',
+    });
+
+    expect(confirmed.contentType).toContain('text/calendar');
+    expect(confirmed.content).toContain('DTSTART:20300107T090000Z');
+    expect(confirmed.content).toContain('SUMMARY:Discovery\\, call');
+    expect(confirmed.content).toContain('DESCRIPTION:Discuss scope\\; next steps');
+    expect(confirmed.content).toContain('STATUS:CONFIRMED');
+
+    const cancelled = service.buildCalendarFile({
+      id: '10000000-0000-4000-8000-000000000010',
+      title: 'Discovery call',
+      description: null,
+      startsAt: new Date('2030-01-07T09:00:00.000Z'),
+      endsAt: new Date('2030-01-07T09:30:00.000Z'),
+      status: 'CANCELLED',
+    });
+    expect(cancelled.content).toContain('STATUS:CANCELLED');
   });
 });

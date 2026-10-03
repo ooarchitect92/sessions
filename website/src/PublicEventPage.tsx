@@ -1,6 +1,32 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { publicApi } from './public-api';
 
+type RegistrationFieldType =
+  | 'TEXT'
+  | 'TEXTAREA'
+  | 'EMAIL'
+  | 'SELECT'
+  | 'CHECKBOX'
+  | 'CONSENT';
+
+interface RegistrationField {
+  key: string;
+  label: string;
+  type: RegistrationFieldType;
+  required: boolean;
+  placeholder?: string;
+  options?: string[];
+}
+
+interface PublicSpeaker {
+  id: string;
+  role: 'ORGANIZER' | 'HOST' | 'COHOST' | 'SPEAKER';
+  displayName: string;
+  title: string | null;
+  bio: string | null;
+  avatarUrl: string | null;
+}
+
 interface PublicEvent {
   id: string;
   slug: string;
@@ -10,10 +36,11 @@ interface PublicEvent {
   durationMinutes: number;
   timezone: string;
   capacity: number | null;
-  registrationFields: Array<Record<string, unknown>>;
+  registrationFields: RegistrationField[];
   branding: Record<string, unknown>;
   status: 'PUBLISHED' | 'LIVE';
   registrationCount: number;
+  speakers: PublicSpeaker[];
 }
 
 interface Registration {
@@ -36,6 +63,7 @@ export function PublicEventPage({
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [registration, setRegistration] = useState<Registration | null>(null);
+  const [answers, setAnswers] = useState<Record<string, string | boolean>>({});
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -72,7 +100,7 @@ export function PublicEventPage({
         )}/events/${encodeURIComponent(eventSlug)}/registrations`,
         {
           method: 'POST',
-          body: JSON.stringify({ name, email, answers: {} }),
+          body: JSON.stringify({ name, email, answers }),
         },
       );
       setRegistration(result);
@@ -135,6 +163,42 @@ export function PublicEventPage({
               <small>{event.registrationCount} people registered</small>
             </article>
           </div>
+
+          {event.speakers.length > 0 ? (
+            <section className="public-speaker-section">
+              <span className="public-kicker">On stage</span>
+              <div className="public-speaker-grid">
+                {event.speakers.map((speaker) => (
+                  <article className="public-speaker-card" key={speaker.id}>
+                    {speaker.avatarUrl ? (
+                      <img
+                        src={speaker.avatarUrl}
+                        alt=""
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="public-speaker-initials" aria-hidden="true">
+                        {speaker.displayName
+                          .split(/\s+/)
+                          .slice(0, 2)
+                          .map((part) => part[0]?.toUpperCase() ?? '')
+                          .join('')}
+                      </div>
+                    )}
+                    <div>
+                      <span>
+                        {speaker.role.toLowerCase().replace('cohost', 'co-host')}
+                      </span>
+                      <strong>{speaker.displayName}</strong>
+                      {speaker.title ? <small>{speaker.title}</small> : null}
+                      {speaker.bio ? <p>{speaker.bio}</p> : null}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          ) : null}
         </section>
 
         <aside className="public-action-card">
@@ -177,12 +241,94 @@ export function PublicEventPage({
                     autoComplete="email"
                   />
                 </label>
-                {event.registrationFields.length > 0 ? (
-                  <div className="public-form-note">
-                    This event has {event.registrationFields.length} additional organizer-defined
-                    fields. The full dynamic form renderer is the next form-builder increment.
-                  </div>
-                ) : null}
+                {event.registrationFields.map((field) => {
+                  if (field.type === 'TEXTAREA') {
+                    return (
+                      <label key={field.key}>
+                        {field.label}
+                        <textarea
+                          required={field.required}
+                          maxLength={5000}
+                          rows={4}
+                          placeholder={field.placeholder}
+                          value={typeof answers[field.key] === 'string' ? String(answers[field.key]) : ''}
+                          onChange={(inputEvent) =>
+                            setAnswers((current) => ({
+                              ...current,
+                              [field.key]: inputEvent.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                    );
+                  }
+
+                  if (field.type === 'SELECT') {
+                    return (
+                      <label key={field.key}>
+                        {field.label}
+                        <select
+                          required={field.required}
+                          value={typeof answers[field.key] === 'string' ? String(answers[field.key]) : ''}
+                          onChange={(inputEvent) =>
+                            setAnswers((current) => ({
+                              ...current,
+                              [field.key]: inputEvent.target.value,
+                            }))
+                          }
+                        >
+                          <option value="">Select an option</option>
+                          {(field.options ?? []).map((option) => (
+                            <option value={option} key={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    );
+                  }
+
+                  if (field.type === 'CHECKBOX' || field.type === 'CONSENT') {
+                    return (
+                      <label className="public-checkbox-field" key={field.key}>
+                        <input
+                          type="checkbox"
+                          required={field.required && field.type === 'CONSENT'}
+                          checked={answers[field.key] === true}
+                          onChange={(inputEvent) =>
+                            setAnswers((current) => ({
+                              ...current,
+                              [field.key]: inputEvent.target.checked,
+                            }))
+                          }
+                        />
+                        <span>
+                          <strong>{field.label}</strong>
+                          {field.required ? <small>Required</small> : null}
+                        </span>
+                      </label>
+                    );
+                  }
+
+                  return (
+                    <label key={field.key}>
+                      {field.label}
+                      <input
+                        required={field.required}
+                        type={field.type === 'EMAIL' ? 'email' : 'text'}
+                        maxLength={5000}
+                        placeholder={field.placeholder}
+                        value={typeof answers[field.key] === 'string' ? String(answers[field.key]) : ''}
+                        onChange={(inputEvent) =>
+                          setAnswers((current) => ({
+                            ...current,
+                            [field.key]: inputEvent.target.value,
+                          }))
+                        }
+                      />
+                    </label>
+                  );
+                })}
                 {error ? <div className="public-error">{error}</div> : null}
                 <button disabled={submitting || !name.trim() || !email.trim()}>
                   {submitting ? 'Registering…' : 'Register now'}

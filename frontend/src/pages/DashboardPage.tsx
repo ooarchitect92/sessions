@@ -124,7 +124,7 @@ function CreateSessionDialog({ onClose }: { onClose: () => void }) {
               />
               <span>
                 <strong>Transcription</strong>
-                <small>Foundation flag only; the STT worker is not enabled yet.</small>
+                <small>Creates a recording-backed transcript and AI memory after the session.</small>
               </span>
             </label>
           </div>
@@ -152,6 +152,10 @@ export function DashboardPage() {
   const sessions = useQuery({
     queryKey: ['sessions'],
     queryFn: () => api.listSessions(),
+  });
+  const analytics = useQuery({
+    queryKey: ['analytics-overview', 30],
+    queryFn: () => api.getAnalyticsOverview(30),
   });
   const instant = useMutation({
     mutationFn: async () => {
@@ -202,13 +206,22 @@ export function DashboardPage() {
         </article>
         <article className="metric-card">
           <span className="metric-icon">◇</span>
-          <div><strong>0</strong><span>Memory items</span></div>
-          <small>Recording pipeline comes next</small>
+          <div>
+            <strong>
+              {(analytics.data?.memory.readyRecordings ?? 0) +
+                (analytics.data?.memory.readySummaries ?? 0)}
+            </strong>
+            <span>Memory items</span>
+          </div>
+          <small>Ready recordings and reviewed AI outputs</small>
         </article>
         <article className="metric-card">
           <span className="metric-icon">↗</span>
-          <div><strong>—</strong><span>Engagement</span></div>
-          <small>Analytics events not active yet</small>
+          <div>
+            <strong>{analytics.data?.engagement.totalActions ?? 0}</strong>
+            <span>Engagement actions</span>
+          </div>
+          <small>Chat, poll answers, and questions · last 30 days</small>
         </article>
       </section>
 
@@ -261,8 +274,8 @@ export function DashboardPage() {
           <section className="panel copilot-panel">
             <span className="eyebrow light">Preparation assistant</span>
             <h2>Turn a topic into an agenda.</h2>
-            <p>The provider-safe AI workflow is planned after transcripts, consent, and review controls are complete.</p>
-            <button className="button ghost" disabled>Generate agenda · coming later</button>
+            <p>AI agenda generation is review-first: suggestions are created as a draft and only persisted after host approval.</p>
+            <button className="button ghost" onClick={() => setDialogOpen(true)}>Create session with AI-ready workflow</button>
           </section>
           <section className="panel readiness-panel">
             <div className="panel-header compact"><h2>Delivery readiness</h2><span className="live-dot">Live</span></div>

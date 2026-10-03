@@ -1,7 +1,21 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { CreateBookingPageInput } from '@sessions/contracts';
+import type {
+  CreateBookingPageInput,
+  IntakeField,
+  IntakeFieldType,
+} from '@sessions/contracts';
 import { FormEvent, useState } from 'react';
 import { api, type BookingPageRecord } from '../api/client';
+
+function toFieldKey(value: string): string {
+  const key = value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 64);
+  return /^[a-z]/.test(key) ? key : `field_${key || 'value'}`;
+}
 
 function toSlug(value: string): string {
   return value
@@ -25,6 +39,11 @@ export function BookingsPage() {
   const [slugEdited, setSlugEdited] = useState(false);
   const [durationMinutes, setDurationMinutes] = useState(30);
   const [minimumNoticeMinutes, setMinimumNoticeMinutes] = useState(120);
+  const [intakeFields, setIntakeFields] = useState<IntakeField[]>([]);
+  const [fieldLabel, setFieldLabel] = useState('');
+  const [fieldType, setFieldType] = useState<IntakeFieldType>('TEXT');
+  const [fieldRequired, setFieldRequired] = useState(false);
+  const [fieldOptions, setFieldOptions] = useState('');
 
   const bookings = useQuery({ queryKey: ['bookings'], queryFn: () => api.listBookings() });
   const create = useMutation({
@@ -33,6 +52,11 @@ export function BookingsPage() {
       setTitle('');
       setSlug('');
       setSlugEdited(false);
+      setIntakeFields([]);
+      setFieldLabel('');
+      setFieldType('TEXT');
+      setFieldRequired(false);
+      setFieldOptions('');
       await queryClient.invalidateQueries({ queryKey: ['bookings'] });
     },
   });
@@ -47,6 +71,43 @@ export function BookingsPage() {
     if (!slugEdited) setSlug(toSlug(value));
   };
 
+  const addIntakeField = () => {
+    const label = fieldLabel.trim();
+    if (!label) return;
+
+    const baseKey = toFieldKey(label);
+    let key = baseKey;
+    let suffix = 2;
+    while (intakeFields.some((field) => field.key === key)) {
+      key = `${baseKey.slice(0, 58)}_${suffix}`;
+      suffix += 1;
+    }
+
+    const options =
+      fieldType === 'SELECT'
+        ? fieldOptions
+            .split(',')
+            .map((option) => option.trim())
+            .filter(Boolean)
+        : undefined;
+    if (fieldType === 'SELECT' && (!options || options.length === 0)) return;
+
+    setIntakeFields((current) => [
+      ...current,
+      {
+        key,
+        label,
+        type: fieldType,
+        required: fieldRequired,
+        ...(options ? { options } : {}),
+      },
+    ]);
+    setFieldLabel('');
+    setFieldType('TEXT');
+    setFieldRequired(false);
+    setFieldOptions('');
+  };
+
   const submit = (event: FormEvent) => {
     event.preventDefault();
     create.mutate({
@@ -58,7 +119,7 @@ export function BookingsPage() {
       bufferBeforeMinutes: 10,
       bufferAfterMinutes: 10,
       availabilityRules: WEEKDAY_RULES,
-      intakeFields: [],
+      intakeFields,
     });
   };
 
@@ -147,6 +208,97 @@ export function BookingsPage() {
                   <option value={1440}>24 hours</option>
                 </select>
               </label>
+            </div>
+
+            <div className="intake-builder">
+              <div className="intake-builder-heading">
+                <div>
+                  <strong>Intake form</strong>
+                  <small>{intakeFields.length} fields</small>
+                </div>
+              </div>
+              <label>
+                Field label
+                <input
+                  maxLength={160}
+                  value={fieldLabel}
+                  onChange={(event) => setFieldLabel(event.target.value)}
+                  placeholder="Company name"
+                />
+              </label>
+              <div className="form-grid">
+                <label>
+                  Field type
+                  <select
+                    value={fieldType}
+                    onChange={(event) =>
+                      setFieldType(event.target.value as IntakeFieldType)
+                    }
+                  >
+                    <option value="TEXT">Text</option>
+                    <option value="TEXTAREA">Long text</option>
+                    <option value="EMAIL">Email</option>
+                    <option value="SELECT">Select</option>
+                    <option value="CHECKBOX">Checkbox</option>
+                    <option value="CONSENT">Consent</option>
+                  </select>
+                </label>
+                <label className="inline-checkbox-field">
+                  <input
+                    type="checkbox"
+                    checked={fieldRequired}
+                    onChange={(event) => setFieldRequired(event.target.checked)}
+                  />
+                  Required
+                </label>
+              </div>
+              {fieldType === 'SELECT' ? (
+                <label>
+                  Options
+                  <input
+                    value={fieldOptions}
+                    onChange={(event) => setFieldOptions(event.target.value)}
+                    placeholder="1-10, 11-50, 51+"
+                  />
+                </label>
+              ) : null}
+              <button
+                type="button"
+                className="button secondary full-width"
+                onClick={addIntakeField}
+                disabled={
+                  !fieldLabel.trim() ||
+                  (fieldType === 'SELECT' && !fieldOptions.trim())
+                }
+              >
+                Add intake field
+              </button>
+              {intakeFields.length > 0 ? (
+                <div className="intake-field-list">
+                  {intakeFields.map((field) => (
+                    <div key={field.key} className="intake-field-row">
+                      <span>
+                        <strong>{field.label}</strong>
+                        <small>
+                          {field.type.toLowerCase()} ·{' '}
+                          {field.required ? 'required' : 'optional'}
+                        </small>
+                      </span>
+                      <button
+                        type="button"
+                        aria-label={`Remove ${field.label}`}
+                        onClick={() =>
+                          setIntakeFields((current) =>
+                            current.filter((candidate) => candidate.key !== field.key),
+                          )
+                        }
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </div>
             {create.error ? <div className="error-banner">{create.error.message}</div> : null}
             <button className="button primary full-width" disabled={create.isPending || !title.trim() || slug.length < 2}>

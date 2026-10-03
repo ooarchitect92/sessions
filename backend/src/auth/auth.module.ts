@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { AuditModule } from '../audit/audit.module';
 import { OutboxModule } from '../outbox/outbox.module';
+import { ApiKeysController } from './api-keys.controller';
+import { ApiKeysService } from './api-keys.service';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { SecurityService } from './security.service';
@@ -23,8 +25,8 @@ import { SecurityService } from './security.service';
     AuditModule,
     OutboxModule,
   ],
-  controllers: [AuthController],
-  providers: [AuthService, SecurityService],
-  exports: [JwtModule, AuthService, SecurityService],
+  controllers: [AuthController, ApiKeysController],
+  providers: [AuthService, SecurityService, ApiKeysService],
+  exports: [JwtModule, AuthService, SecurityService, ApiKeysService],
 })
 export class AuthModule {}

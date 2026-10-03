@@ -167,18 +167,34 @@
   font-weight: 800;
 }
 
-.public-form input {
+.public-form input,
+.public-form textarea,
+.public-form select {
   width: 100%;
-  height: 45px;
   border: 1px solid #d4d3cc;
   border-radius: 11px;
   padding: 0 12px;
   outline: 0;
   background: #fff;
   color: #142421;
+  font: inherit;
 }
 
-.public-form input:focus {
+.public-form input,
+.public-form select {
+  height: 45px;
+}
+
+.public-form textarea {
+  min-height: 96px;
+  padding-top: 11px;
+  padding-bottom: 11px;
+  resize: vertical;
+}
+
+.public-form input:focus,
+.public-form textarea:focus,
+.public-form select:focus {
   border-color: #507b70;
   box-shadow: 0 0 0 3px rgba(48, 111, 85, 0.12);
 }
@@ -434,5 +450,148 @@
   .public-action-card,
   .slot-panel {
     padding: 20px;
+  }
+}
+
+
+.booking-management-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 9px;
+  margin-top: 24px;
+}
+
+.booking-management-actions button {
+  min-height: 42px;
+  border: 0;
+  border-radius: 11px;
+  padding: 0 14px;
+  background: #183f38;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.booking-management-actions button.secondary {
+  border: 1px solid #cfd6d2;
+  background: #eef4f1;
+  color: #31564d;
+}
+
+.booking-management-actions button.danger {
+  border: 1px solid #efc8c2;
+  background: #fff0ed;
+  color: #8a352a;
+}
+
+.booking-management-actions button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.booking-management-error {
+  margin-top: 16px;
+  text-align: left;
+}
+
+.public-form .public-cancel-management {
+  border: 1px solid #d4d3cc;
+  background: #fff;
+  color: #40544f;
+}
+
+
+.public-form .public-checkbox-field {
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+}
+
+.public-form .public-checkbox-field input {
+  width: 18px;
+  height: 18px;
+  margin: 1px 0 0;
+}
+
+.public-form .public-checkbox-field span {
+  line-height: 1.5;
+}
+
+
+.public-speaker-section {
+  margin-top: 34px;
+}
+
+.public-speaker-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.public-speaker-card {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 13px;
+  align-items: start;
+  padding: 16px;
+  border: 1px solid #d8d5cc;
+  border-radius: 15px;
+  background: rgba(255, 254, 250, 0.74);
+}
+
+.public-speaker-card img,
+.public-speaker-initials {
+  width: 56px;
+  height: 56px;
+  border-radius: 15px;
+}
+
+.public-speaker-card img {
+  object-fit: cover;
+}
+
+.public-speaker-initials {
+  display: grid;
+  place-items: center;
+  background: #dfeae5;
+  color: #285a4e;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.public-speaker-card > div:last-child {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.public-speaker-card span {
+  color: #688078;
+  font-size: 8px;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+}
+
+.public-speaker-card strong {
+  font-size: 13px;
+}
+
+.public-speaker-card small {
+  color: #6f7c78;
+  font-size: 10px;
+}
+
+.public-speaker-card p {
+  margin: 4px 0 0;
+  color: #697571;
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+@media (max-width: 700px) {
+  .public-speaker-grid {
+    grid-template-columns: 1fr;
   }
 }

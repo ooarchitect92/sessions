@@ -566,6 +566,19 @@ function SecuritySettings() {
   } | null>(null);
   const [mfaCode, setMfaCode] = useState('');
   const [disableCode, setDisableCode] = useState('');
+  const [apiKeyName, setApiKeyName] = useState('');
+  const [apiKeyRead, setApiKeyRead] = useState(true);
+  const [apiKeyWrite, setApiKeyWrite] = useState(false);
+  const [apiKeyExpiresInDays, setApiKeyExpiresInDays] = useState(90);
+  const [newApiKeyToken, setNewApiKeyToken] = useState<string | null>(null);
+  const canManageApiKeys = auth.me?.principal.roles.some((role) =>
+    ['OWNER', 'ADMIN'].includes(role),
+  ) ?? false;
+  const apiKeys = useQuery({
+    queryKey: ['api-keys'],
+    queryFn: () => api.listApiKeys(),
+    enabled: canManageApiKeys,
+  });
 
   const password = useMutation({
     mutationFn: () => api.changePassword(currentPassword, newPassword),
@@ -596,6 +609,31 @@ function SecuritySettings() {
   const revoke = useMutation({
     mutationFn: (sessionId: string) => api.revokeLoginSession(sessionId),
     onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['login-sessions'] }),
+  });
+  const createApiKey = useMutation({
+    mutationFn: () => {
+      const scopes: Array<'read' | 'write'> = [];
+      if (apiKeyRead) scopes.push('read');
+      if (apiKeyWrite) scopes.push('write');
+      if (scopes.length === 0) throw new Error('Select at least one API key scope');
+      return api.createApiKey({
+        name: apiKeyName,
+        scopes,
+        expiresInDays: apiKeyExpiresInDays,
+      });
+    },
+    onSuccess: async (created) => {
+      setNewApiKeyToken(created.token);
+      setApiKeyName('');
+      setApiKeyRead(true);
+      setApiKeyWrite(false);
+      setApiKeyExpiresInDays(90);
+      await queryClient.invalidateQueries({ queryKey: ['api-keys'] });
+    },
+  });
+  const revokeApiKey = useMutation({
+    mutationFn: (id: string) => api.revokeApiKey(id),
+    onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['api-keys'] }),
   });
 
   const currentSession = useMemo(
@@ -732,6 +770,154 @@ function SecuritySettings() {
         {confirmMfa.error ? <div className="error-banner">{confirmMfa.error.message}</div> : null}
         {disableMfa.error ? <div className="error-banner">{disableMfa.error.message}</div> : null}
       </section>
+
+      {canManageApiKeys ? (
+        <section className="panel settings-panel">
+          <div className="settings-panel-heading">
+            <div>
+              <span className="eyebrow">Programmatic access</span>
+              <h2>Workspace API keys</h2>
+              <p>
+                Keys are tenant-scoped, hashed at rest, and reveal their full token only once.
+                Read and write scopes are enforced by the API gateway.
+              </p>
+            </div>
+            <span className="count-pill">{apiKeys.data?.length ?? 0}</span>
+          </div>
+
+          <form
+            className="settings-form api-key-form"
+            onSubmit={(event: FormEvent) => {
+              event.preventDefault();
+              setNewApiKeyToken(null);
+              createApiKey.mutate();
+            }}
+          >
+            <div className="settings-form-grid">
+              <label>
+                Key name
+                <input
+                  required
+                  maxLength={100}
+                  value={apiKeyName}
+                  onChange={(event) => setApiKeyName(event.target.value)}
+                  placeholder="Production reporting"
+                />
+              </label>
+              <label>
+                Expires after
+                <select
+                  value={apiKeyExpiresInDays}
+                  onChange={(event) => setApiKeyExpiresInDays(Number(event.target.value))}
+                >
+                  <option value={30}>30 days</option>
+                  <option value={90}>90 days</option>
+                  <option value={180}>180 days</option>
+                  <option value={365}>1 year</option>
+                </select>
+              </label>
+            </div>
+            <div className="api-key-scope-grid">
+              <label className="settings-toggle-row">
+                <input
+                  type="checkbox"
+                  checked={apiKeyRead}
+                  onChange={(event) => setApiKeyRead(event.target.checked)}
+                />
+                <span>
+                  <strong>Read</strong>
+                  <small>Allows authenticated GET/HEAD/OPTIONS requests.</small>
+                </span>
+              </label>
+              <label className="settings-toggle-row">
+                <input
+                  type="checkbox"
+                  checked={apiKeyWrite}
+                  onChange={(event) => setApiKeyWrite(event.target.checked)}
+                />
+                <span>
+                  <strong>Write</strong>
+                  <small>Allows POST/PATCH/PUT/DELETE requests subject to RBAC.</small>
+                </span>
+              </label>
+            </div>
+            {createApiKey.error ? (
+              <div className="error-banner">{createApiKey.error.message}</div>
+            ) : null}
+            <div className="settings-actions">
+              <button
+                className="button primary"
+                disabled={
+                  createApiKey.isPending ||
+                  !apiKeyName.trim() ||
+                  (!apiKeyRead && !apiKeyWrite)
+                }
+              >
+                {createApiKey.isPending ? 'Creating…' : 'Create API key'}
+              </button>
+            </div>
+          </form>
+
+          {newApiKeyToken ? (
+            <div className="development-token-box api-key-secret-box">
+              <div>
+                <strong>Copy this API key now</strong>
+                <small>For security, the full token will not be shown again.</small>
+              </div>
+              <code>{newApiKeyToken}</code>
+              <button
+                type="button"
+                className="button secondary"
+                onClick={() => void navigator.clipboard.writeText(newApiKeyToken)}
+              >
+                Copy key
+              </button>
+            </div>
+          ) : null}
+
+          {apiKeys.isLoading ? <SettingsLoading /> : null}
+          {apiKeys.error ? <SettingsError message={apiKeys.error.message} /> : null}
+          <div className="settings-table">
+            {apiKeys.data?.map((key) => (
+              <div className="settings-table-row api-key-row" key={key.id}>
+                <div className="member-copy">
+                  <strong>{key.name}</strong>
+                  <span>
+                    {key.tokenPrefix}… · {key.scopes.join(', ')}
+                  </span>
+                  <small>
+                    Created {formatDate(key.createdAt)} · Last used {formatDate(key.lastUsedAt)}
+                    {key.expiresAt ? ` · Expires ${formatDate(key.expiresAt)}` : ''}
+                  </small>
+                </div>
+                <span className={key.revokedAt ? 'state-chip' : 'state-chip enabled'}>
+                  {key.revokedAt ? 'Revoked' : 'Active'}
+                </span>
+                {!key.revokedAt ? (
+                  <button
+                    type="button"
+                    className="settings-row-action danger-text"
+                    disabled={revokeApiKey.isPending}
+                    onClick={() => {
+                      if (window.confirm(`Revoke API key "${key.name}"?`)) {
+                        revokeApiKey.mutate(key.id);
+                      }
+                    }}
+                  >
+                    Revoke
+                  </button>
+                ) : null}
+              </div>
+            ))}
+            {apiKeys.data?.length === 0 ? (
+              <div className="settings-empty-row">No API keys have been created.</div>
+            ) : null}
+          </div>
+          {revokeApiKey.error ? (
+            <div className="error-banner">{revokeApiKey.error.message}</div>
+          ) : null}
+        </section>
+      ) : null}
 
       <section className="panel settings-panel">
         <div className="settings-panel-heading compact-settings-heading">
