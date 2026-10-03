@@ -173,6 +173,50 @@ export interface AgendaTemplateItem {
   content: Record<string, unknown>;
 }
 
+export interface FileAssetRecord {
+  id: string;
+  sessionId: string | null;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  checksumSha256: string | null;
+  status:
+    | 'PENDING_UPLOAD'
+    | 'QUARANTINED'
+    | 'SCANNING'
+    | 'READY'
+    | 'REJECTED'
+    | 'FAILED'
+    | 'DELETED';
+  scanProvider: string | null;
+  scanResult: string | null;
+  scanAttempts: number;
+  lastScanError: string | null;
+  uploadedAt: string | null;
+  scannedAt: string | null;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FileUploadGrant {
+  file: FileAssetRecord;
+  upload: {
+    method: 'PUT';
+    url: string;
+    expiresAt: string;
+    contentType: string;
+  };
+}
+
+export interface FileDownloadGrant {
+  fileId: string;
+  filename: string;
+  mimeType: string;
+  expiresAt: string;
+  url: string;
+}
+
 export interface AgendaTemplateRecord {
   id: string;
   name: string;
@@ -914,6 +958,52 @@ export const api = {
     return request<GeneratedAgenda>(`/sessions/${sessionId}/agenda-items/generate`, {
       method: "POST",
       body: JSON.stringify(input),
+    });
+  },
+
+  async uploadSessionFile(
+    sessionId: string,
+    file: File,
+  ): Promise<FileAssetRecord> {
+    const grant = await request<FileUploadGrant>(
+      `/sessions/${sessionId}/files/uploads`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          filename: file.name,
+          mimeType: file.type || 'application/octet-stream',
+          sizeBytes: file.size,
+        }),
+      },
+    );
+
+    const uploadResponse = await fetch(grant.upload.url, {
+      method: grant.upload.method,
+      headers: { 'content-type': grant.upload.contentType },
+      body: file,
+    });
+    if (!uploadResponse.ok) {
+      throw new Error(
+        `File upload failed with status ${uploadResponse.status}`,
+      );
+    }
+
+    return request<FileAssetRecord>(`/files/${grant.file.id}/complete`, {
+      method: 'POST',
+    });
+  },
+
+  listSessionFiles(sessionId: string): Promise<FileAssetRecord[]> {
+    return request<FileAssetRecord[]>(`/sessions/${sessionId}/files`);
+  },
+
+  createFileDownloadGrant(fileId: string): Promise<FileDownloadGrant> {
+    return request<FileDownloadGrant>(`/files/${fileId}/download`);
+  },
+
+  deleteFileAsset(fileId: string): Promise<{ id: string; deleted: true }> {
+    return request<{ id: string; deleted: true }>(`/files/${fileId}`, {
+      method: 'DELETE',
     });
   },
 

@@ -25,6 +25,21 @@ export class S3ObjectStoreService {
     );
   }
 
+  createUploadUrl(
+    objectKey: string,
+    expiresInSeconds: number,
+    now = new Date(),
+  ): string {
+    return this.createPresignedUrl(
+      'PUT',
+      objectKey,
+      expiresInSeconds,
+      {},
+      now,
+      true,
+    );
+  }
+
   createAttachmentUrl(
     objectKey: string,
     filename: string,
@@ -40,6 +55,42 @@ export class S3ObjectStoreService {
       },
       now,
     );
+  }
+
+  async headObject(
+    objectKey: string,
+  ): Promise<{ sizeBytes: number; contentType: string | null }> {
+    const url = this.createPresignedUrl('HEAD', objectKey, 60, {}, new Date(), false);
+    const response = await fetch(url, { method: 'HEAD' });
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      throw new Error(
+        `Object metadata lookup failed with ${response.status}${body ? `: ${body.slice(0, 500)}` : ''}`,
+      );
+    }
+    return {
+      sizeBytes: Number(response.headers.get('content-length') ?? '0'),
+      contentType: response.headers.get('content-type'),
+    };
+  }
+
+  async uploadObject(
+    objectKey: string,
+    bytes: Uint8Array,
+    contentType: string,
+  ): Promise<void> {
+    const url = this.createPresignedUrl('PUT', objectKey, 60, {}, new Date(), false);
+    const response = await fetch(url, {
+      method: 'PUT',
+      headers: { 'content-type': contentType },
+      body: Buffer.from(bytes),
+    });
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      throw new Error(
+        `Object upload failed with ${response.status}${body ? `: ${body.slice(0, 500)}` : ''}`,
+      );
+    }
   }
 
   async downloadObject(
@@ -83,7 +134,7 @@ export class S3ObjectStoreService {
   }
 
   createPresignedUrl(
-    method: 'GET' | 'DELETE',
+    method: 'GET' | 'DELETE' | 'PUT' | 'HEAD',
     objectKey: string,
     expiresInSeconds: number,
     extraQuery: Record<string, QueryValue> = {},
@@ -92,7 +143,7 @@ export class S3ObjectStoreService {
   ): string {
     const internalEndpoint = this.config.getOrThrow<string>('S3_ENDPOINT');
     const endpoint = new URL(
-      method === 'GET' && usePublicEndpoint
+      (method === 'GET' || method === 'PUT') && usePublicEndpoint
         ? this.config.get<string>('S3_PUBLIC_ENDPOINT', internalEndpoint)
         : internalEndpoint,
     );

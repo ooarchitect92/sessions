@@ -5,7 +5,9 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  AgendaItemType,
   AgendaTimerStatus,
+  FileAssetStatus,
   Prisma,
   SessionStatus,
   type AgendaItem,
@@ -227,7 +229,51 @@ export class AgendasService {
         select: { position: true },
       });
 
-      const normalizedContent = this.contentPolicy.normalize(input.type, input.content);
+      let normalizedContent: Prisma.InputJsonObject;
+      if (input.type === AgendaItemType.FILE) {
+        const fileId =
+          typeof input.content.fileId === 'string'
+            ? input.content.fileId.trim()
+            : '';
+        if (
+          !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+            fileId,
+          )
+        ) {
+          throw new BadRequestException(
+            'File agenda items require a valid fileId',
+          );
+        }
+        const file = await transaction.fileAsset.findFirst({
+          where: {
+            id: fileId,
+            sessionId,
+            status: FileAssetStatus.READY,
+          },
+          select: {
+            id: true,
+            filename: true,
+            mimeType: true,
+            sizeBytes: true,
+          },
+        });
+        if (!file) {
+          throw new BadRequestException(
+            'The selected file must belong to this session and pass malware scanning before it can be added to the agenda',
+          );
+        }
+        normalizedContent = {
+          fileId: file.id,
+          filename: file.filename,
+          mimeType: file.mimeType,
+          sizeBytes: Number(file.sizeBytes),
+        };
+      } else {
+        normalizedContent = this.contentPolicy.normalize(
+          input.type,
+          input.content,
+        );
+      }
 
       const item = await transaction.agendaItem.create({
         data: {

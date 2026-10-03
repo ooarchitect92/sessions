@@ -43,12 +43,15 @@ export function SessionPage() {
   const [agendaDuration, setAgendaDuration] = useState(10);
   const [agendaUrl, setAgendaUrl] = useState('');
   const [agendaText, setAgendaText] = useState('');
+  const [agendaFileId, setAgendaFileId] = useState('');
+  const [agendaFile, setAgendaFile] = useState<File | null>(null);
   const [timerClock, setTimerClock] = useState(() => Date.now());
   const [agendaType, setAgendaType] = useState<
     | 'TEXT'
     | 'PRESENTATION'
     | 'WEBSITE'
     | 'VIDEO'
+    | 'FILE'
     | 'POLL'
     | 'WHITEBOARD'
     | 'BREAKOUT'
@@ -66,6 +69,20 @@ export function SessionPage() {
   const authMe = useQuery({
     queryKey: ['auth-me'],
     queryFn: () => api.authMe(),
+  });
+
+  const sessionFiles = useQuery({
+    queryKey: ['session-files', sessionId],
+    queryFn: () => api.listSessionFiles(sessionId),
+    enabled: Boolean(sessionId),
+    refetchInterval: (query) => {
+      const files = query.state.data;
+      return files?.some((file) =>
+        ['PENDING_UPLOAD', 'QUARANTINED', 'SCANNING'].includes(file.status),
+      )
+        ? 2500
+        : false;
+    },
   });
 
   const agendaTemplates = useQuery({
@@ -135,6 +152,20 @@ export function SessionPage() {
       setMediaRoomKey('main');
       setMediaRoomLabel('Main room');
       setMedia(token);
+    },
+  });
+
+  const uploadAgendaFile = useMutation({
+    mutationFn: async () => {
+      if (!agendaFile) throw new Error('Choose a file to upload');
+      return api.uploadSessionFile(sessionId, agendaFile);
+    },
+    onSuccess: async (file) => {
+      setAgendaFile(null);
+      setAgendaFileId(file.id);
+      await queryClient.invalidateQueries({
+        queryKey: ['session-files', sessionId],
+      });
     },
   });
 
@@ -224,15 +255,19 @@ export function SessionPage() {
         content:
           agendaType === 'TEXT'
             ? { text: agendaText }
-            : ['WEBSITE', 'PRESENTATION', 'VIDEO'].includes(agendaType)
-              ? { url: agendaUrl }
-              : {},
+            : agendaType === 'FILE'
+              ? { fileId: agendaFileId }
+              : ['WEBSITE', 'PRESENTATION', 'VIDEO'].includes(agendaType)
+                ? { url: agendaUrl }
+                : {},
       }),
     onSuccess: async () => {
       setAgendaTitle('');
       setAgendaDuration(10);
       setAgendaUrl('');
       setAgendaText('');
+      setAgendaFileId('');
+      setAgendaFile(null);
       setAgendaType('TEXT');
       setAgendaEditorOpen(false);
       await queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
@@ -285,7 +320,7 @@ export function SessionPage() {
     current.agendaItems.find((item) => item.id === current.currentAgendaItemId) ?? null;
   const showsSharedContent =
     activeAgendaItem !== null &&
-    ['TEXT', 'WEBSITE', 'PRESENTATION', 'VIDEO'].includes(activeAgendaItem.type);
+    ['TEXT', 'WEBSITE', 'PRESENTATION', 'VIDEO', 'FILE'].includes(activeAgendaItem.type);
   const showsWhiteboard = activeAgendaItem?.type === 'WHITEBOARD';
   const canControlAgenda =
     authMe.data?.principal.roles.some((role) =>
@@ -745,6 +780,7 @@ export function SessionPage() {
                     <option value="PRESENTATION">Presentation</option>
                     <option value="WEBSITE">Website</option>
                     <option value="VIDEO">Video</option>
+                    <option value="FILE">Uploaded file</option>
                     <option value="POLL">Poll</option>
                     <option value="WHITEBOARD">Whiteboard</option>
                     <option value="BREAKOUT">Breakout</option>
@@ -764,6 +800,56 @@ export function SessionPage() {
                     placeholder="Context or talking points visible when this item is active"
                   />
                 </label>
+              ) : agendaType === 'FILE' ? (
+                <div className="agenda-file-picker">
+                  <label>
+                    Upload file for scanning
+                    <input
+                      type="file"
+                      accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.md,.mp4,.webm,.docx,.pptx,.xlsx"
+                      onChange={(event) =>
+                        setAgendaFile(event.target.files?.[0] ?? null)
+                      }
+                    />
+                  </label>
+                  <button
+                    className="button secondary full-width"
+                    type="button"
+                    disabled={!agendaFile || uploadAgendaFile.isPending}
+                    onClick={() => uploadAgendaFile.mutate()}
+                  >
+                    {uploadAgendaFile.isPending
+                      ? 'Uploading to quarantine…'
+                      : 'Upload and scan'}
+                  </button>
+                  {uploadAgendaFile.error ? (
+                    <div className="error-banner">
+                      {uploadAgendaFile.error.message}
+                    </div>
+                  ) : null}
+                  <label>
+                    Cleared file
+                    <select
+                      required
+                      value={agendaFileId}
+                      onChange={(event) => setAgendaFileId(event.target.value)}
+                    >
+                      <option value="">Select a scanned file</option>
+                      {sessionFiles.data?.map((file) => (
+                        <option
+                          key={file.id}
+                          value={file.id}
+                          disabled={file.status !== 'READY'}
+                        >
+                          {file.filename} · {file.status.toLowerCase()}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <small className="agenda-file-safety-note">
+                    Files remain unavailable until malware scanning reports them clean.
+                  </small>
+                </div>
               ) : ['WEBSITE', 'PRESENTATION', 'VIDEO'].includes(agendaType) ? (
                 <label>
                   HTTPS content URL
@@ -781,7 +867,11 @@ export function SessionPage() {
               ) : null}
               <button
                 className="button primary full-width"
-                disabled={createAgendaItem.isPending || !agendaTitle.trim()}
+                disabled={
+                  createAgendaItem.isPending ||
+                  !agendaTitle.trim() ||
+                  (agendaType === 'FILE' && !agendaFileId)
+                }
               >
                 {createAgendaItem.isPending ? 'Adding…' : 'Add agenda item'}
               </button>

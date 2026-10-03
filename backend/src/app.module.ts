@@ -17,6 +17,7 @@ import { ApiEnvelopeInterceptor } from "./common/http/api-envelope.interceptor";
 import { ApiExceptionFilter } from "./common/http/api-exception.filter";
 import { PrismaModule } from "./database/prisma.module";
 import { EventsModule } from "./events/events.module";
+import { FilesModule } from "./files/files.module";
 import { HealthModule } from "./health/health.module";
 import { InfrastructureModule } from "./infrastructure/infrastructure.module";
 import { MediaModule } from "./media/media.module";
@@ -55,6 +56,7 @@ import { WhiteboardsModule } from "./whiteboards/whiteboards.module";
     AiModule,
     AnalyticsModule,
     EventsModule,
+    FilesModule,
     BookingsModule,
     BreakoutsModule,
     CollaborationModule,
