@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { BreakoutsModule } from '../breakouts/breakouts.module';
 import { AuditModule } from '../audit/audit.module';
 import { OutboxModule } from '../outbox/outbox.module';
 import { RecordingsModule } from '../recordings/recordings.module';
