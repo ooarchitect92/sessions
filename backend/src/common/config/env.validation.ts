@@ -63,6 +63,14 @@ const environmentSchema = z
     S3_ACCESS_KEY: z.string().min(1),
     S3_SECRET_KEY: z.string().min(1),
     S3_FORCE_PATH_STYLE: optionalBoolean.default(true),
+    FILE_UPLOAD_MAX_BYTES: z.coerce.number().int().min(1_000_000).max(250_000_000).default(52_428_800),
+    FILE_UPLOAD_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(900),
+    FILE_DOWNLOAD_TTL_SECONDS: z.coerce.number().int().min(30).max(3600).default(300),
+    FILE_SCAN_ENABLED: optionalBoolean.default(false),
+    FILE_SCAN_HOST: z.string().min(1).max(255).default('127.0.0.1'),
+    FILE_SCAN_PORT: z.coerce.number().int().min(1).max(65535).default(3310),
+    FILE_SCAN_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120000).default(15000),
+    FILE_SCAN_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(3),
     TRANSCRIPTION_WORKER_ENABLED: optionalBoolean.default(false),
     TRANSCRIPTION_MAX_SOURCE_BYTES: z.coerce
       .number()
