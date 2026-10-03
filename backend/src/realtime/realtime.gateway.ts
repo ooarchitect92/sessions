@@ -50,6 +50,12 @@ const reactionSchema = z.object({
   reaction: z.enum(["👍", "❤️", "😂", "👏", "🎉", "🙌"]),
 });
 const heartbeatSchema = z.object({ sessionId: z.string().uuid() });
+const whiteboardCursorSchema = z.object({
+  sessionId: z.string().uuid(),
+  x: z.number().finite().min(-100000).max(100000),
+  y: z.number().finite().min(-100000).max(100000),
+  active: z.boolean().default(true),
+});
 
 type SocketData = {
   principal?: Principal;
@@ -277,6 +283,29 @@ export class RealtimeGateway
     };
     this.server.to(this.roomName(sessionId)).emit("reaction.received", event);
     return { ok: true, reactionId: event.reactionId };
+  }
+
+  @SubscribeMessage("whiteboard.cursor")
+  async sendWhiteboardCursor(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() payload: unknown,
+  ): Promise<{ ok: true }> {
+    const principal = this.requirePrincipal(client);
+    const { sessionId, x, y, active } = whiteboardCursorSchema.parse(payload);
+    if (!client.data.sessionIds?.has(sessionId)) {
+      throw new Error("Join the session before sharing a whiteboard cursor");
+    }
+
+    client.to(this.roomName(sessionId)).emit("whiteboard.cursor", {
+      sessionId,
+      userId: principal.userId,
+      displayName: principal.displayName,
+      x,
+      y,
+      active,
+      occurredAt: new Date().toISOString(),
+    });
+    return { ok: true };
   }
 
   private requirePrincipal(client: AuthenticatedSocket): Principal {
