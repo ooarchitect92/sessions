@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, SessionStatus, type AgendaItem } from '@prisma/client';
+import { OpenAiCompatibleAgendaProvider } from '../ai/openai-compatible-agenda.provider';
 import { AuditService } from '../audit/audit.service';
 import {
   HOST_ROLES,
@@ -16,6 +17,7 @@ import { RealtimeEventsService } from '../infrastructure/realtime-events.service
 import { OutboxService } from '../outbox/outbox.service';
 import { AgendaContentPolicyService } from './agenda-content-policy.service';
 import { CreateAgendaItemDto } from './dto/create-agenda-item.dto';
+import { GenerateAgendaDto } from './dto/generate-agenda.dto';
 import { ReorderAgendaDto } from './dto/reorder-agenda.dto';
 
 const EDITABLE_SESSION_STATUSES = new Set<SessionStatus>([
@@ -36,6 +38,7 @@ export class AgendasService {
     private readonly outbox: OutboxService,
     private readonly realtimeEvents: RealtimeEventsService,
     private readonly contentPolicy: AgendaContentPolicyService,
+    private readonly agendaGenerator: OpenAiCompatibleAgendaProvider,
   ) {}
 
   async list(principal: Principal, sessionId: string): Promise<AgendaItem[]> {
@@ -91,6 +94,58 @@ export class AgendasService {
         payload: this.toJson(item),
       });
       return item;
+    });
+  }
+
+  async generate(
+    principal: Principal,
+    sessionId: string,
+    input: GenerateAgendaDto,
+  ) {
+    this.assertHost(principal);
+    return this.database.run(principal, async (transaction) => {
+      const session = await transaction.session.findUnique({
+        where: { id: sessionId },
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          durationMinutes: true,
+          status: true,
+        },
+      });
+      if (!session) throw new NotFoundException('Session not found');
+      if (!EDITABLE_SESSION_STATUSES.has(session.status)) {
+        throw new BadRequestException(
+          `Agenda cannot be generated while session is ${session.status}`,
+        );
+      }
+
+      const generated = await this.agendaGenerator.generate({
+        sessionTitle: session.title,
+        sessionDescription: session.description,
+        durationMinutes: session.durationMinutes,
+        objective: input.objective.trim(),
+        desiredItems: input.desiredItems,
+      });
+
+      await this.audit.record(transaction, principal, {
+        action: 'agenda.generated',
+        resourceType: 'session',
+        resourceId: sessionId,
+        metadata: {
+          provider: generated.provider,
+          model: generated.model,
+          suggestedItems: generated.items.length,
+        },
+      });
+
+      return {
+        sessionId,
+        provider: generated.provider,
+        model: generated.model,
+        items: generated.items,
+      };
     });
   }
 
