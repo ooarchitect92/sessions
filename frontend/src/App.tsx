@@ -8,7 +8,6 @@ import { EventsPage } from './pages/EventsPage';
 import { MemoryDetailPage } from './pages/MemoryDetailPage';
 import { MemoryPage } from './pages/MemoryPage';
 import { NotFoundPage } from './pages/NotFoundPage';
-import { PlaceholderPage } from './pages/PlaceholderPage';
 import { RoomsPage } from './pages/RoomsPage';
 import { SessionPage } from './pages/SessionPage';
 import { SettingsPage } from './pages/SettingsPage';
