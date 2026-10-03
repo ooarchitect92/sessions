@@ -64,7 +64,8 @@
 - [ ] PostgreSQL full-text index and optional vector retrieval with workspace filters
 - [x] provider-abstracted AI summary execution worker with decisions, actions and transcript citations
 - [x] review-first AI agenda generator with host objective, bounded suggestions and explicit approval before persistence
-- [ ] summary/action editor, follow-up approval and CRM write controls
+- [x] reviewed summary/action editor with immutable revisions, reviewer metadata, audit/outbox events and explicit save
+- [ ] follow-up approval and CRM write controls
 - [ ] groundedness, privacy, prompt-injection, cost and latency evaluation suite
 
 ## Phase 5 — platform and enterprise
