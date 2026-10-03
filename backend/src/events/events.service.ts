@@ -284,22 +284,44 @@ export class EventsService {
         select: { id: true },
       });
       if (!organizer) {
-        const maxPosition = await transaction.eventSpeaker.aggregate({
-          where: { eventId: id },
-          _max: { position: true },
-        });
-        await transaction.eventSpeaker.create({
-          data: {
-            organizationId: principal.organizationId,
-            workspaceId: principal.workspaceId,
+        const organizerEmail = principal.email.toLowerCase();
+        const existingProfile = await transaction.eventSpeaker.findFirst({
+          where: {
             eventId: id,
-            userId: principal.userId,
-            role: EventStageRole.ORGANIZER,
-            position: (maxPosition._max.position ?? -1) + 1,
-            displayName: principal.displayName,
-            email: principal.email.toLowerCase(),
+            OR: [
+              { userId: principal.userId },
+              { email: organizerEmail },
+            ],
           },
         });
+        if (existingProfile) {
+          await transaction.eventSpeaker.update({
+            where: { id: existingProfile.id },
+            data: {
+              userId: principal.userId,
+              role: EventStageRole.ORGANIZER,
+              displayName: principal.displayName,
+              email: organizerEmail,
+            },
+          });
+        } else {
+          const maxPosition = await transaction.eventSpeaker.aggregate({
+            where: { eventId: id },
+            _max: { position: true },
+          });
+          await transaction.eventSpeaker.create({
+            data: {
+              organizationId: principal.organizationId,
+              workspaceId: principal.workspaceId,
+              eventId: id,
+              userId: principal.userId,
+              role: EventStageRole.ORGANIZER,
+              position: (maxPosition._max.position ?? -1) + 1,
+              displayName: principal.displayName,
+              email: organizerEmail,
+            },
+          });
+        }
       }
 
       const sessionId = randomUUID();
