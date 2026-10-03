@@ -27,6 +27,6 @@ export class CreateWebhookSubscriptionDto {
   @ArrayMinSize(1)
   @ArrayMaxSize(100)
   @IsString({ each: true })
-  @Matches(/^[a-z0-9]+(?:[._-][a-z0-9]+)*$/, { each: true })
+  @Matches(/^(?:\*|[a-z0-9]+(?:[._-][a-z0-9]+)*)$/, { each: true })
   eventTypes!: string[];
 }
