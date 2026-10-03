@@ -27,6 +27,7 @@ export interface SessionRealtimeEvent {
     | 'breakout.assignment.updated'
     | 'breakout.broadcast'
     | 'whiteboard.updated'
+    | 'file.asset.updated'
     | 'memory.updated';
   payload: unknown;
   audienceUserIds?: string[];
