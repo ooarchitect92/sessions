@@ -310,3 +310,126 @@
   margin: 3px 0 0;
   line-height: 1.4;
 }
+
+
+.reaction-overlay {
+  position: absolute;
+  right: 18px;
+  bottom: 82px;
+  z-index: 8;
+  display: grid;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.reaction-bubble {
+  display: grid;
+  grid-template-columns: 32px auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 140px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background: rgba(16, 24, 23, 0.92);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.26);
+  animation: reaction-pop 180ms ease-out;
+}
+
+.reaction-bubble > span {
+  font-size: 24px;
+}
+
+.reaction-bubble > small {
+  color: #c7d5d1;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.reaction-toolbar {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  z-index: 8;
+  display: flex;
+  gap: 5px;
+  padding: 6px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background: rgba(15, 23, 22, 0.88);
+  backdrop-filter: blur(10px);
+}
+
+.reaction-toolbar button {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  font-size: 18px;
+}
+
+.reaction-toolbar button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateY(-1px);
+}
+
+.reaction-toolbar button:disabled {
+  opacity: 0.4;
+}
+
+@keyframes reaction-pop {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.chat-message.private-message {
+  border-left: 2px solid #e88870;
+  background: rgba(238, 123, 99, 0.06);
+}
+
+.chat-channel-label {
+  display: block;
+  margin: 3px 0 5px;
+  color: #8ea09c;
+  font-size: 8px;
+}
+
+.private-chat-composer {
+  gap: 7px;
+}
+
+.chat-routing-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+}
+
+.chat-routing-row select {
+  width: 100%;
+  min-height: 32px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 0 8px;
+  background: #101a18;
+  color: #dce7e4;
+  font-size: 9px;
+}
+
+@media (max-width: 900px) {
+  .reaction-toolbar {
+    bottom: 8px;
+  }
+
+  .reaction-overlay {
+    right: 10px;
+    bottom: 64px;
+  }
+}
