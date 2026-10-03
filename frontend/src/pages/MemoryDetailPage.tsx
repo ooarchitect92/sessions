@@ -61,11 +61,13 @@ export function MemoryDetailPage() {
     },
   });
   const saveTranscript = useMutation({
-    mutationFn: () =>
-      api.updateTranscript(sessionId, {
-        reason: transcriptReason.trim() || undefined,
+    mutationFn: () => {
+      const reason = transcriptReason.trim();
+      return api.updateTranscript(sessionId, {
+        ...(reason ? { reason } : {}),
         segments: transcriptDraft,
-      }),
+      });
+    },
     onSuccess: async () => {
       setEditingTranscript(false);
       setTranscriptDraft([]);
