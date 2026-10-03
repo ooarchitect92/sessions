@@ -139,8 +139,7 @@ export class MediaService {
   }
 
   async listParticipants(principal: Principal, sessionId: string) {
-    this.assertHost(principal);
-    const session = await this.sessions.getById(principal, sessionId);
+    const session = await this.getModeratableSession(principal, sessionId);
     const participants = await this.roomService.listParticipants(
       session.livekitRoomName,
     );
@@ -156,8 +155,7 @@ export class MediaService {
     trackSid: string,
     muted: boolean,
   ) {
-    this.assertHost(principal);
-    const session = await this.sessions.getById(principal, sessionId);
+    const session = await this.getModeratableSession(principal, sessionId);
     const participant = await this.roomService.getParticipant(
       session.livekitRoomName,
       participantId,
@@ -204,14 +202,13 @@ export class MediaService {
     participantId: string,
     canPublish: boolean,
   ) {
-    this.assertHost(principal);
+    const session = await this.getModeratableSession(principal, sessionId);
     if (participantId === principal.userId && !canPublish) {
       throw new BadRequestException(
         'Use your own meeting controls instead of revoking your host publish permission',
       );
     }
 
-    const session = await this.sessions.getById(principal, sessionId);
     const participant = await this.roomService.getParticipant(
       session.livekitRoomName,
       participantId,
@@ -247,12 +244,11 @@ export class MediaService {
     sessionId: string,
     participantId: string,
   ): Promise<{ sessionId: string; participantId: string; rejoinBlockedUntil: string }> {
-    this.assertHost(principal);
+    const session = await this.getModeratableSession(principal, sessionId);
     if (participantId === principal.userId) {
       throw new BadRequestException('A host cannot remove themselves');
     }
 
-    const session = await this.sessions.getById(principal, sessionId);
     await this.roomService.getParticipant(session.livekitRoomName, participantId);
     await this.roomService.removeParticipant(
       session.livekitRoomName,
@@ -289,8 +285,7 @@ export class MediaService {
     sessionId: string,
     participantId: string,
   ): Promise<{ sessionId: string; participantId: string; rejoinAllowed: true }> {
-    this.assertHost(principal);
-    await this.sessions.getById(principal, sessionId);
+    await this.getModeratableSession(principal, sessionId);
     await this.redis.del(this.rejoinBlockKey(sessionId, participantId));
 
     await this.recordModeration(principal, {
@@ -389,10 +384,34 @@ export class MediaService {
     };
   }
 
-  private assertHost(principal: Principal): void {
-    if (!hasAnyRole(principal, HOST_ROLES)) {
-      throw new ForbiddenException('A host role is required');
+  private async getModeratableSession(
+    principal: Principal,
+    sessionId: string,
+  ) {
+    const session = await this.sessions.getById(principal, sessionId);
+    if (hasAnyRole(principal, HOST_ROLES)) return session;
+
+    if (session.kind === SessionKind.WEBINAR) {
+      const stageProfile = await this.database.run(principal, (transaction) =>
+        transaction.eventSpeaker.findFirst({
+          where: {
+            userId: principal.userId,
+            event: { sessionId },
+            role: {
+              in: [
+                EventStageRole.ORGANIZER,
+                EventStageRole.HOST,
+                EventStageRole.COHOST,
+              ],
+            },
+          },
+          select: { id: true },
+        }),
+      );
+      if (stageProfile) return session;
     }
+
+    throw new ForbiddenException('A host or webinar moderator role is required');
   }
 
   private rejoinBlockKey(sessionId: string, userId: string): string {
