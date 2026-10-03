@@ -83,7 +83,8 @@ export class AnalyticsService {
         select: { id: true, status: true },
       });
       const pollIds = polls.map((poll) => poll.id);
-      const [chatMessages, questions, pollAnswers] = await Promise.all([
+      const [chatMessages, questions, pollAnswers, attendanceIntervals] =
+        await Promise.all([
         transaction.chatMessage.count({
           where: { sessionId, deletedAt: null },
         }),
@@ -93,7 +94,30 @@ export class AnalyticsService {
               where: { pollId: { in: pollIds } },
             })
           : Promise.resolve(0),
+        transaction.sessionAttendanceInterval.findMany({
+          where: { sessionId },
+          select: {
+            userId: true,
+            joinedAt: true,
+            leftAt: true,
+            lastHeartbeatAt: true,
+          },
+        }),
       ]);
+
+      const attendanceByUser = new Set(
+        attendanceIntervals.map((interval) => interval.userId),
+      );
+      const attendanceSeconds = attendanceIntervals.reduce((sum, interval) => {
+        const endAt = interval.leftAt ?? interval.lastHeartbeatAt;
+        return (
+          sum +
+          Math.max(
+            0,
+            Math.round((endAt.getTime() - interval.joinedAt.getTime()) / 1000),
+          )
+        );
+      }, 0);
 
       const registrations = session.event?.registrations ?? [];
       return {
@@ -106,6 +130,8 @@ export class AnalyticsService {
           status: session.status,
         },
         audience: {
+          uniqueParticipants: attendanceByUser.size,
+          attendanceSeconds,
           registrations: registrations.length,
           attended: registrations.filter(
             (item) => item.status === RegistrationStatus.ATTENDED,
@@ -156,6 +182,8 @@ export class AnalyticsService {
         ['chat_messages', overview.engagement.chatMessages],
         ['poll_answers', overview.engagement.pollAnswers],
         ['questions', overview.engagement.questions],
+        ['participant_sessions', overview.attendance.participantSessions],
+        ['attendance_seconds', overview.attendance.totalSeconds],
         ['engagement_actions', overview.engagement.totalActions],
         ['ready_recordings', overview.memory.readyRecordings],
         ['ready_summaries', overview.memory.readySummaries],
@@ -208,6 +236,7 @@ export class AnalyticsService {
       questions,
       readyRecordings,
       readySummaries,
+      attendanceIntervals,
     ] = await Promise.all([
       transaction.session.findMany({
         where: { startsAt: { gte: since, lte: end } },
@@ -248,7 +277,33 @@ export class AnalyticsService {
           completedAt: { gte: since, lte: end },
         },
       }),
+      transaction.sessionAttendanceInterval.findMany({
+        where: { joinedAt: { gte: since, lte: end } },
+        select: {
+          sessionId: true,
+          userId: true,
+          joinedAt: true,
+          leftAt: true,
+          lastHeartbeatAt: true,
+        },
+      }),
     ]);
+
+    const uniqueParticipantSessions = new Set(
+      attendanceIntervals.map(
+        (interval) => `${interval.sessionId}:${interval.userId}`,
+      ),
+    );
+    const attendanceSeconds = attendanceIntervals.reduce((sum, interval) => {
+      const endAt = interval.leftAt ?? interval.lastHeartbeatAt;
+      return (
+        sum +
+        Math.max(
+          0,
+          Math.round((endAt.getTime() - interval.joinedAt.getTime()) / 1000),
+        )
+      );
+    }, 0);
 
     const completedStatuses: SessionStatus[] = [
       SessionStatus.ENDED,
@@ -299,6 +354,11 @@ export class AnalyticsService {
         completed: reservations.filter(
           (item) => item.status === BookingStatus.COMPLETED,
         ).length,
+      },
+      attendance: {
+        participantSessions: uniqueParticipantSessions.size,
+        intervalCount: attendanceIntervals.length,
+        totalSeconds: attendanceSeconds,
       },
       engagement: {
         chatMessages,
