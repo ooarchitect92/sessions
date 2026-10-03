@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { FileAssetStatus, Prisma } from '@prisma/client';
+import { randomUUID } from 'node:crypto';
 import { AuditService } from '../audit/audit.service';
 import {
   HOST_ROLES,
@@ -72,7 +73,7 @@ export class FilesService {
       });
       if (!session) throw new NotFoundException('Session not found');
 
-      const id = crypto.randomUUID();
+      const id = randomUUID();
       const quarantineKey = [
         'quarantine',
         'organizations',
