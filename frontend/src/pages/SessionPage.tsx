@@ -1,7 +1,7 @@
 import '@livekit/components-styles';
 import { LiveKitRoom, VideoConference } from '@livekit/components-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api, type GeneratedAgenda, type MediaToken } from '../api/client';
 import { AgendaContentStage } from '../components/AgendaContentStage';
@@ -31,6 +31,7 @@ export function SessionPage() {
   const [agendaDuration, setAgendaDuration] = useState(10);
   const [agendaUrl, setAgendaUrl] = useState('');
   const [agendaText, setAgendaText] = useState('');
+  const [timerClock, setTimerClock] = useState(() => Date.now());
   const [agendaType, setAgendaType] = useState<
     | 'TEXT'
     | 'PRESENTATION'
@@ -48,6 +49,11 @@ export function SessionPage() {
     queryKey: ['session', sessionId],
     queryFn: () => api.getSession(sessionId),
     enabled: Boolean(sessionId),
+  });
+
+  const authMe = useQuery({
+    queryKey: ['auth-me'],
+    queryFn: () => api.authMe(),
   });
 
   const agendaTemplates = useQuery({
@@ -128,6 +134,15 @@ export function SessionPage() {
     },
   });
 
+  const controlAgendaTimer = useMutation({
+    mutationFn: (action: 'START' | 'PAUSE' | 'RESET') =>
+      api.controlAgendaTimer(sessionId, action),
+    onSuccess: async () => {
+      setTimerClock(Date.now());
+      await queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+    },
+  });
+
   const activate = useMutation({
     mutationFn: (agendaItemId: string) => api.activateAgendaItem(sessionId, agendaItemId),
     onSuccess: async () => {
@@ -193,6 +208,20 @@ export function SessionPage() {
     createAgendaItem.mutate();
   };
 
+  useEffect(() => {
+    const timer = session.data;
+    if (
+      timer?.agendaTimerStatus !== 'RUNNING' ||
+      !timer.agendaTimerEndsAt
+    ) {
+      return;
+    }
+
+    setTimerClock(Date.now());
+    const interval = window.setInterval(() => setTimerClock(Date.now()), 500);
+    return () => window.clearInterval(interval);
+  }, [session.data?.agendaTimerEndsAt, session.data?.agendaTimerStatus]);
+
   if (session.isLoading) return <div className="full-page-state">Loading session…</div>;
   if (session.error || !session.data) {
     return (
@@ -221,6 +250,25 @@ export function SessionPage() {
   const showsSharedContent =
     activeAgendaItem !== null &&
     ['TEXT', 'WEBSITE', 'PRESENTATION', 'VIDEO'].includes(activeAgendaItem.type);
+  const canControlAgenda =
+    authMe.data?.principal.roles.some((role) =>
+      ['OWNER', 'ADMIN', 'HOST'].includes(role),
+    ) ?? false;
+  const timerRemainingSeconds =
+    current.agendaTimerStatus === 'RUNNING' && current.agendaTimerEndsAt
+      ? Math.max(
+          0,
+          Math.ceil(
+            (new Date(current.agendaTimerEndsAt).getTime() - timerClock) / 1000,
+          ),
+        )
+      : current.agendaTimerRemainingSeconds;
+  const timerStatus =
+    current.agendaTimerStatus === 'RUNNING' && timerRemainingSeconds === 0
+      ? 'EXPIRED'
+      : current.agendaTimerStatus;
+  const timerMinutes = Math.floor(timerRemainingSeconds / 60);
+  const timerSeconds = timerRemainingSeconds % 60;
 
   return (
     <div className="session-workspace">
@@ -366,6 +414,74 @@ export function SessionPage() {
             </div>
             <span>{current.agendaItems.length} items</span>
           </div>
+          {activeAgendaItem ? (
+            <section
+              className={`agenda-timer-card agenda-timer-${timerStatus.toLowerCase()}`}
+              aria-live="polite"
+            >
+              <div className="agenda-timer-heading">
+                <div>
+                  <span className="eyebrow">Current item</span>
+                  <strong>{activeAgendaItem.title}</strong>
+                </div>
+                <span className="agenda-timer-status">{timerStatus.toLowerCase()}</span>
+              </div>
+              <div className="agenda-timer-display">
+                {String(timerMinutes).padStart(2, '0')}:
+                {String(timerSeconds).padStart(2, '0')}
+              </div>
+              <div className="agenda-timer-meta">
+                <span>
+                  Planned {Math.max(0, Math.round(activeAgendaItem.durationSeconds / 60))} min
+                </span>
+                {current.agendaTimerStartedAt ? (
+                  <span>Host timer synchronized</span>
+                ) : (
+                  <span>Ready to start</span>
+                )}
+              </div>
+              {canControlAgenda ? (
+                <div className="agenda-timer-actions">
+                  <button
+                    type="button"
+                    disabled={
+                      controlAgendaTimer.isPending ||
+                      timerStatus === 'RUNNING' ||
+                      activeAgendaItem.durationSeconds === 0
+                    }
+                    onClick={() => controlAgendaTimer.mutate('START')}
+                  >
+                    {timerStatus === 'PAUSED' ? 'Resume' : 'Start'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={
+                      controlAgendaTimer.isPending || timerStatus !== 'RUNNING'
+                    }
+                    onClick={() => controlAgendaTimer.mutate('PAUSE')}
+                  >
+                    Pause
+                  </button>
+                  <button
+                    type="button"
+                    disabled={controlAgendaTimer.isPending}
+                    onClick={() => controlAgendaTimer.mutate('RESET')}
+                  >
+                    Reset
+                  </button>
+                </div>
+              ) : (
+                <small className="agenda-timer-viewer-note">
+                  Timer controls are available to hosts.
+                </small>
+              )}
+              {controlAgendaTimer.error ? (
+                <div className="error-banner compact-error">
+                  {controlAgendaTimer.error.message}
+                </div>
+              ) : null}
+            </section>
+          ) : null}
           {agendaTemplatesOpen ? (
             <div className="agenda-template-panel">
               <span className="eyebrow">Agenda templates</span>
