@@ -29,6 +29,7 @@ import { SessionsModule } from "./sessions/sessions.module";
 import { TranscriptionModule } from "./transcription/transcription.module";
 import { WebhooksModule } from "./webhooks/webhooks.module";
 import { WorkspacesModule } from "./workspaces/workspaces.module";
+import { WhiteboardsModule } from "./whiteboards/whiteboards.module";
 
 @Module({
   imports: [
@@ -60,6 +61,7 @@ import { WorkspacesModule } from "./workspaces/workspaces.module";
     MediaModule,
     RealtimeModule,
     WebhooksModule,
+    WhiteboardsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: PrincipalGuard },
