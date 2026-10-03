@@ -1,7 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
-import type { SessionPresenceParticipant } from '../api/client';
 import { bootstrapAuthentication } from '../auth/dev-auth';
 
 export type SessionReaction = '👍' | '❤️' | '😂' | '👏' | '🎉' | '🙌';
@@ -57,21 +56,11 @@ export function useSessionRealtime(sessionId: string): SessionRealtimeController
 
       socket.on('connect', () => {
         setConnected(true);
-        socket?.emit(
-          'session.join',
-          { sessionId },
-          (result?: { participants?: SessionPresenceParticipant[] }) => {
-            if (result?.participants) {
-              queryClient.setQueryData(
-                ['session-presence', sessionId],
-                result.participants.map((participant) => ({
-                  ...participant,
-                  isSelf: participant.userId === result.participants?.find((item) => item.isSelf)?.userId,
-                })),
-              );
-            }
-          },
-        );
+        socket?.emit('session.join', { sessionId }, () => {
+          void queryClient.invalidateQueries({
+            queryKey: ['session-presence', sessionId],
+          });
+        });
         heartbeatTimer = window.setInterval(() => {
           socket?.emit('session.heartbeat', { sessionId });
         }, 30_000);
@@ -82,15 +71,12 @@ export function useSessionRealtime(sessionId: string): SessionRealtimeController
       socket.on('agenda.activated', () => {
         void queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
       });
-      socket.on(
-        'presence.updated',
-        (event: { sessionId: string; participants: SessionPresenceParticipant[] }) => {
-          if (event.sessionId !== sessionId) return;
-          void queryClient.invalidateQueries({
-            queryKey: ['session-presence', sessionId],
-          });
-        },
-      );
+      socket.on('presence.updated', (event: { sessionId: string }) => {
+        if (event.sessionId !== sessionId) return;
+        void queryClient.invalidateQueries({
+          queryKey: ['session-presence', sessionId],
+        });
+      });
       socket.on('participant.joined', () => {
         void queryClient.invalidateQueries({ queryKey: ['session-presence', sessionId] });
       });
