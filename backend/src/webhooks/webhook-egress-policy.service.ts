@@ -78,13 +78,21 @@ export class WebhookEgressPolicyService {
       (a === 169 && b === 254) ||
       (a === 172 && b >= 16 && b <= 31) ||
       (a === 192 && b === 168) ||
+      (a === 192 && b === 0) ||
+      (a === 192 && b === 2) ||
       (a === 198 && (b === 18 || b === 19)) ||
+      (a === 198 && b === 51) ||
+      (a === 203 && b === 0) ||
       a >= 224
     );
   }
 
   private isPrivateIpv6(address: string): boolean {
     const normalized = address.toLowerCase();
+    if (normalized.startsWith('::ffff:')) {
+      const mapped = normalized.slice('::ffff:'.length);
+      if (isIP(mapped) === 4) return this.isPrivateIpv4(mapped);
+    }
     return (
       normalized === '::' ||
       normalized === '::1' ||
