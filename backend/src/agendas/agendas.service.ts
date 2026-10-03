@@ -4,7 +4,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, SessionStatus, type AgendaItem } from '@prisma/client';
+import {
+  AgendaTimerStatus,
+  Prisma,
+  SessionStatus,
+  type AgendaItem,
+} from '@prisma/client';
 import { OpenAiCompatibleAgendaProvider } from '../ai/openai-compatible-agenda.provider';
 import { AuditService } from '../audit/audit.service';
 import {
@@ -16,6 +21,11 @@ import { TenantDatabaseService } from '../database/tenant-database.service';
 import { RealtimeEventsService } from '../infrastructure/realtime-events.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { AgendaContentPolicyService } from './agenda-content-policy.service';
+import {
+  resolveAgendaTimerSnapshot,
+  transitionAgendaTimer,
+  type AgendaTimerAction,
+} from './agenda-timer';
 import { CreateAgendaItemDto } from './dto/create-agenda-item.dto';
 import { GenerateAgendaDto } from './dto/generate-agenda.dto';
 import { ReorderAgendaDto } from './dto/reorder-agenda.dto';
@@ -49,6 +59,157 @@ export class AgendasService {
         orderBy: { position: 'asc' },
       });
     });
+  }
+
+  async getTimer(principal: Principal, sessionId: string) {
+    return this.database.run(principal, async (transaction) => {
+      const session = await transaction.session.findUnique({
+        where: { id: sessionId },
+        select: {
+          id: true,
+          status: true,
+          currentAgendaItemId: true,
+          agendaTimerStatus: true,
+          agendaTimerRemainingSeconds: true,
+          agendaTimerEndsAt: true,
+          agendaTimerStartedAt: true,
+        },
+      });
+      if (!session) throw new NotFoundException('Session not found');
+
+      const item = session.currentAgendaItemId
+        ? await transaction.agendaItem.findFirst({
+            where: {
+              id: session.currentAgendaItemId,
+              sessionId,
+            },
+            select: { id: true, durationSeconds: true },
+          })
+        : null;
+
+      const now = new Date();
+      const resolved = resolveAgendaTimerSnapshot(
+        {
+          status: session.agendaTimerStatus,
+          remainingSeconds: session.agendaTimerRemainingSeconds,
+          endsAt: session.agendaTimerEndsAt,
+          startedAt: session.agendaTimerStartedAt,
+        },
+        now,
+      );
+
+      return {
+        sessionId,
+        agendaItemId: item?.id ?? null,
+        durationSeconds: item?.durationSeconds ?? 0,
+        status: item ? resolved.status : AgendaTimerStatus.IDLE,
+        remainingSeconds: item ? resolved.remainingSeconds : 0,
+        endsAt: item && resolved.endsAt ? resolved.endsAt.toISOString() : null,
+        startedAt:
+          item && resolved.startedAt ? resolved.startedAt.toISOString() : null,
+        serverTime: now.toISOString(),
+      };
+    });
+  }
+
+  async controlTimer(
+    principal: Principal,
+    sessionId: string,
+    action: AgendaTimerAction,
+  ) {
+    this.assertHost(principal);
+
+    const state = await this.database.run(principal, async (transaction) => {
+      const session = await transaction.session.findUnique({
+        where: { id: sessionId },
+        select: {
+          id: true,
+          status: true,
+          currentAgendaItemId: true,
+          agendaTimerStatus: true,
+          agendaTimerRemainingSeconds: true,
+          agendaTimerEndsAt: true,
+          agendaTimerStartedAt: true,
+        },
+      });
+      if (!session) throw new NotFoundException('Session not found');
+      if (!ACTIVATABLE_SESSION_STATUSES.has(session.status)) {
+        throw new BadRequestException(
+          `Agenda timer is unavailable while session is ${session.status}`,
+        );
+      }
+      if (!session.currentAgendaItemId) {
+        throw new BadRequestException(
+          'Activate an agenda item before controlling the timer',
+        );
+      }
+
+      const item = await transaction.agendaItem.findFirst({
+        where: { id: session.currentAgendaItemId, sessionId },
+        select: { id: true, durationSeconds: true },
+      });
+      if (!item) throw new NotFoundException('Active agenda item not found');
+
+      const now = new Date();
+      const next = transitionAgendaTimer(
+        {
+          status: session.agendaTimerStatus,
+          remainingSeconds: session.agendaTimerRemainingSeconds,
+          endsAt: session.agendaTimerEndsAt,
+          startedAt: session.agendaTimerStartedAt,
+        },
+        action,
+        item.durationSeconds,
+        now,
+      );
+
+      await transaction.session.update({
+        where: { id: sessionId },
+        data: {
+          agendaTimerStatus: next.status,
+          agendaTimerRemainingSeconds: next.remainingSeconds,
+          agendaTimerEndsAt: next.endsAt,
+          agendaTimerStartedAt: next.startedAt,
+        },
+      });
+
+      const payload = {
+        sessionId,
+        agendaItemId: item.id,
+        durationSeconds: item.durationSeconds,
+        status: next.status,
+        remainingSeconds: next.remainingSeconds,
+        endsAt: next.endsAt?.toISOString() ?? null,
+        startedAt: next.startedAt?.toISOString() ?? null,
+        serverTime: now.toISOString(),
+      };
+
+      await this.audit.record(transaction, principal, {
+        action: `agenda_timer.${action.toLowerCase()}`,
+        resourceType: 'session',
+        resourceId: sessionId,
+        metadata: {
+          agendaItemId: item.id,
+          status: next.status,
+          remainingSeconds: next.remainingSeconds,
+        },
+      });
+      await this.outbox.enqueue(transaction, principal, {
+        aggregateType: 'session',
+        aggregateId: sessionId,
+        eventType: `agenda.timer.${action.toLowerCase()}`,
+        payload: this.toJson(payload),
+      });
+
+      return payload;
+    });
+
+    this.realtimeEvents.publishSessionEvent({
+      sessionId,
+      eventName: 'agenda.timer.updated',
+      payload: state,
+    });
+    return state;
   }
 
   async create(
@@ -216,7 +377,14 @@ export class AgendasService {
 
       await transaction.session.update({
         where: { id: sessionId },
-        data: { currentAgendaItemId: agendaItemId, version: { increment: 1 } },
+        data: {
+          currentAgendaItemId: agendaItemId,
+          agendaTimerStatus: AgendaTimerStatus.IDLE,
+          agendaTimerRemainingSeconds: item.durationSeconds,
+          agendaTimerEndsAt: null,
+          agendaTimerStartedAt: null,
+          version: { increment: 1 },
+        },
       });
       const activatedAt = new Date().toISOString();
       await this.audit.record(transaction, principal, {
@@ -234,6 +402,20 @@ export class AgendasService {
       return { sessionId, agendaItem: item, activatedAt };
     });
     this.realtimeEvents.publishAgendaActivated(result);
+    this.realtimeEvents.publishSessionEvent({
+      sessionId,
+      eventName: 'agenda.timer.updated',
+      payload: {
+        sessionId,
+        agendaItemId: result.agendaItem.id,
+        durationSeconds: result.agendaItem.durationSeconds,
+        status: AgendaTimerStatus.IDLE,
+        remainingSeconds: result.agendaItem.durationSeconds,
+        endsAt: null,
+        startedAt: null,
+        serverTime: result.activatedAt,
+      },
+    });
     return result;
   }
 
