@@ -40,6 +40,17 @@ interface Slot {
   endsAt: string;
 }
 
+const RESCHEDULABLE_SESSION_STATUSES = new Set<SessionStatus>([
+  SessionStatus.DRAFT,
+  SessionStatus.SCHEDULED,
+]);
+
+const CANCELLABLE_SESSION_STATUSES = new Set<SessionStatus>([
+  SessionStatus.DRAFT,
+  SessionStatus.SCHEDULED,
+  SessionStatus.CANCELLED,
+]);
+
 @Injectable()
 export class BookingsService {
   constructor(
@@ -99,7 +110,7 @@ export class BookingsService {
           bufferBeforeMinutes: input.bufferBeforeMinutes,
           bufferAfterMinutes: input.bufferAfterMinutes,
           availabilityRules: input.availabilityRules as unknown as Prisma.InputJsonValue,
-          intakeFields: input.intakeFields as Prisma.InputJsonValue,
+          intakeFields: input.intakeFields as unknown as Prisma.InputJsonValue,
         },
       });
       const response = this.toJson(page);
@@ -207,7 +218,10 @@ export class BookingsService {
               }
             : {}),
           ...(input.intakeFields !== undefined
-            ? { intakeFields: input.intakeFields as Prisma.InputJsonValue }
+            ? {
+                intakeFields:
+                  input.intakeFields as unknown as Prisma.InputJsonValue,
+              }
             : {}),
           ...(input.active !== undefined ? { active: input.active } : {}),
         },
@@ -413,9 +427,7 @@ export class BookingsService {
       }
       if (
         reservation.session &&
-        ![SessionStatus.DRAFT, SessionStatus.SCHEDULED].includes(
-          reservation.session.status,
-        )
+        !RESCHEDULABLE_SESSION_STATUSES.has(reservation.session.status)
       ) {
         throw new ConflictException(
           `The linked session cannot be rescheduled while ${reservation.session.status}`,
@@ -511,11 +523,7 @@ export class BookingsService {
       }
       if (
         reservation.session &&
-        ![
-          SessionStatus.DRAFT,
-          SessionStatus.SCHEDULED,
-          SessionStatus.CANCELLED,
-        ].includes(reservation.session.status)
+        !CANCELLABLE_SESSION_STATUSES.has(reservation.session.status)
       ) {
         throw new ConflictException(
           `The linked session cannot be cancelled while ${reservation.session.status}`,
