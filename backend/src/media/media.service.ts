@@ -18,6 +18,7 @@ import { TenantDatabaseService } from '../database/tenant-database.service';
 import { RealtimeEventsService } from '../infrastructure/realtime-events.service';
 import { RedisService } from '../infrastructure/redis.service';
 import { OutboxService } from '../outbox/outbox.service';
+import { TenantDatabaseService } from '../database/tenant-database.service';
 import { RecordingsService } from '../recordings/recordings.service';
 import { SessionsService } from '../sessions/sessions.service';
 
@@ -35,6 +36,7 @@ export class MediaService {
 
   constructor(
     private readonly config: ConfigService,
+    private readonly database: TenantDatabaseService,
     private readonly sessions: SessionsService,
     private readonly recordings: RecordingsService,
     private readonly database: TenantDatabaseService,
@@ -78,11 +80,31 @@ export class MediaService {
 
     await this.recordings.assertConsentAndPrepare(principal, session);
 
-    const canPublish =
+    let stageRole: EventStageRole | null = null;
+    if (session.kind === SessionKind.WEBINAR) {
+      const stageProfile = await this.database.run(principal, (transaction) =>
+        transaction.eventSpeaker.findFirst({
+          where: {
+            userId: principal.userId,
+            event: { sessionId },
+          },
+          select: { role: true },
+        }),
+      );
+      stageRole = stageProfile?.role ?? null;
+    }
+
+    const canModerate =
       isHost ||
-      (session.kind === SessionKind.MEETING &&
-        !principal.roles.includes('ANALYST') &&
-        !principal.roles.includes('GUEST'));
+      stageRole === EventStageRole.ORGANIZER ||
+      stageRole === EventStageRole.HOST ||
+      stageRole === EventStageRole.COHOST;
+    const canPublish =
+      session.kind === SessionKind.WEBINAR
+        ? canModerate || stageRole === EventStageRole.SPEAKER
+        : isHost ||
+          (!principal.roles.includes('ANALYST') &&
+            !principal.roles.includes('GUEST'));
     const expiresIn = this.config.getOrThrow<number>('LIVEKIT_TOKEN_TTL_SECONDS');
 
     const accessToken = new AccessToken(
@@ -97,13 +119,14 @@ export class MediaService {
           workspaceId: principal.workspaceId,
           sessionId,
           roles: principal.roles,
+          eventStageRole: stageRole,
         }),
       },
     );
     accessToken.addGrant({
       room: session.livekitRoomName,
       roomJoin: true,
-      roomAdmin: isHost,
+      roomAdmin: canModerate,
       canPublish,
       canSubscribe: true,
       canPublishData: true,
