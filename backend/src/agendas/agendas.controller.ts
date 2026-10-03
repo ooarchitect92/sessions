@@ -4,6 +4,7 @@ import { CurrentPrincipal } from '../common/auth/current-principal.decorator';
 import type { Principal } from '../common/auth/principal';
 import { AgendasService } from './agendas.service';
 import { CreateAgendaItemDto } from './dto/create-agenda-item.dto';
+import { ControlAgendaTimerDto } from './dto/control-agenda-timer.dto';
 import { GenerateAgendaDto } from './dto/generate-agenda.dto';
 import { ReorderAgendaDto } from './dto/reorder-agenda.dto';
 
@@ -19,6 +20,23 @@ export class AgendasController {
     @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
   ) {
     return this.agendas.list(principal, sessionId);
+  }
+
+  @Get('timer')
+  getTimer(
+    @CurrentPrincipal() principal: Principal,
+    @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
+  ) {
+    return this.agendas.getTimer(principal, sessionId);
+  }
+
+  @Post('timer')
+  controlTimer(
+    @CurrentPrincipal() principal: Principal,
+    @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
+    @Body() body: ControlAgendaTimerDto,
+  ) {
+    return this.agendas.controlTimer(principal, sessionId, body.action);
   }
 
   @Post()
