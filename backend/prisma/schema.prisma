@@ -179,6 +179,8 @@ model Organization {
   attendanceIntervals SessionAttendanceInterval[]
   breakoutRooms        BreakoutRoom[]
   breakoutAssignments  BreakoutAssignment[]
+  whiteboards          WhiteboardDocument[]
+  whiteboardOperations WhiteboardOperation[]
   webhookSubscriptions WebhookSubscription[]
   webhookDeliveries   WebhookDelivery[]
   authSessions        AuthSession[]
@@ -223,6 +225,8 @@ model Workspace {
   attendanceIntervals SessionAttendanceInterval[]
   breakoutRooms        BreakoutRoom[]
   breakoutAssignments  BreakoutAssignment[]
+  whiteboards          WhiteboardDocument[]
+  whiteboardOperations WhiteboardOperation[]
   webhookSubscriptions WebhookSubscription[]
   webhookDeliveries   WebhookDelivery[]
   authSessions        AuthSession[]
@@ -267,6 +271,7 @@ model User {
   recordingConsents       RecordingConsent[]
   attendanceIntervals     SessionAttendanceInterval[]
   breakoutAssignments     BreakoutAssignment[]
+  whiteboardOperations    WhiteboardOperation[]
   createdWebhookSubscriptions WebhookSubscription[] @relation("WebhookSubscriptionCreator")
 
   @@index([status])
@@ -351,10 +356,55 @@ model Session {
   attendanceIntervals  SessionAttendanceInterval[]
   breakoutRooms         BreakoutRoom[]
   breakoutAssignments   BreakoutAssignment[]
+  whiteboard             WhiteboardDocument?
+  whiteboardOperations   WhiteboardOperation[]
 
   @@index([organizationId, workspaceId, startsAt])
   @@index([workspaceId, status, startsAt])
   @@map("sessions")
+}
+
+model WhiteboardDocument {
+  id               String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String                @map("organization_id") @db.Uuid
+  workspaceId      String                @map("workspace_id") @db.Uuid
+  sessionId        String                @unique @map("session_id") @db.Uuid
+  snapshot         Json                  @default("{\"elements\":[]}")
+  snapshotVersion  Int                   @default(1) @map("snapshot_version")
+  compactedThrough Int                   @default(0) @map("compacted_through")
+  createdAt        DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization     Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace        Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  session          Session               @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  operations       WhiteboardOperation[]
+
+  @@index([organizationId, workspaceId, sessionId])
+  @@map("whiteboard_documents")
+}
+
+model WhiteboardOperation {
+  id             String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String             @map("organization_id") @db.Uuid
+  workspaceId    String             @map("workspace_id") @db.Uuid
+  sessionId      String             @map("session_id") @db.Uuid
+  whiteboardId   String             @map("whiteboard_id") @db.Uuid
+  userId         String             @map("user_id") @db.Uuid
+  operationId    String             @unique @map("operation_id") @db.Uuid
+  sequence       Int
+  type           String             @db.VarChar(32)
+  payload        Json
+  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  session        Session            @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  whiteboard     WhiteboardDocument @relation(fields: [whiteboardId], references: [id], onDelete: Cascade)
+  user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([whiteboardId, sequence])
+  @@index([organizationId, workspaceId, sessionId, sequence])
+  @@index([whiteboardId, sequence])
+  @@map("whiteboard_operations")
 }
 
 model BreakoutRoom {
