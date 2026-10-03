@@ -1,19 +1,47 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { bootstrapAuthentication } from '../auth/dev-auth';
+
+export type SessionReaction = '👍' | '❤️' | '😂' | '👏' | '🎉' | '🙌';
+
+export interface SessionReactionEvent {
+  reactionId: string;
+  sessionId: string;
+  userId: string;
+  displayName: string;
+  reaction: SessionReaction;
+  occurredAt: string;
+}
+
+export interface SessionRealtimeController {
+  connected: boolean;
+  reactions: SessionReactionEvent[];
+  sendReaction: (reaction: SessionReaction) => void;
+}
 
 function realtimeUrl(): string {
   const api = new URL(import.meta.env.VITE_API_URL);
   return `${api.origin}/realtime`;
 }
 
-export function useSessionRealtime(sessionId: string): void {
+export function useSessionRealtime(sessionId: string): SessionRealtimeController {
   const queryClient = useQueryClient();
+  const socketRef = useRef<Socket>();
+  const [connected, setConnected] = useState(false);
+  const [reactions, setReactions] = useState<SessionReactionEvent[]>([]);
+
+  const sendReaction = useCallback(
+    (reaction: SessionReaction) => {
+      socketRef.current?.emit('reaction.send', { sessionId, reaction });
+    },
+    [sessionId],
+  );
 
   useEffect(() => {
     let disposed = false;
     let socket: Socket | undefined;
+    const reactionTimers = new Set<number>();
 
     const connect = async () => {
       const token = await bootstrapAuthentication();
@@ -23,8 +51,14 @@ export function useSessionRealtime(sessionId: string): void {
         transports: ['websocket'],
         auth: { token },
       });
+      socketRef.current = socket;
+
       socket.on('connect', () => {
+        setConnected(true);
         socket?.emit('session.join', { sessionId });
+      });
+      socket.on('disconnect', () => {
+        setConnected(false);
       });
       socket.on('agenda.activated', () => {
         void queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
@@ -57,6 +91,17 @@ export function useSessionRealtime(sessionId: string): void {
           void queryClient.invalidateQueries({ queryKey: ['questions', sessionId] });
         });
       }
+      socket.on('reaction.received', (event: SessionReactionEvent) => {
+        if (event.sessionId !== sessionId) return;
+        setReactions((current) => [...current.slice(-7), event]);
+        const timer = window.setTimeout(() => {
+          setReactions((current) =>
+            current.filter((reaction) => reaction.reactionId !== event.reactionId),
+          );
+          reactionTimers.delete(timer);
+        }, 2600);
+        reactionTimers.add(timer);
+      });
       socket.on('memory.updated', () => {
         void queryClient.invalidateQueries({ queryKey: ['memory'] });
         void queryClient.invalidateQueries({
@@ -68,7 +113,13 @@ export function useSessionRealtime(sessionId: string): void {
     void connect();
     return () => {
       disposed = true;
+      setConnected(false);
+      socketRef.current = undefined;
       socket?.disconnect();
+      for (const timer of reactionTimers) window.clearTimeout(timer);
+      reactionTimers.clear();
     };
   }, [queryClient, sessionId]);
+
+  return { connected, reactions, sendReaction };
 }
