@@ -29,11 +29,11 @@
 - [x] poll creation, launch, answer, results and close lifecycle
 - [x] moderated Q&A with voting and answers
 - [x] Redis-backed live presence, throttled meeting reactions and user-targeted private chat invalidation
-- [ ] whiteboard integration, snapshots and operation compaction
-- [ ] breakout assignment, media-room transition and host broadcast
+- [x] whiteboard integration, snapshots and operation compaction
+- [x] breakout assignment, LiveKit media-room transition and host broadcast
 - [x] URL-backed agenda content blocks, HTTPS/private-network policy and sandboxed embed rendering
 - [ ] OAuth/native app embeds, co-browsing permissions and remote-control consent
-- [ ] upload quarantine, malware scan and signed downloads
+- [x] direct-to-quarantine file uploads, ClamAV malware scanning, clean-object promotion and signed agenda-file downloads
 - [x] recording, transcript and summary artifact state models
 - [x] post-session artifact requests, audit evidence and retry controls
 - [x] LiveKit egress orchestration and recording finalization worker
