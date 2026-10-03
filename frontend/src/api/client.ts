@@ -164,6 +164,26 @@ export interface AgendaItem {
   updatedAt: string;
 }
 
+export interface AgendaTemplateItem {
+  id: string;
+  position: number;
+  title: string;
+  durationSeconds: number;
+  type: AgendaItemType;
+  content: Record<string, unknown>;
+}
+
+export interface AgendaTemplateRecord {
+  id: string;
+  name: string;
+  description: string | null;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: { id: string; displayName: string };
+  items: AgendaTemplateItem[];
+}
+
 export interface SessionDetail extends Session {
   livekitRoomName: string;
   agendaItems: AgendaItem[];
@@ -735,6 +755,56 @@ export const api = {
     return request<GeneratedAgenda>(`/sessions/${sessionId}/agenda-items/generate`, {
       method: "POST",
       body: JSON.stringify(input),
+    });
+  },
+
+  listAgendaTemplates(): Promise<AgendaTemplateRecord[]> {
+    return request<AgendaTemplateRecord[]>('/agenda-templates');
+  },
+
+  saveAgendaTemplate(
+    sessionId: string,
+    input: { name: string; description?: string },
+  ): Promise<AgendaTemplateRecord> {
+    return request<AgendaTemplateRecord>(`/sessions/${sessionId}/agenda-templates`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  updateAgendaTemplate(
+    templateId: string,
+    version: number,
+    input: { name?: string; description?: string },
+  ): Promise<AgendaTemplateRecord> {
+    return request<AgendaTemplateRecord>(`/agenda-templates/${templateId}`, {
+      method: 'PATCH',
+      headers: { 'if-match': String(version) },
+      body: JSON.stringify(input),
+    });
+  },
+
+  deleteAgendaTemplate(
+    templateId: string,
+    version: number,
+  ): Promise<{ id: string }> {
+    return request<{ id: string }>(`/agenda-templates/${templateId}`, {
+      method: 'DELETE',
+      headers: { 'if-match': String(version) },
+    });
+  },
+
+  applyAgendaTemplate(
+    sessionId: string,
+    templateId: string,
+  ): Promise<{
+    sessionId: string;
+    agendaTemplateId: string;
+    appendedItemCount: number;
+    agendaItems: AgendaItem[];
+  }> {
+    return request(`/sessions/${sessionId}/agenda-templates/${templateId}/apply`, {
+      method: 'POST',
     });
   },
 
