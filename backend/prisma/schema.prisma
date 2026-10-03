@@ -148,6 +148,16 @@ enum WebhookDeliveryStatus {
   FAILED
 }
 
+enum FileAssetStatus {
+  PENDING_UPLOAD
+  QUARANTINED
+  SCANNING
+  READY
+  REJECTED
+  FAILED
+  DELETED
+}
+
 model Organization {
   id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name                String                @db.VarChar(160)
@@ -181,6 +191,7 @@ model Organization {
   breakoutAssignments  BreakoutAssignment[]
   whiteboards          WhiteboardDocument[]
   whiteboardOperations WhiteboardOperation[]
+  fileAssets           FileAsset[]
   webhookSubscriptions WebhookSubscription[]
   webhookDeliveries   WebhookDelivery[]
   authSessions        AuthSession[]
@@ -227,6 +238,7 @@ model Workspace {
   breakoutAssignments  BreakoutAssignment[]
   whiteboards          WhiteboardDocument[]
   whiteboardOperations WhiteboardOperation[]
+  fileAssets           FileAsset[]
   webhookSubscriptions WebhookSubscription[]
   webhookDeliveries   WebhookDelivery[]
   authSessions        AuthSession[]
@@ -272,6 +284,7 @@ model User {
   attendanceIntervals     SessionAttendanceInterval[]
   breakoutAssignments     BreakoutAssignment[]
   whiteboardOperations    WhiteboardOperation[]
+  fileAssets               FileAsset[]
   createdWebhookSubscriptions WebhookSubscription[] @relation("WebhookSubscriptionCreator")
 
   @@index([status])
@@ -358,6 +371,7 @@ model Session {
   breakoutAssignments   BreakoutAssignment[]
   whiteboard             WhiteboardDocument?
   whiteboardOperations   WhiteboardOperation[]
+  fileAssets             FileAsset[]
 
   @@index([organizationId, workspaceId, startsAt])
   @@index([workspaceId, status, startsAt])
@@ -405,6 +419,40 @@ model WhiteboardOperation {
   @@index([organizationId, workspaceId, sessionId, sequence])
   @@index([whiteboardId, sequence])
   @@map("whiteboard_operations")
+}
+
+model FileAsset {
+  id               String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String          @map("organization_id") @db.Uuid
+  workspaceId      String          @map("workspace_id") @db.Uuid
+  sessionId        String?         @map("session_id") @db.Uuid
+  createdById      String          @map("created_by_id") @db.Uuid
+  filename         String          @db.VarChar(255)
+  mimeType         String          @map("mime_type") @db.VarChar(160)
+  sizeBytes        BigInt          @map("size_bytes")
+  checksumSha256   String?         @map("checksum_sha256") @db.VarChar(64)
+  quarantineKey    String          @unique @map("quarantine_key") @db.Text
+  cleanObjectKey   String?         @unique @map("clean_object_key") @db.Text
+  status           FileAssetStatus @default(PENDING_UPLOAD)
+  scanProvider     String?         @map("scan_provider") @db.VarChar(80)
+  scanResult       String?         @map("scan_result") @db.VarChar(500)
+  scanAttempts     Int             @default(0) @map("scan_attempts")
+  lastScanError    String?         @map("last_scan_error") @db.Text
+  uploadedAt       DateTime?       @map("uploaded_at") @db.Timestamptz(6)
+  scannedAt        DateTime?       @map("scanned_at") @db.Timestamptz(6)
+  deletedAt        DateTime?       @map("deleted_at") @db.Timestamptz(6)
+  version          Int             @default(1)
+  createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization     Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace        Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  session          Session?        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  createdBy        User            @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, workspaceId, createdAt])
+  @@index([sessionId, status, createdAt])
+  @@index([workspaceId, status, createdAt])
+  @@map("file_assets")
 }
 
 model BreakoutRoom {
