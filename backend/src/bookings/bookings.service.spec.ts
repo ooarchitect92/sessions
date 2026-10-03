@@ -18,6 +18,15 @@ interface AvailabilityHarness {
   ): Slot[];
   validateDateRange(dateFrom: string, dateTo: string): unknown;
   assertAvailabilityRules(rules: AvailabilityRuleDto[]): void;
+  hashManagementToken(token: string): string;
+  buildCalendarFile(input: {
+    id: string;
+    title: string;
+    description: string | null;
+    startsAt: Date;
+    endsAt: Date;
+    status: 'CONFIRMED' | 'CANCELLED' | 'COMPLETED' | 'NO_SHOW';
+  }): { filename: string; contentType: string; content: string };
 }
 
 function createService(): AvailabilityHarness {
@@ -107,5 +116,41 @@ describe('booking availability', () => {
     expect(() => service.validateDateRange('2030-01-01', '2030-02-02')).toThrow(
       BadRequestException,
     );
+  });
+
+  it('hashes management tokens without exposing the raw credential', () => {
+    const service = createService();
+    const token = 'booking-management-token-0123456789';
+
+    expect(service.hashManagementToken(token)).toMatch(/^[a-f0-9]{64}$/);
+    expect(service.hashManagementToken(token)).not.toContain(token);
+  });
+
+  it('builds a standards-oriented calendar artifact for confirmed and cancelled bookings', () => {
+    const service = createService();
+    const confirmed = service.buildCalendarFile({
+      id: '10000000-0000-4000-8000-000000000010',
+      title: 'Discovery, call',
+      description: 'Discuss scope; next steps',
+      startsAt: new Date('2030-01-07T09:00:00.000Z'),
+      endsAt: new Date('2030-01-07T09:30:00.000Z'),
+      status: 'CONFIRMED',
+    });
+
+    expect(confirmed.contentType).toContain('text/calendar');
+    expect(confirmed.content).toContain('DTSTART:20300107T090000Z');
+    expect(confirmed.content).toContain('SUMMARY:Discovery\\, call');
+    expect(confirmed.content).toContain('DESCRIPTION:Discuss scope\\; next steps');
+    expect(confirmed.content).toContain('STATUS:CONFIRMED');
+
+    const cancelled = service.buildCalendarFile({
+      id: '10000000-0000-4000-8000-000000000010',
+      title: 'Discovery call',
+      description: null,
+      startsAt: new Date('2030-01-07T09:00:00.000Z'),
+      endsAt: new Date('2030-01-07T09:30:00.000Z'),
+      status: 'CANCELLED',
+    });
+    expect(cancelled.content).toContain('STATUS:CANCELLED');
   });
 });
