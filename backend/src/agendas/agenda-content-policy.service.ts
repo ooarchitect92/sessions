@@ -138,7 +138,7 @@ export class AgendaContentPolicyService {
   }
 
   private isPrivateIpv4(hostname: string): boolean {
-    const [a, b] = hostname.split('.').map(Number);
+    const [a = 0, b = 0] = hostname.split('.').map(Number);
     return (
       a === 10 ||
       a === 127 ||
