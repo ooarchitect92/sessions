@@ -181,6 +181,24 @@ export const AvailabilityRuleSchema = z.object({
   endTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
 });
 
+export const IntakeFieldTypeSchema = z.enum([
+  'TEXT',
+  'TEXTAREA',
+  'EMAIL',
+  'SELECT',
+  'CHECKBOX',
+  'CONSENT',
+]);
+
+export const IntakeFieldSchema = z.object({
+  key: z.string().regex(/^[a-z][a-z0-9_]{0,63}$/),
+  label: z.string().trim().min(1).max(160),
+  type: IntakeFieldTypeSchema,
+  required: z.boolean().default(false),
+  placeholder: z.string().max(200).optional(),
+  options: z.array(z.string().trim().min(1).max(160)).max(50).optional(),
+});
+
 export const CreateBookingPageSchema = z.object({
   slug: SlugSchema,
   title: z.string().trim().min(1).max(160),
@@ -191,7 +209,7 @@ export const CreateBookingPageSchema = z.object({
   bufferBeforeMinutes: z.number().int().min(0).max(1440).default(0),
   bufferAfterMinutes: z.number().int().min(0).max(1440).default(0),
   availabilityRules: z.array(AvailabilityRuleSchema).min(1),
-  intakeFields: z.array(z.record(z.string(), z.unknown())).default([]),
+  intakeFields: z.array(IntakeFieldSchema).max(50).default([]),
 });
 
 export const BookingPageSchema = z.object({
@@ -267,6 +285,8 @@ export type Event = z.infer<typeof EventSchema>;
 export type RegisterForEventInput = z.infer<typeof RegisterForEventSchema>;
 export type BookingStatus = z.infer<typeof BookingStatusSchema>;
 export type AvailabilityRule = z.infer<typeof AvailabilityRuleSchema>;
+export type IntakeFieldType = z.infer<typeof IntakeFieldTypeSchema>;
+export type IntakeField = z.infer<typeof IntakeFieldSchema>;
 export type CreateBookingPageInput = z.infer<typeof CreateBookingPageSchema>;
 export type BookingPage = z.infer<typeof BookingPageSchema>;
 export type ReserveBookingInput = z.infer<typeof ReserveBookingSchema>;
