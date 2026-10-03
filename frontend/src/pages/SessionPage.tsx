@@ -39,7 +39,7 @@ export function SessionPage() {
     | 'QA'
     | 'SCREEN_SHARE'
   >('TEXT');
-  useSessionRealtime(sessionId);
+  const realtime = useSessionRealtime(sessionId);
 
   const session = useQuery({
     queryKey: ['session', sessionId],
@@ -504,6 +504,27 @@ export function SessionPage() {
           {showsSharedContent && activeAgendaItem ? (
             <AgendaContentStage item={activeAgendaItem} />
           ) : null}
+          <div className="reaction-overlay" aria-live="polite">
+            {realtime.reactions.map((event) => (
+              <div className="reaction-bubble" key={event.reactionId}>
+                <span>{event.reaction}</span>
+                <small>{event.displayName}</small>
+              </div>
+            ))}
+          </div>
+          <div className="reaction-toolbar" aria-label="Meeting reactions">
+            {(['👍', '❤️', '😂', '👏', '🎉', '🙌'] as const).map((reaction) => (
+              <button
+                key={reaction}
+                type="button"
+                onClick={() => realtime.sendReaction(reaction)}
+                disabled={!realtime.connected}
+                aria-label={`Send ${reaction} reaction`}
+              >
+                {reaction}
+              </button>
+            ))}
+          </div>
           <div className="media-stage">
           {media ? (
             <LiveKitRoom
