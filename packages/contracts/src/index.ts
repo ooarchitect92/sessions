@@ -136,6 +136,29 @@ export const SessionSchema = z.object({
   updatedAt: z.iso.datetime(),
 });
 
+export const EventRegistrationFieldTypeSchema = z.enum([
+  'TEXT',
+  'TEXTAREA',
+  'EMAIL',
+  'SELECT',
+  'CHECKBOX',
+  'CONSENT',
+]);
+
+export const EventRegistrationFieldSchema = z.object({
+  key: z
+    .string()
+    .regex(/^[a-z][a-z0-9_]{0,63}$/)
+    .refine((key) => !['name', 'email'].includes(key), {
+      message: 'name and email are reserved registration keys',
+    }),
+  label: z.string().trim().min(1).max(160),
+  type: EventRegistrationFieldTypeSchema,
+  required: z.boolean().default(false),
+  placeholder: z.string().max(200).optional(),
+  options: z.array(z.string().trim().min(1).max(160)).max(50).optional(),
+});
+
 export const CreateEventSchema = z.object({
   slug: SlugSchema,
   title: z.string().trim().min(1).max(160),
@@ -144,7 +167,7 @@ export const CreateEventSchema = z.object({
   durationMinutes: z.number().int().min(5).max(1440),
   timezone: z.string().trim().min(1).max(100),
   capacity: z.number().int().positive().max(100000).nullable().optional(),
-  registrationFields: z.array(z.record(z.string(), z.unknown())).default([]),
+  registrationFields: z.array(EventRegistrationFieldSchema).max(50).default([]),
   branding: z.record(z.string(), z.unknown()).default({}),
 });
 
@@ -161,7 +184,7 @@ export const EventSchema = z.object({
   timezone: z.string(),
   capacity: z.number().int().nullable(),
   status: EventStatusSchema,
-  registrationFields: z.array(z.record(z.string(), z.unknown())),
+  registrationFields: z.array(EventRegistrationFieldSchema),
   branding: z.record(z.string(), z.unknown()),
   publishedAt: z.iso.datetime().nullable(),
   version: z.number().int().positive(),
@@ -280,6 +303,12 @@ export type UpdateSessionInput = z.infer<typeof UpdateSessionSchema>;
 export type CreateAgendaItemInput = z.infer<typeof CreateAgendaItemSchema>;
 export type Session = z.infer<typeof SessionSchema>;
 export type EventStatus = z.infer<typeof EventStatusSchema>;
+export type EventRegistrationFieldType = z.infer<
+  typeof EventRegistrationFieldTypeSchema
+>;
+export type EventRegistrationField = z.infer<
+  typeof EventRegistrationFieldSchema
+>;
 export type CreateEventInput = z.infer<typeof CreateEventSchema>;
 export type Event = z.infer<typeof EventSchema>;
 export type RegisterForEventInput = z.infer<typeof RegisterForEventSchema>;
