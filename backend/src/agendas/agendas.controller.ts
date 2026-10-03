@@ -4,6 +4,7 @@ import { CurrentPrincipal } from '../common/auth/current-principal.decorator';
 import type { Principal } from '../common/auth/principal';
 import { AgendasService } from './agendas.service';
 import { CreateAgendaItemDto } from './dto/create-agenda-item.dto';
+import { GenerateAgendaDto } from './dto/generate-agenda.dto';
 import { ReorderAgendaDto } from './dto/reorder-agenda.dto';
 
 @ApiTags('agendas')
@@ -27,6 +28,15 @@ export class AgendasController {
     @Body() body: CreateAgendaItemDto,
   ) {
     return this.agendas.create(principal, sessionId, body);
+  }
+
+  @Post('generate')
+  generate(
+    @CurrentPrincipal() principal: Principal,
+    @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
+    @Body() body: GenerateAgendaDto,
+  ) {
+    return this.agendas.generate(principal, sessionId, body);
   }
 
   @Put('order')
