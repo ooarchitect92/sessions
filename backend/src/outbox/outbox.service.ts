@@ -6,6 +6,7 @@ import type { Principal } from '../common/auth/principal';
 import { WorkerPrismaService } from '../database/worker-prisma.service';
 import { RedisService } from '../infrastructure/redis.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
+import { WebhooksService } from '../webhooks/webhooks.service';
 
 interface ClaimedOutboxEvent {
   id: string;
