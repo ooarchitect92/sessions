@@ -189,6 +189,17 @@ export interface SessionDetail extends Session {
   agendaItems: AgendaItem[];
 }
 
+export interface AgendaTimerState {
+  sessionId: string;
+  agendaItemId: string | null;
+  durationSeconds: number;
+  status: 'IDLE' | 'RUNNING' | 'PAUSED' | 'EXPIRED';
+  remainingSeconds: number;
+  endsAt: string | null;
+  startedAt: string | null;
+  serverTime: string;
+}
+
 export interface MediaToken {
   url: string;
   token: string;
@@ -805,6 +816,20 @@ export const api = {
   }> {
     return request(`/sessions/${sessionId}/agenda-templates/${templateId}/apply`, {
       method: 'POST',
+    });
+  },
+
+  getAgendaTimer(sessionId: string): Promise<AgendaTimerState> {
+    return request<AgendaTimerState>(`/sessions/${sessionId}/agenda-items/timer`);
+  },
+
+  controlAgendaTimer(
+    sessionId: string,
+    action: 'START' | 'PAUSE' | 'RESET',
+  ): Promise<AgendaTimerState> {
+    return request<AgendaTimerState>(`/sessions/${sessionId}/agenda-items/timer`, {
+      method: 'POST',
+      body: JSON.stringify({ action }),
     });
   },
 
