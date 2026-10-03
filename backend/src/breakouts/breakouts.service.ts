@@ -10,7 +10,10 @@ import { AuditService } from '../audit/audit.service';
 import { HOST_ROLES, hasAnyRole, type Principal } from '../common/auth/principal';
 import { TenantDatabaseService } from '../database/tenant-database.service';
 import { PresenceService } from '../infrastructure/presence.service';
-import { RealtimeEventsService } from '../infrastructure/realtime-events.service';
+import {
+  RealtimeEventsService,
+  type SessionRealtimeEvent,
+} from '../infrastructure/realtime-events.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { AssignBreakoutParticipantDto } from './dto/assign-breakout-participant.dto';
 import { BroadcastBreakoutMessageDto } from './dto/broadcast-breakout-message.dto';
@@ -543,7 +546,7 @@ export class BreakoutsService {
 
   private publish(
     sessionId: string,
-    eventName: string,
+    eventName: SessionRealtimeEvent['eventName'],
     payload: Prisma.JsonObject,
   ): void {
     this.realtime.publishSessionEvent({
