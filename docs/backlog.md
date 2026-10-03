@@ -19,7 +19,9 @@
 - [x] TOTP MFA with encrypted secrets and single-use recovery codes
 - [ ] production OIDC/SAML, IdP logout, SCIM and identity-provider qualification
 - [x] Redis-backed distributed API rate limiting with stricter auth-write, public, user and API-key buckets
-- [ ] device preflight, host moderation, reconnect and media qualification
+- [x] browser device preflight with camera/microphone selection and preview
+- [x] LiveKit-backed host moderation for track mute, publish blocking, participant removal and temporary rejoin blocking
+- [ ] reconnect chaos testing, TURN/SFU scale and production media qualification
 
 ## Phase 2 — collaboration and reliable capture
 
