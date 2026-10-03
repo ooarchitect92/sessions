@@ -12,3 +12,9 @@ ALTER TABLE "booking_reservations"
 
 CREATE UNIQUE INDEX "booking_reservations_management_token_hash_key"
   ON "booking_reservations"("management_token_hash");
+
+DROP INDEX IF EXISTS "booking_reservations_booking_page_id_starts_at_key";
+
+CREATE UNIQUE INDEX "booking_reservations_confirmed_slot_key"
+  ON "booking_reservations"("booking_page_id", "starts_at")
+  WHERE "status" = 'CONFIRMED';
