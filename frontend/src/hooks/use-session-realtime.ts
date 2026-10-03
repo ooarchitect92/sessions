@@ -1,6 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
+import type { SessionPresenceParticipant } from '../api/client';
 import { bootstrapAuthentication } from '../auth/dev-auth';
 
 export type SessionReaction = '👍' | '❤️' | '😂' | '👏' | '🎉' | '🙌';
@@ -41,6 +42,7 @@ export function useSessionRealtime(sessionId: string): SessionRealtimeController
   useEffect(() => {
     let disposed = false;
     let socket: Socket | undefined;
+    let heartbeatTimer: number | undefined;
     const reactionTimers = new Set<number>();
 
     const connect = async () => {
@@ -55,7 +57,24 @@ export function useSessionRealtime(sessionId: string): SessionRealtimeController
 
       socket.on('connect', () => {
         setConnected(true);
-        socket?.emit('session.join', { sessionId });
+        socket?.emit(
+          'session.join',
+          { sessionId },
+          (result?: { participants?: SessionPresenceParticipant[] }) => {
+            if (result?.participants) {
+              queryClient.setQueryData(
+                ['session-presence', sessionId],
+                result.participants.map((participant) => ({
+                  ...participant,
+                  isSelf: participant.userId === result.participants?.find((item) => item.isSelf)?.userId,
+                })),
+              );
+            }
+          },
+        );
+        heartbeatTimer = window.setInterval(() => {
+          socket?.emit('session.heartbeat', { sessionId });
+        }, 30_000);
       });
       socket.on('disconnect', () => {
         setConnected(false);
@@ -63,6 +82,15 @@ export function useSessionRealtime(sessionId: string): SessionRealtimeController
       socket.on('agenda.activated', () => {
         void queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
       });
+      socket.on(
+        'presence.updated',
+        (event: { sessionId: string; participants: SessionPresenceParticipant[] }) => {
+          if (event.sessionId !== sessionId) return;
+          void queryClient.invalidateQueries({
+            queryKey: ['session-presence', sessionId],
+          });
+        },
+      );
       socket.on('participant.joined', () => {
         void queryClient.invalidateQueries({ queryKey: ['session-presence', sessionId] });
       });
@@ -115,6 +143,7 @@ export function useSessionRealtime(sessionId: string): SessionRealtimeController
       disposed = true;
       setConnected(false);
       socketRef.current = undefined;
+      if (heartbeatTimer !== undefined) window.clearInterval(heartbeatTimer);
       socket?.disconnect();
       for (const timer of reactionTimers) window.clearTimeout(timer);
       reactionTimers.clear();
