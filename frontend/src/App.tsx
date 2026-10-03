@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import { AppShell } from './components/AppShell';
+import { AnalyticsPage } from './pages/AnalyticsPage';
 import { BookingsPage } from './pages/BookingsPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { EventsPage } from './pages/EventsPage';
@@ -26,15 +27,7 @@ function ShelledRoutes() {
         <Route path="/bookings" element={<BookingsPage />} />
         <Route path="/events" element={<EventsPage />} />
         <Route path="/memory" element={<MemoryPage />} />
-        <Route
-          path="/analytics"
-          element={
-            <PlaceholderPage
-              title="Analytics"
-              description="A governed event model, attendance intervals, aggregation jobs, and privacy controls will precede engagement dashboards."
-            />
-          }
-        />
+        <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/404" element={<NotFoundPage />} />
         <Route path="*" element={<Navigate to="/404" replace />} />
