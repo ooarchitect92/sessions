@@ -162,6 +162,7 @@ model Organization {
   pollAnswers         PollAnswer[]
   questions           Question[]
   questionVotes       QuestionVote[]
+  attendanceIntervals SessionAttendanceInterval[]
   webhookSubscriptions WebhookSubscription[]
   webhookDeliveries   WebhookDelivery[]
   authSessions        AuthSession[]
@@ -202,6 +203,7 @@ model Workspace {
   pollAnswers         PollAnswer[]
   questions           Question[]
   questionVotes       QuestionVote[]
+  attendanceIntervals SessionAttendanceInterval[]
   webhookSubscriptions WebhookSubscription[]
   webhookDeliveries   WebhookDelivery[]
   authSessions        AuthSession[]
@@ -243,6 +245,7 @@ model User {
   sentInvitations         WorkspaceInvitation[]    @relation("InvitationSender")
   acceptedInvitations     WorkspaceInvitation[]    @relation("InvitationAcceptor")
   recordingConsents       RecordingConsent[]
+  attendanceIntervals     SessionAttendanceInterval[]
   createdWebhookSubscriptions WebhookSubscription[] @relation("WebhookSubscriptionCreator")
 
   @@index([status])
@@ -324,10 +327,33 @@ model Session {
   chatMessages         ChatMessage[]
   polls                Poll[]
   questions            Question[]
+  attendanceIntervals  SessionAttendanceInterval[]
 
   @@index([organizationId, workspaceId, startsAt])
   @@index([workspaceId, status, startsAt])
   @@map("sessions")
+}
+
+model SessionAttendanceInterval {
+  id              String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String       @map("organization_id") @db.Uuid
+  workspaceId     String       @map("workspace_id") @db.Uuid
+  sessionId       String       @map("session_id") @db.Uuid
+  userId          String       @map("user_id") @db.Uuid
+  joinedAt        DateTime     @map("joined_at") @db.Timestamptz(6)
+  leftAt          DateTime?    @map("left_at") @db.Timestamptz(6)
+  lastHeartbeatAt DateTime     @map("last_heartbeat_at") @db.Timestamptz(6)
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace       Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  session         Session      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, workspaceId, sessionId, joinedAt])
+  @@index([sessionId, userId, joinedAt])
+  @@index([workspaceId, joinedAt])
+  @@map("session_attendance_intervals")
 }
 
 model AgendaItem {
