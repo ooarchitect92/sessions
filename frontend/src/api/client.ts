@@ -248,6 +248,11 @@ export interface WorkspaceAnalyticsOverview {
     cancelled: number;
     completed: number;
   };
+  attendance: {
+    participantSessions: number;
+    intervalCount: number;
+    totalSeconds: number;
+  };
   engagement: {
     chatMessages: number;
     pollAnswers: number;
