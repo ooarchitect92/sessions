@@ -23,6 +23,8 @@ export function SessionPage() {
   const { sessionId = '' } = useParams();
   const queryClient = useQueryClient();
   const [media, setMedia] = useState<MediaToken | null>(null);
+  const [mediaRoomKey, setMediaRoomKey] = useState('main');
+  const [mediaRoomLabel, setMediaRoomLabel] = useState('Main room');
   const [preflightOpen, setPreflightOpen] = useState(false);
   const [mediaPreferences, setMediaPreferences] = useState<MediaJoinPreferences>({
     audioEnabled: true,
@@ -109,8 +111,29 @@ export function SessionPage() {
   const join = useMutation({
     mutationFn: () => api.createMediaToken(sessionId),
     onSuccess: (token) => {
+      setMediaRoomKey('main');
+      setMediaRoomLabel('Main room');
       setMedia(token);
       setPreflightOpen(false);
+    },
+  });
+
+  const joinBreakout = useMutation({
+    mutationFn: (breakoutRoomId: string) =>
+      api.createBreakoutMediaToken(sessionId, breakoutRoomId),
+    onSuccess: (token, breakoutRoomId) => {
+      setMediaRoomKey(`breakout:${breakoutRoomId}`);
+      setMediaRoomLabel('Breakout room');
+      setMedia(token);
+    },
+  });
+
+  const returnToMain = useMutation({
+    mutationFn: () => api.createMediaToken(sessionId),
+    onSuccess: (token) => {
+      setMediaRoomKey('main');
+      setMediaRoomLabel('Main room');
+      setMedia(token);
     },
   });
 
@@ -817,7 +840,21 @@ export function SessionPage() {
           </div>
           <div className="media-stage">
           {media ? (
+            <>
+              <div className="media-room-context">
+                <span>{mediaRoomLabel}</span>
+                {mediaRoomKey !== 'main' ? (
+                  <button
+                    type="button"
+                    disabled={returnToMain.isPending}
+                    onClick={() => returnToMain.mutate()}
+                  >
+                    Return to main room
+                  </button>
+                ) : null}
+              </div>
             <LiveKitRoom
+              key={mediaRoomKey}
               token={media.token}
               serverUrl={media.url}
               connect
@@ -843,10 +880,15 @@ export function SessionPage() {
                   : false
               }
               data-lk-theme="default"
-              onDisconnected={() => setMedia(null)}
+              onDisconnected={() =>
+                setMedia((current) =>
+                  current?.token === media.token ? null : current,
+                )
+              }
             >
               <VideoConference />
             </LiveKitRoom>
+            </>
           ) : (
             <div className="stage-placeholder">
               <div className="stage-orbit">
@@ -878,7 +920,11 @@ export function SessionPage() {
           </div>
         </section>
 
-        <SessionCollaborationPanel sessionId={sessionId} />
+        <SessionCollaborationPanel
+          sessionId={sessionId}
+          onJoinBreakout={(breakoutRoomId) => joinBreakout.mutate(breakoutRoomId)}
+          onReturnToMain={() => returnToMain.mutate()}
+        />
       </div>
     </div>
   );
