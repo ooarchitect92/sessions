@@ -200,6 +200,26 @@ export interface AgendaTimerState {
   serverTime: string;
 }
 
+export interface MediaParticipantTrack {
+  sid: string;
+  name: string;
+  muted: boolean;
+  type: number;
+  source: number;
+  kind: 'audio' | 'video';
+}
+
+export interface MediaParticipant {
+  identity: string;
+  name: string;
+  permission: {
+    canPublish: boolean;
+    canSubscribe: boolean;
+    canPublishData: boolean;
+  };
+  tracks: MediaParticipantTrack[];
+}
+
 export interface MediaToken {
   url: string;
   token: string;
@@ -922,6 +942,62 @@ export const api = {
     return request<MediaToken>(`/sessions/${sessionId}/media-token`, {
       method: "POST",
     });
+  },
+
+  listMediaParticipants(sessionId: string): Promise<MediaParticipant[]> {
+    return request<MediaParticipant[]>(`/sessions/${sessionId}/media/participants`);
+  },
+
+  muteMediaTrack(
+    sessionId: string,
+    participantId: string,
+    trackSid: string,
+    muted: boolean,
+  ) {
+    return request(
+      `/sessions/${sessionId}/media/participants/${participantId}/tracks/${trackSid}/mute`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ muted }),
+      },
+    );
+  },
+
+  setMediaPublishPermission(
+    sessionId: string,
+    participantId: string,
+    canPublish: boolean,
+  ): Promise<MediaParticipant> {
+    return request<MediaParticipant>(
+      `/sessions/${sessionId}/media/participants/${participantId}/permissions`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ canPublish }),
+      },
+    );
+  },
+
+  removeMediaParticipant(
+    sessionId: string,
+    participantId: string,
+  ): Promise<{
+    sessionId: string;
+    participantId: string;
+    rejoinBlockedUntil: string;
+  }> {
+    return request(`/sessions/${sessionId}/media/participants/${participantId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  allowMediaRejoin(
+    sessionId: string,
+    participantId: string,
+  ): Promise<{ sessionId: string; participantId: string; rejoinAllowed: true }> {
+    return request(
+      `/sessions/${sessionId}/media/participants/${participantId}/allow-rejoin`,
+      { method: 'POST' },
+    );
   },
 
   createRecordingPlaybackGrant(
