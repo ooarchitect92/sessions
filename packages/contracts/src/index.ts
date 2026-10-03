@@ -32,6 +32,7 @@ export const AgendaItemTypeSchema = z.enum([
   'PRESENTATION',
   'WEBSITE',
   'VIDEO',
+  'FILE',
   'POLL',
   'WHITEBOARD',
   'BREAKOUT',
