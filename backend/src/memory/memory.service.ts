@@ -16,11 +16,16 @@ import { TenantDatabaseService } from '../database/tenant-database.service';
 import { RealtimeEventsService } from '../infrastructure/realtime-events.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { ListMemoryQuery } from './dto/list-memory.query';
+import { UpdateMemorySummaryDto } from './dto/update-memory-summary.dto';
 import { UpdateTranscriptDto } from './dto/update-transcript.dto';
 import {
   normalizeTranscriptCorrection,
   transcriptCorrectionError,
 } from './transcript-correction';
+import {
+  memorySummaryReviewError,
+  normalizeMemorySummaryReview,
+} from './memory-summary-review';
 
 @Injectable()
 export class MemoryService {
@@ -296,6 +301,125 @@ export class MemoryService {
         transcriptVersion: result.version,
       },
     });
+    return result;
+  }
+
+  async listMemorySummaryRevisions(
+    principal: Principal,
+    sessionId: string,
+  ) {
+    return this.database.run(principal, async (transaction) => {
+      const summary = await transaction.memorySummary.findUnique({
+        where: { sessionId },
+        select: { id: true },
+      });
+      if (!summary) throw new NotFoundException('Memory summary not found');
+
+      return transaction.memorySummaryRevision.findMany({
+        where: { memorySummaryId: summary.id },
+        select: {
+          id: true,
+          summaryVersion: true,
+          editedByUserId: true,
+          reviewNote: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+      });
+    });
+  }
+
+  async updateMemorySummary(
+    principal: Principal,
+    sessionId: string,
+    input: UpdateMemorySummaryDto,
+  ) {
+    this.assertHost(principal);
+
+    const normalized = normalizeMemorySummaryReview(input);
+    const reviewError = memorySummaryReviewError(normalized);
+    if (reviewError) throw new BadRequestException(reviewError);
+
+    const result = await this.database.run(principal, async (transaction) => {
+      const summary = await transaction.memorySummary.findUnique({
+        where: { sessionId },
+      });
+      if (!summary) throw new NotFoundException('Memory summary not found');
+      if (summary.status !== ArtifactStatus.READY) {
+        throw new BadRequestException(
+          'Only a ready memory summary can be reviewed',
+        );
+      }
+
+      await transaction.memorySummaryRevision.create({
+        data: {
+          organizationId: principal.organizationId,
+          workspaceId: principal.workspaceId,
+          memorySummaryId: summary.id,
+          editedByUserId: principal.userId,
+          summaryVersion: summary.version,
+          summaryText: summary.summaryText ?? '',
+          decisions: summary.decisions as Prisma.InputJsonValue,
+          actionItems: summary.actionItems as Prisma.InputJsonValue,
+          reviewNote: summary.reviewNote,
+        },
+      });
+
+      const reviewedAt = new Date();
+      const updated = await transaction.memorySummary.update({
+        where: { id: summary.id },
+        data: {
+          summaryText: normalized.summaryText,
+          decisions: normalized.decisions as Prisma.InputJsonValue,
+          actionItems:
+            normalized.actionItems as unknown as Prisma.InputJsonValue,
+          reviewedAt,
+          reviewedByUserId: principal.userId,
+          reviewNote: normalized.reviewNote,
+          version: { increment: 1 },
+        },
+      });
+
+      await this.audit.record(transaction, principal, {
+        action: 'memory.summary.reviewed',
+        resourceType: 'memory_summary',
+        resourceId: summary.id,
+        metadata: {
+          sessionId,
+          previousVersion: summary.version,
+          newVersion: updated.version,
+          decisionCount: normalized.decisions.length,
+          actionItemCount: normalized.actionItems.length,
+          reviewNote: normalized.reviewNote,
+        },
+      });
+      await this.outbox.enqueue(transaction, principal, {
+        aggregateType: 'memory_summary',
+        aggregateId: summary.id,
+        eventType: 'memory.summary.reviewed',
+        payload: {
+          memorySummaryId: summary.id,
+          sessionId,
+          version: updated.version,
+          reviewedByUserId: principal.userId,
+          reviewedAt: reviewedAt.toISOString(),
+        },
+      });
+
+      return updated;
+    });
+
+    this.realtime.publishSessionEvent({
+      sessionId,
+      eventName: 'memory.updated',
+      payload: {
+        sessionId,
+        memorySummaryId: result.id,
+        summaryVersion: result.version,
+      },
+    });
+
     return result;
   }
 
