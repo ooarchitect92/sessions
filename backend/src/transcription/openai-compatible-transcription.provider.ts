@@ -34,9 +34,13 @@ export class OpenAiCompatibleTranscriptionProvider extends TranscriptionProvider
     const model = this.config.getOrThrow<string>('STT_MODEL');
 
     const form = new FormData();
+    const fileBytes = new Uint8Array(source.bytes.byteLength);
+    fileBytes.set(source.bytes);
     form.append(
       'file',
-      new Blob([source.bytes], { type: source.mimeType || 'application/octet-stream' }),
+      new Blob([fileBytes.buffer], {
+        type: source.mimeType || 'application/octet-stream',
+      }),
       source.filename,
     );
     form.append('model', model);
