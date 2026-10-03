@@ -55,6 +55,7 @@ enum AgendaItemType {
   PRESENTATION
   WEBSITE
   VIDEO
+  FILE
   POLL
   WHITEBOARD
   BREAKOUT
