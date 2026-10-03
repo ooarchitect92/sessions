@@ -26,7 +26,8 @@
 - [ ] reactions and private direct-message channels
 - [ ] whiteboard integration, snapshots and operation compaction
 - [ ] breakout assignment, media-room transition and host broadcast
-- [ ] content blocks and sandboxed embed resolver
+- [x] URL-backed agenda content blocks, HTTPS/private-network policy and sandboxed embed rendering
+- [ ] OAuth/native app embeds, co-browsing permissions and remote-control consent
 - [ ] upload quarantine, malware scan and signed downloads
 - [x] recording, transcript and summary artifact state models
 - [x] post-session artifact requests, audit evidence and retry controls
