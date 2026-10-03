@@ -1,4 +1,4 @@
-import { IsString, Length } from '@nestjs/class-validator';
+import { IsString, Length } from 'class-validator';
 
 export class ManageReservationDto {
   @IsString()
