@@ -77,7 +77,7 @@
 - [x] webhook subscriptions, HMAC signatures, delivery retries, replay, SSRF-safe egress and transactional-outbox fanout
 - [ ] provider integration framework, credential governance and SSRF-safe egress
 - [ ] branding, email templates, custom domains and automated TLS
-- [ ] analytics aggregation and governed exports
+- [x] tenant-scoped analytics aggregation, workspace dashboard, session metrics and audited CSV exports
 - [ ] plans, subscriptions, entitlements, seats, quota ledger and reconciliation
 - [ ] SAML/OIDC enterprise SSO, SCIM, audit exports and retention policies
 - [ ] localization, accessibility certification, regional cells and disaster-recovery qualification
