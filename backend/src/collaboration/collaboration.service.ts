@@ -22,6 +22,7 @@ import {
   type Principal,
 } from "../common/auth/principal";
 import { TenantDatabaseService } from "../database/tenant-database.service";
+import { PresenceService } from "../infrastructure/presence.service";
 import { RealtimeEventsService } from "../infrastructure/realtime-events.service";
 import { OutboxService } from "../outbox/outbox.service";
 import { CreateChatMessageDto } from "./dto/create-chat-message.dto";
@@ -61,7 +62,19 @@ export class CollaborationService {
     private readonly audit: AuditService,
     private readonly outbox: OutboxService,
     private readonly realtime: RealtimeEventsService,
+    private readonly presence: PresenceService,
   ) {}
+
+  async listPresence(principal: Principal, sessionId: string) {
+    await this.database.run(principal, async (transaction) => {
+      await this.assertSessionExists(transaction, sessionId);
+    });
+    const participants = await this.presence.list(sessionId);
+    return participants.map((participant) => ({
+      ...participant,
+      isSelf: participant.userId === principal.userId,
+    }));
+  }
 
   async listChat(principal: Principal, sessionId: string) {
     return this.database.run(principal, async (transaction) => {
