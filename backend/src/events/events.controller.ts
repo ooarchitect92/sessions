@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Headers,
   Param,
@@ -13,7 +14,9 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentPrincipal } from '../common/auth/current-principal.decorator';
 import type { Principal } from '../common/auth/principal';
 import { CreateEventDto } from './dto/create-event.dto';
+import { CreateEventSpeakerDto } from './dto/create-event-speaker.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
+import { UpdateEventSpeakerDto } from './dto/update-event-speaker.dto';
 import { UpdateRegistrationStatusDto } from './dto/update-registration-status.dto';
 import { EventsService } from './events.service';
 
@@ -83,6 +86,42 @@ export class EventsController {
     @Headers('if-match') ifMatch: string | undefined,
   ) {
     return this.events.cancel(principal, id, parseVersion(ifMatch));
+  }
+
+  @Get(':id/speakers')
+  speakers(
+    @CurrentPrincipal() principal: Principal,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) eventId: string,
+  ) {
+    return this.events.listSpeakers(principal, eventId);
+  }
+
+  @Post(':id/speakers')
+  createSpeaker(
+    @CurrentPrincipal() principal: Principal,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) eventId: string,
+    @Body() body: CreateEventSpeakerDto,
+  ) {
+    return this.events.createSpeaker(principal, eventId, body);
+  }
+
+  @Patch(':eventId/speakers/:speakerId')
+  updateSpeaker(
+    @CurrentPrincipal() principal: Principal,
+    @Param('eventId', new ParseUUIDPipe({ version: '4' })) eventId: string,
+    @Param('speakerId', new ParseUUIDPipe({ version: '4' })) speakerId: string,
+    @Body() body: UpdateEventSpeakerDto,
+  ) {
+    return this.events.updateSpeaker(principal, eventId, speakerId, body);
+  }
+
+  @Delete(':eventId/speakers/:speakerId')
+  deleteSpeaker(
+    @CurrentPrincipal() principal: Principal,
+    @Param('eventId', new ParseUUIDPipe({ version: '4' })) eventId: string,
+    @Param('speakerId', new ParseUUIDPipe({ version: '4' })) speakerId: string,
+  ) {
+    return this.events.deleteSpeaker(principal, eventId, speakerId);
   }
 
   @Get(':id/registrations')
