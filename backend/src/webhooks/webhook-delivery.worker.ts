@@ -31,6 +31,7 @@ export class WebhookDeliveryWorker {
     if (this.running) return;
     this.running = true;
     try {
+      await this.recoverStaleClaims();
       const deliveries = await this.claimBatch();
       for (const delivery of deliveries) {
         await this.deliver(delivery);
@@ -43,6 +44,21 @@ export class WebhookDeliveryWorker {
     } finally {
       this.running = false;
     }
+  }
+
+  private async recoverStaleClaims(): Promise<void> {
+    const staleBefore = new Date(Date.now() - 10 * 60 * 1000);
+    await this.prisma.webhookDelivery.updateMany({
+      where: {
+        status: WebhookDeliveryStatus.DELIVERING,
+        updatedAt: { lt: staleBefore },
+      },
+      data: {
+        status: WebhookDeliveryStatus.RETRYING,
+        nextAttemptAt: new Date(),
+        lastError: 'worker_claim_recovered',
+      },
+    });
   }
 
   private async claimBatch(): Promise<ClaimedDelivery[]> {
