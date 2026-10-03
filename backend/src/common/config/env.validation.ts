@@ -76,8 +76,6 @@ const environmentSchema = z
     WEBHOOK_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(8),
     WEBHOOK_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(10000),
     OUTBOX_POLL_MS: z.coerce.number().int().min(250).max(60000).default(1000),
-    WEBHOOK_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(8),
-    WEBHOOK_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(10000),
   })
   .superRefine((value, context) => {
     if (value.TRANSCRIPTION_WORKER_ENABLED && !value.STT_API_KEY) {
