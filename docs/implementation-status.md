@@ -25,7 +25,7 @@ Status meanings:
 | Webinars and event registration   | Foundation  | event CRUD, publish-to-webinar transition, public event page, registration, capacity/waitlist and registration administration; speaker builder, reminders, roles and attendance analytics remain |
 | Memory library and search         | Foundation  | artifact graph, workspace list, title/transcript database search, detail page, chat/poll/Q&A context, authorized recording playback/download, retention visibility and failed-job retry; indexed semantic search, shares and export packages remain |
 | Public event and booking journeys | Foundation  | original public web UI backed by unauthenticated, narrowly scoped API routes; custom domains, dynamic form renderer, reminder delivery and abuse controls remain |
-| Webhooks and integrations         | Foundation  | transactional outbox, Redis stream relay, bounded retries and dead-letter state; endpoint management, signatures, replay and OAuth connectors remain |
+| Webhooks and integrations         | Foundation  | transactional outbox, Redis stream relay, tenant-scoped webhook subscription management, encrypted signing secrets, HMAC-SHA256 delivery, SSRF-safe egress validation, bounded retries, delivery logs and replay are wired end-to-end; API keys and OAuth connectors remain |
 | Analytics                         | Planned     | attendance event model, privacy review, aggregation jobs, dashboards and governed exports |
 | Branding, custom domains and i18n | Planned     | domain verification, TLS, theme tokens, email rendering and localization pipeline |
 | Billing and quotas                | Planned     | plan catalog, usage ledger, reservations, verified provider webhooks and reconciliation |
