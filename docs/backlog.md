@@ -56,7 +56,8 @@
 - [x] reviewed summary, decision, action-item and citation model
 - [x] recording-backed STT provider abstraction, worker, segment persistence and durable ready event
 - [ ] streaming captions, diarization qualification and recordless transcription path
-- [ ] transcript correction, revision history and language policy
+- [x] host transcript correction with immutable revision snapshots, audit/outbox events and review UI
+- [ ] transcript language policy and revision restore/diff workflow
 - [x] object-storage access, signed playback and secure download paths
 - [ ] PostgreSQL full-text index and optional vector retrieval with workspace filters
 - [x] provider-abstracted AI summary execution worker with decisions, actions and transcript citations
