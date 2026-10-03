@@ -70,7 +70,7 @@
 
 ## Phase 5 — platform and enterprise
 
-- [ ] API keys and scoped bearer authentication
+- [x] tenant-scoped API keys with one-time secret reveal, hashed storage, expiry/revocation, read/write scopes, RBAC inheritance and settings UI
 - [x] webhook subscriptions, HMAC signatures, delivery retries, replay, SSRF-safe egress and transactional-outbox fanout
 - [ ] provider integration framework, credential governance and SSRF-safe egress
 - [ ] branding, email templates, custom domains and automated TLS
