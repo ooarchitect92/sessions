@@ -2,13 +2,13 @@ export interface MemoryCitation {
   segmentPosition: number;
   startMs: number;
   endMs: number;
-  reason?: string | null;
+  reason: string | null;
 }
 
 export interface MemoryActionItem {
   title: string;
-  owner?: string | null;
-  dueDate?: string | null;
+  owner: string | null;
+  dueDate: string | null;
 }
 
 export interface MemoryGenerationInput {
