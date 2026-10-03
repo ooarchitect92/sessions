@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Interval } from '@nestjs/schedule';
-import { ArtifactStatus } from '@prisma/client';
+import { ArtifactStatus, Prisma } from '@prisma/client';
 import { WorkerPrismaService } from '../database/worker-prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { OpenAiCompatibleMemoryProvider } from './openai-compatible-memory.provider';
@@ -114,9 +114,9 @@ export class AiMemoryWorker {
               provider: result.provider,
               model: result.model,
               summaryText: result.summaryText,
-              decisions: result.decisions,
-              actionItems: result.actionItems,
-              citations: result.citations,
+              decisions: result.decisions as Prisma.InputJsonValue,
+              actionItems: result.actionItems as unknown as Prisma.InputJsonValue,
+              citations: result.citations as unknown as Prisma.InputJsonValue,
               completedAt: new Date(),
               failureCode: null,
               version: { increment: 1 },
