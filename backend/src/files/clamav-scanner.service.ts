@@ -8,6 +8,22 @@ export interface MalwareScanResult {
   raw: string;
 }
 
+export function parseClamAvResponse(response: string): MalwareScanResult {
+  const raw = response.trim();
+  const found = raw.match(/stream:\s+(.+)\s+FOUND$/i);
+  if (/stream:\s+OK$/i.test(raw)) {
+    return { clean: true, signature: null, raw };
+  }
+  if (found) {
+    return {
+      clean: false,
+      signature: found[1]?.trim() || 'malware-detected',
+      raw,
+    };
+  }
+  throw new Error(`Unexpected ClamAV response: ${raw || 'empty'}`);
+}
+
 @Injectable()
 export class ClamAvScannerService {
   constructor(private readonly config: ConfigService) {}
@@ -39,25 +55,18 @@ export class ClamAvScannerService {
       });
       socket.on('close', () => {
         if (settled) return;
-        const raw = response.trim();
-        const found = raw.match(/stream:\s+(.+)\s+FOUND$/i);
-        if (/stream:\s+OK$/i.test(raw)) {
-          finish(() => resolve({ clean: true, signature: null, raw }));
-          return;
-        }
-        if (found) {
+        try {
+          const parsed = parseClamAvResponse(response);
+          finish(() => resolve(parsed));
+        } catch (error: unknown) {
           finish(() =>
-            resolve({
-              clean: false,
-              signature: found[1]?.trim() || 'malware-detected',
-              raw,
-            }),
+            reject(
+              error instanceof Error
+                ? error
+                : new Error('Unexpected ClamAV response'),
+            ),
           );
-          return;
         }
-        finish(() =>
-          reject(new Error(`Unexpected ClamAV response: ${raw || 'empty'}`)),
-        );
       });
 
       socket.connect(port, host, () => {
