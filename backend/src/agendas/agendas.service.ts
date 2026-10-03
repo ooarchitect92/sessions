@@ -14,6 +14,7 @@ import {
 import { TenantDatabaseService } from '../database/tenant-database.service';
 import { RealtimeEventsService } from '../infrastructure/realtime-events.service';
 import { OutboxService } from '../outbox/outbox.service';
+import { AgendaContentPolicyService } from './agenda-content-policy.service';
 import { CreateAgendaItemDto } from './dto/create-agenda-item.dto';
 import { ReorderAgendaDto } from './dto/reorder-agenda.dto';
 
@@ -34,6 +35,7 @@ export class AgendasService {
     private readonly audit: AuditService,
     private readonly outbox: OutboxService,
     private readonly realtimeEvents: RealtimeEventsService,
+    private readonly contentPolicy: AgendaContentPolicyService,
   ) {}
 
   async list(principal: Principal, sessionId: string): Promise<AgendaItem[]> {
@@ -61,6 +63,8 @@ export class AgendasService {
         select: { position: true },
       });
 
+      const normalizedContent = this.contentPolicy.normalize(input.type, input.content);
+
       const item = await transaction.agendaItem.create({
         data: {
           organizationId: principal.organizationId,
@@ -70,7 +74,7 @@ export class AgendasService {
           title: input.title.trim(),
           durationSeconds: input.durationSeconds,
           type: input.type,
-          content: input.content as Prisma.InputJsonValue,
+          content: normalizedContent,
         },
       });
 
