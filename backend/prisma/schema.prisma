@@ -62,6 +62,12 @@ enum AgendaItemType {
   SCREEN_SHARE
 }
 
+enum BreakoutRoomStatus {
+  DRAFT
+  ACTIVE
+  CLOSED
+}
+
 enum EventStatus {
   DRAFT
   PUBLISHED
@@ -171,6 +177,8 @@ model Organization {
   questions           Question[]
   questionVotes       QuestionVote[]
   attendanceIntervals SessionAttendanceInterval[]
+  breakoutRooms        BreakoutRoom[]
+  breakoutAssignments  BreakoutAssignment[]
   webhookSubscriptions WebhookSubscription[]
   webhookDeliveries   WebhookDelivery[]
   authSessions        AuthSession[]
@@ -213,6 +221,8 @@ model Workspace {
   questions           Question[]
   questionVotes       QuestionVote[]
   attendanceIntervals SessionAttendanceInterval[]
+  breakoutRooms        BreakoutRoom[]
+  breakoutAssignments  BreakoutAssignment[]
   webhookSubscriptions WebhookSubscription[]
   webhookDeliveries   WebhookDelivery[]
   authSessions        AuthSession[]
@@ -256,6 +266,7 @@ model User {
   acceptedInvitations     WorkspaceInvitation[]    @relation("InvitationAcceptor")
   recordingConsents       RecordingConsent[]
   attendanceIntervals     SessionAttendanceInterval[]
+  breakoutAssignments     BreakoutAssignment[]
   createdWebhookSubscriptions WebhookSubscription[] @relation("WebhookSubscriptionCreator")
 
   @@index([status])
@@ -338,10 +349,58 @@ model Session {
   polls                Poll[]
   questions            Question[]
   attendanceIntervals  SessionAttendanceInterval[]
+  breakoutRooms         BreakoutRoom[]
+  breakoutAssignments   BreakoutAssignment[]
 
   @@index([organizationId, workspaceId, startsAt])
   @@index([workspaceId, status, startsAt])
   @@map("sessions")
+}
+
+model BreakoutRoom {
+  id              String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String             @map("organization_id") @db.Uuid
+  workspaceId     String             @map("workspace_id") @db.Uuid
+  sessionId       String             @map("session_id") @db.Uuid
+  name            String             @db.VarChar(160)
+  position        Int
+  status          BreakoutRoomStatus @default(DRAFT)
+  livekitRoomName String             @unique @map("livekit_room_name") @db.VarChar(220)
+  openedAt        DateTime?          @map("opened_at") @db.Timestamptz(6)
+  closedAt        DateTime?          @map("closed_at") @db.Timestamptz(6)
+  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization    Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace       Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  session         Session            @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  assignments     BreakoutAssignment[]
+
+  @@unique([sessionId, position])
+  @@unique([sessionId, name])
+  @@index([organizationId, workspaceId, sessionId, status])
+  @@map("breakout_rooms")
+}
+
+model BreakoutAssignment {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  workspaceId    String       @map("workspace_id") @db.Uuid
+  sessionId      String       @map("session_id") @db.Uuid
+  breakoutRoomId String       @map("breakout_room_id") @db.Uuid
+  userId         String       @map("user_id") @db.Uuid
+  assignedAt     DateTime     @default(now()) @map("assigned_at") @db.Timestamptz(6)
+  joinedAt       DateTime?    @map("joined_at") @db.Timestamptz(6)
+  leftAt         DateTime?    @map("left_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  session        Session      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  breakoutRoom   BreakoutRoom @relation(fields: [breakoutRoomId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, userId])
+  @@index([organizationId, workspaceId, sessionId])
+  @@index([breakoutRoomId, assignedAt])
+  @@map("breakout_assignments")
 }
 
 model SessionAttendanceInterval {
