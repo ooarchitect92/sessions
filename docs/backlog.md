@@ -10,6 +10,7 @@
 - [x] interactive agenda create, reorder and activate API
 - [x] agenda editor and realtime activation
 - [x] reusable workspace agenda templates with save/apply/delete workflows and tenant-safe RLS
+- [x] persistent host-controlled agenda timers with realtime synchronization, audit/outbox events and reconnect-safe state
 - [x] LiveKit token issuance and browser meeting stage
 - [x] audit events, idempotency records and transactional outbox
 - [x] local email/password identity, email verification tokens and password recovery
