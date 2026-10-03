@@ -425,7 +425,6 @@ model BookingReservation {
   bookingPage         BookingPage   @relation(fields: [bookingPageId], references: [id], onDelete: Cascade)
   session             Session?      @relation(fields: [sessionId], references: [id], onDelete: SetNull)
 
-  @@unique([bookingPageId, startsAt])
   @@index([organizationId, workspaceId, startsAt])
   @@index([bookingPageId, status, startsAt])
   @@map("booking_reservations")
