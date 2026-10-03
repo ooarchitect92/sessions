@@ -25,8 +25,14 @@ import { TenantDatabaseService } from "../database/tenant-database.service";
 import { WorkerPrismaService } from "../database/worker-prisma.service";
 import { OutboxService } from "../outbox/outbox.service";
 import { CreateEventDto } from "./dto/create-event.dto";
+import type { EventRegistrationFieldDto } from "./dto/event-registration-field.dto";
 import { RegisterEventDto } from "./dto/register-event.dto";
 import { UpdateEventDto } from "./dto/update-event.dto";
+import {
+  normalizeRegistrationAnswers,
+  normalizeRegistrationFields,
+  type NormalizedEventRegistrationField,
+} from "./event-registration-form";
 
 const PUBLIC_EVENT_STATUSES: EventStatus[] = [
   EventStatus.PUBLISHED,
@@ -54,8 +60,14 @@ export class EventsService {
   ): Promise<Event | Prisma.JsonObject> {
     this.assertHost(principal);
     this.assertTimeZone(input.timezone);
+    const registrationFields = normalizeRegistrationFields(input.registrationFields);
     const requestHash = createHash("sha256")
-      .update(JSON.stringify({ operation: "event.create", input }))
+      .update(
+        JSON.stringify({
+          operation: "event.create",
+          input: { ...input, registrationFields },
+        }),
+      )
       .digest("hex");
 
     return this.database.run(principal, async (transaction) => {
@@ -102,7 +114,8 @@ export class EventsService {
           durationMinutes: input.durationMinutes,
           timezone: input.timezone,
           capacity: input.capacity ?? null,
-          registrationFields: input.registrationFields as Prisma.InputJsonValue,
+          registrationFields:
+            registrationFields as unknown as Prisma.InputJsonValue,
           branding: input.branding as Prisma.InputJsonValue,
         },
       });
@@ -170,6 +183,10 @@ export class EventsService {
       );
     }
     if (input.timezone !== undefined) this.assertTimeZone(input.timezone);
+    const registrationFields =
+      input.registrationFields !== undefined
+        ? normalizeRegistrationFields(input.registrationFields)
+        : undefined;
 
     return this.database.run(principal, async (transaction) => {
       if (input.slug !== undefined) {
@@ -202,10 +219,10 @@ export class EventsService {
             : {}),
           ...(input.timezone !== undefined ? { timezone: input.timezone } : {}),
           ...(input.capacity !== undefined ? { capacity: input.capacity } : {}),
-          ...(input.registrationFields !== undefined
+          ...(registrationFields !== undefined
             ? {
                 registrationFields:
-                  input.registrationFields as Prisma.InputJsonValue,
+                  registrationFields as unknown as Prisma.InputJsonValue,
               }
             : {}),
           ...(input.branding !== undefined
@@ -460,6 +477,11 @@ export class EventsService {
         event.capacity !== null && confirmedCount >= event.capacity
           ? RegistrationStatus.WAITLISTED
           : RegistrationStatus.REGISTERED;
+      const registrationFields = this.registrationFields(event.registrationFields);
+      const answers = normalizeRegistrationAnswers(
+        registrationFields,
+        input.answers,
+      );
       const registration = await transaction.eventRegistration.create({
         data: {
           organizationId: event.organizationId,
@@ -467,7 +489,7 @@ export class EventsService {
           eventId: event.id,
           name: input.name.trim(),
           email: input.email.toLowerCase(),
-          answers: input.answers as Prisma.InputJsonValue,
+          answers: answers as Prisma.InputJsonValue,
           status,
         },
       });
@@ -486,6 +508,15 @@ export class EventsService {
       );
       return registration;
     });
+  }
+
+  private registrationFields(
+    value: Prisma.JsonValue,
+  ): NormalizedEventRegistrationField[] {
+    if (!Array.isArray(value)) return [];
+    return normalizeRegistrationFields(
+      value as unknown as EventRegistrationFieldDto[],
+    );
   }
 
   private async findPublicEvent(
