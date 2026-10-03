@@ -17,6 +17,18 @@ const environmentSchema = z
     DATABASE_URL: z.string().min(1),
     WORKER_DATABASE_URL: z.string().min(1).optional(),
     REDIS_URL: z.string().min(1),
+    RATE_LIMIT_ENABLED: optionalBoolean.default(true),
+    RATE_LIMIT_FAIL_OPEN: optionalBoolean.default(true),
+    RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().min(1).max(3600).default(60),
+    RATE_LIMIT_PUBLIC_MAX: z.coerce.number().int().min(1).max(100000).default(120),
+    RATE_LIMIT_AUTH_WRITE_MAX: z.coerce.number().int().min(1).max(100000).default(20),
+    RATE_LIMIT_AUTHENTICATED_MAX: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(100000)
+      .default(240),
+    RATE_LIMIT_API_KEY_MAX: z.coerce.number().int().min(1).max(100000).default(600),
     AUTH_MODE: z.enum(['development', 'local', 'oidc']).default('development'),
     AUTH_REQUIRE_EMAIL_VERIFICATION: optionalBoolean.default(false),
     ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().min(300).max(3600).default(900),
