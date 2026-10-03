@@ -1,4 +1,4 @@
-import { IsISO8601, IsString, Length } from '@nestjs/class-validator';
+import { IsISO8601, IsString, Length } from 'class-validator';
 
 export class RescheduleReservationDto {
   @IsString()
