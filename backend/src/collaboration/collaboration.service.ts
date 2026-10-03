@@ -163,7 +163,10 @@ export class CollaborationService {
           workspaceId: principal.workspaceId,
           sessionId,
           authorUserId: principal.userId,
-          recipientUserId: privateMessage ? input.recipientUserId : null,
+          recipientUserId:
+            privateMessage && input.recipientUserId
+              ? input.recipientUserId
+              : null,
           channel: input.channel,
           body: input.body.trim(),
         },
