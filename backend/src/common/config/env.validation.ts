@@ -51,9 +51,28 @@ const environmentSchema = z
     S3_ACCESS_KEY: z.string().min(1),
     S3_SECRET_KEY: z.string().min(1),
     S3_FORCE_PATH_STYLE: optionalBoolean.default(true),
+    TRANSCRIPTION_WORKER_ENABLED: optionalBoolean.default(false),
+    TRANSCRIPTION_MAX_SOURCE_BYTES: z.coerce
+      .number()
+      .int()
+      .min(1_000_000)
+      .max(2_000_000_000)
+      .default(250_000_000),
+    STT_PROVIDER: z.enum(['openai-compatible']).default('openai-compatible'),
+    STT_BASE_URL: z.string().url().default('https://api.openai.com/v1'),
+    STT_MODEL: z.string().min(1).max(160).default('whisper-1'),
+    STT_API_KEY: z.string().min(1).optional(),
     OUTBOX_POLL_MS: z.coerce.number().int().min(250).max(60000).default(1000),
   })
   .superRefine((value, context) => {
+    if (value.TRANSCRIPTION_WORKER_ENABLED && !value.STT_API_KEY) {
+      context.addIssue({
+        code: 'custom',
+        path: ['STT_API_KEY'],
+        message: 'STT_API_KEY is required when TRANSCRIPTION_WORKER_ENABLED=true',
+      });
+    }
+
     if (value.NODE_ENV !== 'production') return;
 
     const productionIssue = (path: keyof typeof value, message: string) => {
@@ -124,6 +143,15 @@ const environmentSchema = z
       productionIssue(
         'S3_PUBLIC_ENDPOINT',
         'S3_PUBLIC_ENDPOINT must use HTTPS in production',
+      );
+    }
+    if (
+      value.TRANSCRIPTION_WORKER_ENABLED &&
+      !value.STT_BASE_URL.startsWith('https://')
+    ) {
+      productionIssue(
+        'STT_BASE_URL',
+        'STT_BASE_URL must use HTTPS in production when transcription is enabled',
       );
     }
   });
