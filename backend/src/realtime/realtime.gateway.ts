@@ -19,7 +19,10 @@ import { z } from "zod";
 import { AgendasService } from "../agendas/agendas.service";
 import { AuthService } from "../auth/auth.service";
 import type { AccessTokenClaims, Principal } from "../common/auth/principal";
-import { PresenceService, type PresenceParticipant } from "../infrastructure/presence.service";
+import {
+  PresenceService,
+  type PresenceParticipant,
+} from "../infrastructure/presence.service";
 import { RealtimeEventsService } from "../infrastructure/realtime-events.service";
 import { RedisService } from "../infrastructure/redis.service";
 import { SessionsService } from "../sessions/sessions.service";
@@ -128,7 +131,8 @@ export class RealtimeGateway
         audience: this.config.getOrThrow<string>("JWT_AUDIENCE"),
       });
       const parsed = principalSchema.parse(claims) as AccessTokenClaims;
-      client.data.principal = await this.auth.resolvePrincipalFromClaims(parsed);
+      client.data.principal =
+        await this.auth.resolvePrincipalFromClaims(parsed);
       client.data.sessionIds = new Set<string>();
       await client.join(this.userRoomName(client.data.principal.userId));
     } catch {
@@ -152,7 +156,10 @@ export class RealtimeGateway
         );
         this.server
           .to(this.roomName(sessionId))
-          .emit("presence.updated", { sessionId, participants: result.participants });
+          .emit("presence.updated", {
+            sessionId,
+            participants: result.participants,
+          });
 
         if (result.departed) {
           this.server.to(this.roomName(sessionId)).emit("participant.left", {
@@ -187,7 +194,10 @@ export class RealtimeGateway
     const presence = await this.presence.join(sessionId, principal, client.id);
     this.server
       .to(this.roomName(sessionId))
-      .emit("presence.updated", { sessionId, participants: presence.participants });
+      .emit("presence.updated", {
+        sessionId,
+        participants: presence.participants,
+      });
 
     if (presence.firstConnection) {
       client.to(this.roomName(sessionId)).emit("participant.joined", {
