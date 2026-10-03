@@ -43,6 +43,13 @@ enum SessionStatus {
   FAILED
 }
 
+enum AgendaTimerStatus {
+  IDLE
+  RUNNING
+  PAUSED
+  EXPIRED
+}
+
 enum AgendaItemType {
   TEXT
   PRESENTATION
@@ -294,8 +301,12 @@ model Session {
   timezone             String               @db.VarChar(100)
   recordingEnabled     Boolean              @default(false) @map("recording_enabled")
   transcriptionEnabled Boolean              @default(false) @map("transcription_enabled")
-  currentAgendaItemId  String?              @map("current_agenda_item_id") @db.Uuid
-  livekitRoomName      String               @unique @map("livekit_room_name") @db.VarChar(200)
+  currentAgendaItemId          String?           @map("current_agenda_item_id") @db.Uuid
+  agendaTimerStatus            AgendaTimerStatus @default(IDLE) @map("agenda_timer_status")
+  agendaTimerRemainingSeconds  Int               @default(0) @map("agenda_timer_remaining_seconds")
+  agendaTimerEndsAt            DateTime?         @map("agenda_timer_ends_at") @db.Timestamptz(6)
+  agendaTimerStartedAt         DateTime?         @map("agenda_timer_started_at") @db.Timestamptz(6)
+  livekitRoomName              String            @unique @map("livekit_room_name") @db.VarChar(200)
   version              Int                  @default(1)
   createdAt            DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt            DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
