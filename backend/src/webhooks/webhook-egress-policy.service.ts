@@ -98,8 +98,9 @@ export class WebhookEgressPolicyService {
   private isPrivateIpv6(address: string): boolean {
     const normalized = address.toLowerCase();
     if (normalized.startsWith('::ffff:')) {
-      const mapped = normalized.slice('::ffff:'.length);
-      if (isIP(mapped) === 4) return this.isPrivateIpv4(mapped);
+      // IPv4-mapped IPv6 literals are rejected outright. Allowing them would
+      // create alternate spellings that can bypass IPv4 SSRF deny rules.
+      return true;
     }
     return (
       normalized === '::' ||
