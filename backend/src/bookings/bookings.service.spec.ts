@@ -2,7 +2,11 @@ import { BadRequestException } from '@nestjs/common';
 import type { BookingPage } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
 import { BookingsService } from './bookings.service';
-import type { AvailabilityRuleDto } from './dto/create-booking-page.dto';
+import {
+  IntakeFieldType,
+  type AvailabilityRuleDto,
+  type IntakeFieldDto,
+} from './dto/create-booking-page.dto';
 
 interface Slot {
   startsAt: string;
@@ -18,6 +22,11 @@ interface AvailabilityHarness {
   ): Slot[];
   validateDateRange(dateFrom: string, dateTo: string): unknown;
   assertAvailabilityRules(rules: AvailabilityRuleDto[]): void;
+  assertIntakeFields(fields: IntakeFieldDto[]): void;
+  validateIntakeAnswers(
+    page: BookingPage,
+    answers: Record<string, unknown>,
+  ): Record<string, unknown>;
   hashManagementToken(token: string): string;
   buildCalendarFile(input: {
     id: string;
@@ -116,6 +125,77 @@ describe('booking availability', () => {
     expect(() => service.validateDateRange('2030-01-01', '2030-02-02')).toThrow(
       BadRequestException,
     );
+  });
+
+  it('validates dynamic intake field definitions and submitted answers', () => {
+    const service = createService();
+    const intakeFields: IntakeFieldDto[] = [
+      {
+        key: 'company',
+        label: 'Company',
+        type: IntakeFieldType.TEXT,
+        required: true,
+      },
+      {
+        key: 'team_size',
+        label: 'Team size',
+        type: IntakeFieldType.SELECT,
+        required: true,
+        options: ['1-10', '11-50'],
+      },
+      {
+        key: 'consent',
+        label: 'I agree to be contacted',
+        type: IntakeFieldType.CONSENT,
+        required: true,
+      },
+    ];
+    service.assertIntakeFields(intakeFields);
+
+    expect(
+      service.validateIntakeAnswers(
+        page({ intakeFields }),
+        {
+          company: '  Acme  ',
+          team_size: '11-50',
+          consent: true,
+        },
+      ),
+    ).toEqual({
+      company: 'Acme',
+      team_size: '11-50',
+      consent: true,
+    });
+
+    expect(() =>
+      service.validateIntakeAnswers(page({ intakeFields }), {
+        company: 'Acme',
+        team_size: 'invalid',
+        consent: true,
+      }),
+    ).toThrow(BadRequestException);
+    expect(() =>
+      service.validateIntakeAnswers(page({ intakeFields }), {
+        company: 'Acme',
+        team_size: '1-10',
+        consent: false,
+      }),
+    ).toThrow(BadRequestException);
+  });
+
+  it('rejects malformed intake field definitions', () => {
+    const service = createService();
+    expect(() =>
+      service.assertIntakeFields([
+        {
+          key: 'size',
+          label: 'Size',
+          type: IntakeFieldType.SELECT,
+          required: false,
+          options: [],
+        },
+      ]),
+    ).toThrow(BadRequestException);
   });
 
   it('hashes management tokens without exposing the raw credential', () => {
