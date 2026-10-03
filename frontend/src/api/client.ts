@@ -257,6 +257,28 @@ export interface BreakoutState {
   }) | null;
 }
 
+export interface WhiteboardElementRecord {
+  id: string;
+  type: 'PEN' | 'RECT' | 'TEXT' | 'STICKY';
+  x: number;
+  y: number;
+  width?: number;
+  height?: number;
+  text?: string;
+  points?: Array<{ x: number; y: number }>;
+}
+
+export interface WhiteboardState {
+  sessionId: string;
+  whiteboardId: string;
+  snapshotVersion: number;
+  compactedThrough: number;
+  latestSequence: number;
+  snapshot: {
+    elements: WhiteboardElementRecord[];
+  };
+}
+
 export interface MediaToken {
   url: string;
   token: string;
@@ -996,6 +1018,31 @@ export const api = {
   createMediaToken(sessionId: string): Promise<MediaToken> {
     return request<MediaToken>(`/sessions/${sessionId}/media-token`, {
       method: "POST",
+    });
+  },
+
+  getWhiteboardState(sessionId: string): Promise<WhiteboardState> {
+    return request<WhiteboardState>(`/sessions/${sessionId}/whiteboard`);
+  },
+
+  applyWhiteboardOperation(
+    sessionId: string,
+    input: {
+      operationId: string;
+      type: 'UPSERT_ELEMENT' | 'DELETE_ELEMENT' | 'CLEAR';
+      payload: Record<string, unknown>;
+    },
+  ): Promise<{
+    sessionId: string;
+    whiteboardId: string;
+    operationId: string;
+    sequence: number;
+    compacted: boolean;
+    duplicate: boolean;
+  }> {
+    return request(`/sessions/${sessionId}/whiteboard/operations`, {
+      method: 'POST',
+      body: JSON.stringify(input),
     });
   },
 
