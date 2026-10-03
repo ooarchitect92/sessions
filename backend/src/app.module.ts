@@ -9,6 +9,7 @@ import { BookingsModule } from "./bookings/bookings.module";
 import { CollaborationModule } from "./collaboration/collaboration.module";
 import { PrincipalGuard } from "./common/auth/principal.guard";
 import { validateEnvironment } from "./common/config/env.validation";
+import { RateLimitGuard } from "./common/security/rate-limit.guard";
 import { ApiEnvelopeInterceptor } from "./common/http/api-envelope.interceptor";
 import { ApiExceptionFilter } from "./common/http/api-exception.filter";
 import { PrismaModule } from "./database/prisma.module";
@@ -56,6 +57,7 @@ import { WorkspacesModule } from "./workspaces/workspaces.module";
   ],
   providers: [
     { provide: APP_GUARD, useClass: PrincipalGuard },
+    { provide: APP_GUARD, useClass: RateLimitGuard },
     { provide: APP_FILTER, useClass: ApiExceptionFilter },
     { provide: APP_INTERCEPTOR, useClass: ApiEnvelopeInterceptor },
   ],
