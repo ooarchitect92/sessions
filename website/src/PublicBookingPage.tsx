@@ -22,8 +22,18 @@ interface Reservation {
   id: string;
   startsAt: string;
   endsAt: string;
-  status: 'CONFIRMED';
-  session: { id: string; title: string } | null;
+  status: 'CONFIRMED' | 'CANCELLED';
+  cancelledAt: string | null;
+  rescheduleCount: number;
+  version: number;
+  managementToken: string;
+  session: { id: string; title: string; status: string } | null;
+}
+
+interface CalendarFile {
+  filename: string;
+  contentType: string;
+  content: string;
 }
 
 function calendarDate(value: Date): string {
@@ -55,13 +65,19 @@ export function PublicBookingPage({
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [reservation, setReservation] = useState<Reservation | null>(null);
+  const [managingReservation, setManagingReservation] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  const basePath = useMemo(
+    () =>
+      `/public/${encodeURIComponent(organizationSlug)}/${encodeURIComponent(
+        workspaceSlug,
+      )}/bookings/${encodeURIComponent(bookingSlug)}`,
+    [bookingSlug, organizationSlug, workspaceSlug],
+  );
 
   useEffect(() => {
     let cancelled = false;
-    const basePath = `/public/${encodeURIComponent(organizationSlug)}/${encodeURIComponent(
-      workspaceSlug,
-    )}/bookings/${encodeURIComponent(bookingSlug)}`;
     Promise.all([
       publicApi<PublicBookingPage>(basePath),
       publicApi<Slot[]>(
@@ -87,7 +103,16 @@ export function PublicBookingPage({
     return () => {
       cancelled = true;
     };
-  }, [bookingSlug, dateRange, organizationSlug, workspaceSlug]);
+  }, [basePath, dateRange]);
+
+  const reloadSlots = async () => {
+    const nextSlots = await publicApi<Slot[]>(
+      `${basePath}/slots?dateFrom=${encodeURIComponent(
+        dateRange.dateFrom,
+      )}&dateTo=${encodeURIComponent(dateRange.dateTo)}`,
+    );
+    setSlots(nextSlots);
+  };
 
   const submit = async (formEvent: FormEvent) => {
     formEvent.preventDefault();
@@ -95,11 +120,27 @@ export function PublicBookingPage({
     setSubmitting(true);
     setError(null);
     try {
-      const result = await publicApi<Reservation>(
-        `/public/${encodeURIComponent(organizationSlug)}/${encodeURIComponent(
-          workspaceSlug,
-        )}/bookings/${encodeURIComponent(bookingSlug)}/reservations`,
-        {
+      if (reservation && managingReservation) {
+        const result = await publicApi<Omit<Reservation, 'managementToken'>>(
+          `${basePath}/reservations/${encodeURIComponent(reservation.id)}/reschedule`,
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              managementToken: reservation.managementToken,
+              startsAt: selected.startsAt,
+              timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            }),
+          },
+        );
+        setReservation({
+          ...result,
+          managementToken: reservation.managementToken,
+        });
+        setManagingReservation(false);
+        setSelected(null);
+        await reloadSlots();
+      } else {
+        const result = await publicApi<Reservation>(`${basePath}/reservations`, {
           method: 'POST',
           body: JSON.stringify({
             name,
@@ -108,13 +149,64 @@ export function PublicBookingPage({
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
             answers: {},
           }),
-        },
-      );
-      setReservation(result);
+        });
+        setReservation(result);
+        setSelected(null);
+        await reloadSlots();
+      }
     } catch (caught: unknown) {
       setError(caught instanceof Error ? caught.message : 'The time could not be reserved');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const cancelReservation = async () => {
+    if (!reservation || reservation.status === 'CANCELLED') return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const result = await publicApi<Omit<Reservation, 'managementToken'>>(
+        `${basePath}/reservations/${encodeURIComponent(reservation.id)}/cancel`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ managementToken: reservation.managementToken }),
+        },
+      );
+      setReservation({
+        ...result,
+        managementToken: reservation.managementToken,
+      });
+      setManagingReservation(false);
+      setSelected(null);
+      await reloadSlots();
+    } catch (caught: unknown) {
+      setError(caught instanceof Error ? caught.message : 'The booking could not be cancelled');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const downloadCalendar = async () => {
+    if (!reservation) return;
+    setError(null);
+    try {
+      const file = await publicApi<CalendarFile>(
+        `${basePath}/reservations/${encodeURIComponent(
+          reservation.id,
+        )}/calendar?token=${encodeURIComponent(reservation.managementToken)}`,
+      );
+      const blob = new Blob([file.content], { type: file.contentType });
+      const href = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = href;
+      anchor.download = file.filename;
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(href);
+    } catch (caught: unknown) {
+      setError(caught instanceof Error ? caught.message : 'Calendar file could not be created');
     }
   };
 
@@ -147,18 +239,57 @@ export function PublicBookingPage({
           </div>
         </section>
 
-        {reservation ? (
+        {reservation && !managingReservation ? (
           <section className="public-action-card booking-success-card">
             <div className="public-success-state">
-              <span>✓</span>
-              <h2>Your meeting is scheduled.</h2>
+              <span>{reservation.status === 'CANCELLED' ? '×' : '✓'}</span>
+              <h2>
+                {reservation.status === 'CANCELLED'
+                  ? 'This booking is cancelled.'
+                  : 'Your meeting is scheduled.'}
+              </h2>
               <p>
                 {new Intl.DateTimeFormat(undefined, {
                   dateStyle: 'full',
                   timeStyle: 'short',
                 }).format(new Date(reservation.startsAt))}
               </p>
-              <small>The scheduled session and reservation were created atomically.</small>
+              <small>
+                {reservation.status === 'CANCELLED'
+                  ? 'The linked scheduled session was cancelled too.'
+                  : reservation.rescheduleCount > 0
+                    ? `Rescheduled ${reservation.rescheduleCount} time${reservation.rescheduleCount === 1 ? '' : 's'}.`
+                    : 'The scheduled session and reservation were created atomically.'}
+              </small>
+              <div className="booking-management-actions">
+                <button type="button" onClick={() => void downloadCalendar()}>
+                  Download calendar
+                </button>
+                {reservation.status === 'CONFIRMED' ? (
+                  <>
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => {
+                        setManagingReservation(true);
+                        setSelected(null);
+                        setError(null);
+                      }}
+                    >
+                      Reschedule
+                    </button>
+                    <button
+                      type="button"
+                      className="danger"
+                      disabled={submitting}
+                      onClick={() => void cancelReservation()}
+                    >
+                      {submitting ? 'Cancelling…' : 'Cancel booking'}
+                    </button>
+                  </>
+                ) : null}
+              </div>
+              {error ? <div className="public-error booking-management-error">{error}</div> : null}
             </div>
           </section>
         ) : (
@@ -204,8 +335,16 @@ export function PublicBookingPage({
             </section>
 
             <aside className="public-action-card">
-              <span className="public-kicker">Your details</span>
-              <h2>{selected ? 'Confirm this time' : 'Select an available time'}</h2>
+              <span className="public-kicker">
+                {managingReservation ? 'Reschedule booking' : 'Your details'}
+              </span>
+              <h2>
+                {selected
+                  ? managingReservation
+                    ? 'Move to this time'
+                    : 'Confirm this time'
+                  : 'Select an available time'}
+              </h2>
               {selected ? (
                 <div className="selected-slot-summary">
                   {new Intl.DateTimeFormat(undefined, {
@@ -215,36 +354,70 @@ export function PublicBookingPage({
                 </div>
               ) : null}
               <form className="public-form" onSubmit={submit}>
-                <label>
-                  Full name
-                  <input
-                    required
-                    maxLength={160}
-                    value={name}
-                    onChange={(inputEvent) => setName(inputEvent.target.value)}
-                    autoComplete="name"
-                  />
-                </label>
-                <label>
-                  Email address
-                  <input
-                    required
-                    type="email"
-                    value={email}
-                    onChange={(inputEvent) => setEmail(inputEvent.target.value)}
-                    autoComplete="email"
-                  />
-                </label>
-                {page.intakeFields.length > 0 ? (
+                {!managingReservation ? (
+                  <>
+                    <label>
+                      Full name
+                      <input
+                        required
+                        maxLength={160}
+                        value={name}
+                        onChange={(inputEvent) => setName(inputEvent.target.value)}
+                        autoComplete="name"
+                      />
+                    </label>
+                    <label>
+                      Email address
+                      <input
+                        required
+                        type="email"
+                        value={email}
+                        onChange={(inputEvent) => setEmail(inputEvent.target.value)}
+                        autoComplete="email"
+                      />
+                    </label>
+                    {page.intakeFields.length > 0 ? (
+                      <div className="public-form-note">
+                        {page.intakeFields.length} additional intake fields are configured. Their
+                        dynamic renderer follows in the form-builder increment.
+                      </div>
+                    ) : null}
+                  </>
+                ) : (
                   <div className="public-form-note">
-                    {page.intakeFields.length} additional intake fields are configured. Their
-                    dynamic renderer follows in the form-builder increment.
+                    Your secure booking-management token will be used to update the existing
+                    reservation and its linked meeting.
                   </div>
-                ) : null}
+                )}
                 {error ? <div className="public-error">{error}</div> : null}
-                <button disabled={submitting || !selected || !name.trim() || !email.trim()}>
-                  {submitting ? 'Scheduling…' : 'Schedule meeting'}
+                <button
+                  disabled={
+                    submitting ||
+                    !selected ||
+                    (!managingReservation && (!name.trim() || !email.trim()))
+                  }
+                >
+                  {submitting
+                    ? managingReservation
+                      ? 'Rescheduling…'
+                      : 'Scheduling…'
+                    : managingReservation
+                      ? 'Confirm new time'
+                      : 'Schedule meeting'}
                 </button>
+                {managingReservation ? (
+                  <button
+                    type="button"
+                    className="public-cancel-management"
+                    onClick={() => {
+                      setManagingReservation(false);
+                      setSelected(null);
+                      setError(null);
+                    }}
+                  >
+                    Keep current time
+                  </button>
+                ) : null}
               </form>
             </aside>
           </div>
