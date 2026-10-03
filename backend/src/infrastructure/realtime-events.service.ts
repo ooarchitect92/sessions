@@ -21,6 +21,11 @@ export interface SessionRealtimeEvent {
     | 'question.votes.updated'
     | 'agenda.timer.updated'
     | 'media.moderation.updated'
+    | 'breakout.updated'
+    | 'breakout.opened'
+    | 'breakout.closed'
+    | 'breakout.assignment.updated'
+    | 'breakout.broadcast'
     | 'memory.updated';
   payload: unknown;
   audienceUserIds?: string[];
