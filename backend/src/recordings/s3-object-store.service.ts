@@ -83,7 +83,7 @@ export class S3ObjectStoreService {
     const response = await fetch(url, {
       method: 'PUT',
       headers: { 'content-type': contentType },
-      body: bytes,
+      body: Buffer.from(bytes),
     });
     if (!response.ok) {
       const body = await response.text().catch(() => '');
