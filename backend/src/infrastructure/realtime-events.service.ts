@@ -21,6 +21,7 @@ export interface SessionRealtimeEvent {
     | 'question.votes.updated'
     | 'memory.updated';
   payload: unknown;
+  audienceUserIds?: string[];
 }
 
 /**
