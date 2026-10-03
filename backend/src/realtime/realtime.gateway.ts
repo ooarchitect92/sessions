@@ -19,6 +19,7 @@ import { z } from "zod";
 import { AgendasService } from "../agendas/agendas.service";
 import { AuthService } from "../auth/auth.service";
 import type { AccessTokenClaims, Principal } from "../common/auth/principal";
+import { PresenceService, type PresenceParticipant } from "../infrastructure/presence.service";
 import { RealtimeEventsService } from "../infrastructure/realtime-events.service";
 import { RedisService } from "../infrastructure/redis.service";
 import { SessionsService } from "../sessions/sessions.service";
@@ -44,6 +45,7 @@ const reactionSchema = z.object({
   sessionId: z.string().uuid(),
   reaction: z.enum(["👍", "❤️", "😂", "👏", "🎉", "🙌"]),
 });
+const heartbeatSchema = z.object({ sessionId: z.string().uuid() });
 
 type SocketData = {
   principal?: Principal;
@@ -83,6 +85,7 @@ export class RealtimeGateway
     private readonly agendas: AgendasService,
     private readonly realtimeEvents: RealtimeEventsService,
     private readonly redis: RedisService,
+    private readonly presence: PresenceService,
   ) {}
 
   afterInit(server: Server): void {
@@ -136,15 +139,33 @@ export class RealtimeGateway
     }
   }
 
-  handleDisconnect(client: AuthenticatedSocket): void {
+  async handleDisconnect(client: AuthenticatedSocket): Promise<void> {
     const principal = client.data.principal;
     if (!principal) return;
+
     for (const sessionId of client.data.sessionIds ?? []) {
-      client.to(this.roomName(sessionId)).emit("participant.left", {
-        sessionId,
-        userId: principal.userId,
-        occurredAt: new Date().toISOString(),
-      });
+      try {
+        const result = await this.presence.leave(
+          sessionId,
+          principal.userId,
+          client.id,
+        );
+        this.server
+          .to(this.roomName(sessionId))
+          .emit("presence.updated", { sessionId, participants: result.participants });
+
+        if (result.departed) {
+          this.server.to(this.roomName(sessionId)).emit("participant.left", {
+            sessionId,
+            userId: principal.userId,
+            occurredAt: new Date().toISOString(),
+          });
+        }
+      } catch (error: unknown) {
+        this.logger.warn(
+          `Failed to clear presence for ${principal.userId} in ${sessionId}: ${error instanceof Error ? error.message : "unknown error"}`,
+        );
+      }
     }
   }
 
@@ -152,19 +173,46 @@ export class RealtimeGateway
   async joinSession(
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() payload: unknown,
-  ): Promise<{ ok: true; sessionId: string }> {
+  ): Promise<{
+    ok: true;
+    sessionId: string;
+    participants: PresenceParticipant[];
+  }> {
     const principal = this.requirePrincipal(client);
     const { sessionId } = joinSchema.parse(payload);
     await this.sessions.getById(principal, sessionId);
     await client.join(this.roomName(sessionId));
     client.data.sessionIds?.add(sessionId);
-    client.to(this.roomName(sessionId)).emit("participant.joined", {
-      sessionId,
-      userId: principal.userId,
-      displayName: principal.displayName,
-      occurredAt: new Date().toISOString(),
-    });
-    return { ok: true, sessionId };
+
+    const presence = await this.presence.join(sessionId, principal, client.id);
+    this.server
+      .to(this.roomName(sessionId))
+      .emit("presence.updated", { sessionId, participants: presence.participants });
+
+    if (presence.firstConnection) {
+      client.to(this.roomName(sessionId)).emit("participant.joined", {
+        sessionId,
+        userId: principal.userId,
+        displayName: principal.displayName,
+        occurredAt: new Date().toISOString(),
+      });
+    }
+
+    return { ok: true, sessionId, participants: presence.participants };
+  }
+
+  @SubscribeMessage("session.heartbeat")
+  async heartbeat(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() payload: unknown,
+  ): Promise<{ ok: true }> {
+    const principal = this.requirePrincipal(client);
+    const { sessionId } = heartbeatSchema.parse(payload);
+    if (!client.data.sessionIds?.has(sessionId)) {
+      throw new Error("Join the session before sending presence heartbeats");
+    }
+    await this.presence.heartbeat(sessionId, principal, client.id);
+    return { ok: true };
   }
 
   @SubscribeMessage("agenda.activate")
