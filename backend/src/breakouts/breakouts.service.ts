@@ -353,7 +353,7 @@ export class BreakoutsService {
 
   async open(principal: Principal, sessionId: string) {
     this.assertHost(principal);
-    return this.database.run(principal, async (transaction) => {
+    const openedAt = await this.database.run(principal, async (transaction) => {
       const assignmentCount = await transaction.breakoutAssignment.count({
         where: { sessionId },
       });
@@ -390,9 +390,14 @@ export class BreakoutsService {
         sessionId,
         openedAt: now.toISOString(),
       });
-
-      return this.state(principal, sessionId);
+      return now;
     });
+
+    const state = await this.state(principal, sessionId);
+    return {
+      ...state,
+      openedAt: openedAt.toISOString(),
+    };
   }
 
   async close(principal: Principal, sessionId: string) {
