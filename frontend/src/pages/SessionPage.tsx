@@ -10,6 +10,7 @@ import {
   type MediaJoinPreferences,
 } from '../components/DevicePreflight';
 import { SessionCollaborationPanel } from '../components/SessionCollaborationPanel';
+import { WhiteboardStage } from '../components/WhiteboardStage';
 import { useSessionRealtime } from '../hooks/use-session-realtime';
 
 function formatTime(value: string): string {
@@ -254,9 +255,11 @@ export function SessionPage() {
         content:
           agendaType === 'TEXT'
             ? { text: agendaText }
-            : ['WEBSITE', 'PRESENTATION', 'VIDEO'].includes(agendaType)
-              ? { url: agendaUrl }
-              : {},
+            : agendaType === 'FILE'
+              ? { fileId: agendaFileId }
+              : ['WEBSITE', 'PRESENTATION', 'VIDEO'].includes(agendaType)
+                ? { url: agendaUrl }
+                : {},
       }),
     onSuccess: async () => {
       setAgendaTitle('');
@@ -318,6 +321,7 @@ export function SessionPage() {
   const showsSharedContent =
     activeAgendaItem !== null &&
     ['TEXT', 'WEBSITE', 'PRESENTATION', 'VIDEO', 'FILE'].includes(activeAgendaItem.type);
+  const showsWhiteboard = activeAgendaItem?.type === 'WHITEBOARD';
   const canControlAgenda =
     authMe.data?.principal.roles.some((role) =>
       ['OWNER', 'ADMIN', 'HOST'].includes(role),
@@ -907,10 +911,21 @@ export function SessionPage() {
         </aside>
 
         <section
-          className={showsSharedContent ? 'meeting-stage with-shared-content' : 'meeting-stage'}
+          className={
+            showsSharedContent || showsWhiteboard
+              ? 'meeting-stage with-shared-content'
+              : 'meeting-stage'
+          }
         >
           {showsSharedContent && activeAgendaItem ? (
             <AgendaContentStage item={activeAgendaItem} />
+          ) : null}
+          {showsWhiteboard ? (
+            <WhiteboardStage
+              sessionId={sessionId}
+              cursors={realtime.whiteboardCursors}
+              sendCursor={realtime.sendWhiteboardCursor}
+            />
           ) : null}
           <div className="reaction-overlay" aria-live="polite">
             {realtime.reactions.map((event) => (
