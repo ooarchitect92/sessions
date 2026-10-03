@@ -89,7 +89,46 @@ export class AttendanceService {
         data: { lastHeartbeatAt: occurredAt },
       });
       if (updated.count === 0) {
-        await this.join(principal, sessionId, occurredAt);
+        const lockKey = `attendance:${sessionId}:${principal.userId}`;
+        await transaction.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
+        const existing = await transaction.sessionAttendanceInterval.findFirst({
+          where: {
+            sessionId,
+            userId: principal.userId,
+            leftAt: null,
+          },
+          select: { id: true },
+        });
+        if (!existing) {
+          const session = await transaction.session.findUnique({
+            where: { id: sessionId },
+            select: { id: true },
+          });
+          if (!session) throw new NotFoundException('Session not found');
+          const interval = await transaction.sessionAttendanceInterval.create({
+            data: {
+              organizationId: principal.organizationId,
+              workspaceId: principal.workspaceId,
+              sessionId,
+              userId: principal.userId,
+              joinedAt: occurredAt,
+              lastHeartbeatAt: occurredAt,
+            },
+          });
+          await this.outbox.enqueue(transaction, principal, {
+            aggregateType: 'session_attendance',
+            aggregateId: interval.id,
+            eventType: 'participant.joined',
+            payload: {
+              attendanceIntervalId: interval.id,
+              sessionId,
+              userId: principal.userId,
+              displayName: principal.displayName,
+              occurredAt: occurredAt.toISOString(),
+              recoveredFromHeartbeat: true,
+            },
+          });
+        }
       }
     });
   }
