@@ -308,6 +308,15 @@ export interface MemoryDetail extends SessionDetail {
   questions: QuestionRecord[];
 }
 
+export interface SessionPresenceParticipant {
+  userId: string;
+  displayName: string;
+  roles: string[];
+  joinedAt: string;
+  lastSeenAt: string;
+  isSelf: boolean;
+}
+
 export interface ChatMessageRecord {
   id: string;
   sessionId: string;
@@ -910,6 +919,10 @@ export const api = {
         method: "POST",
       },
     );
+  },
+
+  listSessionPresence(sessionId: string): Promise<SessionPresenceParticipant[]> {
+    return request<SessionPresenceParticipant[]>(`/sessions/${sessionId}/presence`);
   },
 
   listChat(sessionId: string): Promise<ChatMessageRecord[]> {
