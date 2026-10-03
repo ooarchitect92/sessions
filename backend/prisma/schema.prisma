@@ -119,6 +119,14 @@ enum QuestionStatus {
   HIDDEN
 }
 
+enum WebhookDeliveryStatus {
+  PENDING
+  DELIVERING
+  RETRYING
+  SUCCEEDED
+  FAILED
+}
+
 model Organization {
   id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name                String                @db.VarChar(160)
@@ -144,6 +152,8 @@ model Organization {
   pollAnswers         PollAnswer[]
   questions           Question[]
   questionVotes       QuestionVote[]
+  webhookSubscriptions WebhookSubscription[]
+  webhookDeliveries   WebhookDelivery[]
   authSessions        AuthSession[]
   authChallenges      AuthChallenge[]
   workspaceInvitations WorkspaceInvitation[]
@@ -180,6 +190,8 @@ model Workspace {
   pollAnswers         PollAnswer[]
   questions           Question[]
   questionVotes       QuestionVote[]
+  webhookSubscriptions WebhookSubscription[]
+  webhookDeliveries   WebhookDelivery[]
   authSessions        AuthSession[]
   authChallenges      AuthChallenge[]
   workspaceInvitations WorkspaceInvitation[]
@@ -217,6 +229,7 @@ model User {
   sentInvitations         WorkspaceInvitation[]    @relation("InvitationSender")
   acceptedInvitations     WorkspaceInvitation[]    @relation("InvitationAcceptor")
   recordingConsents       RecordingConsent[]
+  createdWebhookSubscriptions WebhookSubscription[] @relation("WebhookSubscriptionCreator")
 
   @@index([status])
   @@map("users")
@@ -699,6 +712,58 @@ model QuestionVote {
   @@map("question_votes")
 }
 
+model WebhookSubscription {
+  id               String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String            @map("organization_id") @db.Uuid
+  workspaceId      String            @map("workspace_id") @db.Uuid
+  createdById      String            @map("created_by_id") @db.Uuid
+  url              String            @db.Text
+  description      String?           @db.VarChar(160)
+  eventTypes       Json              @default("[]") @map("event_types")
+  secretEncrypted  String            @map("secret_encrypted") @db.Text
+  active           Boolean           @default(true)
+  failureCount     Int               @default(0) @map("failure_count")
+  lastSuccessAt    DateTime?         @map("last_success_at") @db.Timestamptz(6)
+  lastFailureAt    DateTime?         @map("last_failure_at") @db.Timestamptz(6)
+  version          Int               @default(1)
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace        Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy        User              @relation("WebhookSubscriptionCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  deliveries       WebhookDelivery[]
+
+  @@index([organizationId, workspaceId, active])
+  @@map("webhook_subscriptions")
+}
+
+model WebhookDelivery {
+  id             String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String                @map("organization_id") @db.Uuid
+  workspaceId    String                @map("workspace_id") @db.Uuid
+  subscriptionId String                @map("subscription_id") @db.Uuid
+  outboxEventId  String                @map("outbox_event_id") @db.Uuid
+  eventType      String                @map("event_type") @db.VarChar(160)
+  payload        Json
+  status         WebhookDeliveryStatus @default(PENDING)
+  attemptCount   Int                   @default(0) @map("attempt_count")
+  nextAttemptAt  DateTime              @default(now()) @map("next_attempt_at") @db.Timestamptz(6)
+  responseStatus Int?                  @map("response_status")
+  lastError      String?               @map("last_error") @db.Text
+  deliveredAt    DateTime?             @map("delivered_at") @db.Timestamptz(6)
+  createdAt      DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  subscription   WebhookSubscription   @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  outboxEvent    OutboxEvent           @relation(fields: [outboxEventId], references: [id], onDelete: Cascade)
+
+  @@unique([subscriptionId, outboxEventId])
+  @@index([organizationId, workspaceId, status, nextAttemptAt])
+  @@index([subscriptionId, createdAt])
+  @@map("webhook_deliveries")
+}
+
 model IdempotencyKey {
   id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   organizationId String   @map("organization_id") @db.Uuid
@@ -731,6 +796,7 @@ model OutboxEvent {
   lastError      String?   @map("last_error") @db.Text
   deadLetteredAt DateTime? @map("dead_lettered_at") @db.Timestamptz(6)
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  webhookDeliveries WebhookDelivery[]
 
   @@index([publishedAt, deadLetteredAt, availableAt])
   @@index([workspaceId, createdAt])
