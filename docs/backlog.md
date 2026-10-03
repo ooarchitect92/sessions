@@ -58,7 +58,8 @@
 - [ ] transcript correction, revision history and language policy
 - [x] object-storage access, signed playback and secure download paths
 - [ ] PostgreSQL full-text index and optional vector retrieval with workspace filters
-- [ ] agenda generator and provider-abstracted AI execution gateway
+- [x] provider-abstracted AI summary execution worker with decisions, actions and transcript citations
+- [ ] agenda generator and interactive AI preparation tools
 - [ ] summary/action editor, follow-up approval and CRM write controls
 - [ ] groundedness, privacy, prompt-injection, cost and latency evaluation suite
 
