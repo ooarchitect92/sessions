@@ -19,7 +19,7 @@ import { UpdateAgendaTemplateDto } from './dto/update-agenda-template.dto';
 
 function parseVersion(value: string | undefined): number {
   if (!value) throw new BadRequestException('If-Match is required');
-  const parsed = Number(value.replace(/^W//, '').replaceAll('"', '').trim());
+  const parsed = Number(value.replace('W/', '').replaceAll('"', '').trim());
   if (!Number.isInteger(parsed) || parsed < 1) {
     throw new BadRequestException(
       'If-Match must contain a positive integer version',
