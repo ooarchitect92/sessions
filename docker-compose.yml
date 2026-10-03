@@ -56,6 +56,13 @@ services:
       mc anonymous set private local/sessions-local
       "
 
+  clamav:
+    image: clamav/clamav:stable
+    ports:
+      - "3310:3310"
+    volumes:
+      - clamav-data:/var/lib/clamav
+
   livekit:
     image: livekit/livekit-server:v1.13.7
     command: --config /etc/livekit.yaml
@@ -117,6 +124,8 @@ services:
       LIVEKIT_API_URL: http://livekit:7880
       LIVEKIT_EGRESS_ENABLED: "true"
       S3_ENDPOINT: http://minio:9000
+      FILE_SCAN_ENABLED: "true"
+      FILE_SCAN_HOST: clamav
     ports:
       - "4000:4000"
     depends_on:
@@ -127,6 +136,8 @@ services:
       livekit:
         condition: service_started
       egress:
+        condition: service_started
+      clamav:
         condition: service_started
 
   app:
@@ -161,3 +172,4 @@ volumes:
   postgres-data:
   redis-data:
   minio-data:
+  clamav-data:
