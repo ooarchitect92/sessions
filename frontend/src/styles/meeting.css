@@ -206,3 +206,107 @@
     grid-template-rows: minmax(220px, 52%) minmax(180px, 48%);
   }
 }
+
+
+.agenda-rail-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.agenda-ai-button,
+.agenda-add-button {
+  min-width: 28px;
+  height: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #dce7e4;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.agenda-ai-button:hover,
+.agenda-add-button:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.agenda-ai-panel {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.agenda-ai-panel > p {
+  margin: 0;
+  color: #8ea19c;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.agenda-ai-panel label {
+  display: grid;
+  gap: 5px;
+  color: #aebfbb;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.agenda-ai-panel textarea,
+.agenda-ai-panel input {
+  width: 100%;
+}
+
+.agenda-ai-preview {
+  display: grid;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.agenda-ai-preview-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.agenda-ai-preview-heading strong {
+  font-size: 10px;
+}
+
+.agenda-ai-preview-heading small {
+  color: #7f928e;
+  font-size: 8px;
+}
+
+.agenda-ai-preview ol {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.agenda-ai-preview li {
+  color: #dce7e4;
+  font-size: 9px;
+}
+
+.agenda-ai-preview li > strong,
+.agenda-ai-preview li > span {
+  display: block;
+}
+
+.agenda-ai-preview li > span,
+.agenda-ai-preview li > p {
+  color: #829591;
+  font-size: 8px;
+}
+
+.agenda-ai-preview li > p {
+  margin: 3px 0 0;
+  line-height: 1.4;
+}
