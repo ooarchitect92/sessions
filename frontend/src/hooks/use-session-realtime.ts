@@ -27,7 +27,7 @@ function realtimeUrl(): string {
 
 export function useSessionRealtime(sessionId: string): SessionRealtimeController {
   const queryClient = useQueryClient();
-  const socketRef = useRef<Socket>();
+  const socketRef = useRef<Socket | null>(null);
   const [connected, setConnected] = useState(false);
   const [reactions, setReactions] = useState<SessionReactionEvent[]>([]);
 
@@ -128,7 +128,7 @@ export function useSessionRealtime(sessionId: string): SessionRealtimeController
     return () => {
       disposed = true;
       setConnected(false);
-      socketRef.current = undefined;
+      socketRef.current = null;
       if (heartbeatTimer !== undefined) window.clearInterval(heartbeatTimer);
       socket?.disconnect();
       for (const timer of reactionTimers) window.clearTimeout(timer);
