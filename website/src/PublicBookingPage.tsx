@@ -1,6 +1,23 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { publicApi } from './public-api';
 
+type IntakeFieldType =
+  | 'TEXT'
+  | 'TEXTAREA'
+  | 'EMAIL'
+  | 'SELECT'
+  | 'CHECKBOX'
+  | 'CONSENT';
+
+interface IntakeField {
+  key: string;
+  label: string;
+  type: IntakeFieldType;
+  required: boolean;
+  placeholder?: string;
+  options?: string[];
+}
+
 interface PublicBookingPage {
   id: string;
   slug: string;
@@ -10,7 +27,7 @@ interface PublicBookingPage {
   timezone: string;
   minimumNoticeMinutes: number;
   availabilityRules: Array<Record<string, unknown>>;
-  intakeFields: Array<Record<string, unknown>>;
+  intakeFields: IntakeField[];
 }
 
 interface Slot {
@@ -64,6 +81,7 @@ export function PublicBookingPage({
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [answers, setAnswers] = useState<Record<string, string | boolean>>({});
   const [reservation, setReservation] = useState<Reservation | null>(null);
   const [managingReservation, setManagingReservation] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -147,7 +165,7 @@ export function PublicBookingPage({
             email,
             startsAt: selected.startsAt,
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            answers: {},
+            answers,
           }),
         });
         setReservation(result);
@@ -376,12 +394,19 @@ export function PublicBookingPage({
                         autoComplete="email"
                       />
                     </label>
-                    {page.intakeFields.length > 0 ? (
-                      <div className="public-form-note">
-                        {page.intakeFields.length} additional intake fields are configured. Their
-                        dynamic renderer follows in the form-builder increment.
-                      </div>
-                    ) : null}
+                    {page.intakeFields.map((field) => (
+                      <IntakeFieldControl
+                        key={field.key}
+                        field={field}
+                        value={answers[field.key]}
+                        onChange={(value) =>
+                          setAnswers((current) => ({
+                            ...current,
+                            [field.key]: value,
+                          }))
+                        }
+                      />
+                    ))}
                   </>
                 ) : (
                   <div className="public-form-note">
@@ -424,6 +449,80 @@ export function PublicBookingPage({
         )}
       </div>
     </main>
+  );
+}
+
+function IntakeFieldControl({
+  field,
+  value,
+  onChange,
+}: {
+  field: IntakeField;
+  value: string | boolean | undefined;
+  onChange: (value: string | boolean) => void;
+}) {
+  if (field.type === 'CHECKBOX' || field.type === 'CONSENT') {
+    return (
+      <label className="public-checkbox-field">
+        <input
+          type="checkbox"
+          required={field.required}
+          checked={value === true}
+          onChange={(event) => onChange(event.target.checked)}
+        />
+        <span>{field.label}</span>
+      </label>
+    );
+  }
+
+  if (field.type === 'TEXTAREA') {
+    return (
+      <label>
+        {field.label}
+        <textarea
+          required={field.required}
+          maxLength={5000}
+          rows={4}
+          value={typeof value === 'string' ? value : ''}
+          placeholder={field.placeholder}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      </label>
+    );
+  }
+
+  if (field.type === 'SELECT') {
+    return (
+      <label>
+        {field.label}
+        <select
+          required={field.required}
+          value={typeof value === 'string' ? value : ''}
+          onChange={(event) => onChange(event.target.value)}
+        >
+          <option value="">Choose an option</option>
+          {(field.options ?? []).map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+      </label>
+    );
+  }
+
+  return (
+    <label>
+      {field.label}
+      <input
+        required={field.required}
+        type={field.type === 'EMAIL' ? 'email' : 'text'}
+        maxLength={1000}
+        value={typeof value === 'string' ? value : ''}
+        placeholder={field.placeholder}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </label>
   );
 }
 
