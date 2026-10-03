@@ -5,6 +5,7 @@ import { ScheduleModule } from "@nestjs/schedule";
 import { AgendasModule } from "./agendas/agendas.module";
 import { AiModule } from "./ai/ai.module";
 import { AnalyticsModule } from "./analytics/analytics.module";
+import { AttendanceModule } from "./attendance/attendance.module";
 import { AuthModule } from "./auth/auth.module";
 import { BookingsModule } from "./bookings/bookings.module";
 import { CollaborationModule } from "./collaboration/collaboration.module";
@@ -38,6 +39,7 @@ import { WorkspacesModule } from "./workspaces/workspaces.module";
     ScheduleModule.forRoot(),
     PrismaModule,
     InfrastructureModule,
+    AttendanceModule,
     AuthModule,
     WorkspacesModule,
     HealthModule,
