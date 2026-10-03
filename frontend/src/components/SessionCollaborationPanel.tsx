@@ -14,16 +14,13 @@ export function SessionCollaborationPanel({ sessionId }: { sessionId: string }) 
   const [pollOptions, setPollOptions] = useState('Yes\nNo');
   const [questionBody, setQuestionBody] = useState('');
 
-  const me = useQuery({
-    queryKey: ['auth-me'],
-    queryFn: () => api.authMe(),
+  const presence = useQuery({
+    queryKey: ['session-presence', sessionId],
+    queryFn: () => api.listSessionPresence(sessionId),
     enabled: tab === 'chat' || tab === 'people',
+    refetchInterval: 45_000,
   });
-  const members = useQuery({
-    queryKey: ['workspace-members'],
-    queryFn: () => api.listWorkspaceMembers(),
-    enabled: tab === 'chat' || tab === 'people',
-  });
+  const self = presence.data?.find((participant) => participant.isSelf);
   const chat = useQuery({
     queryKey: ['chat', sessionId],
     queryFn: () => api.listChat(sessionId),
@@ -127,32 +124,35 @@ export function SessionCollaborationPanel({ sessionId }: { sessionId: string }) 
       {tab === 'people' ? (
         <div className="collaboration-scroll">
           <div className="people-list">
-            {members.data?.map((member) => (
-              <div className="person-row" key={member.id}>
+            {presence.data?.map((participant) => (
+              <div className="person-row" key={participant.userId}>
                 <div className="avatar">
-                  {member.user.displayName
+                  {participant.displayName
                     .split(' ')
                     .slice(0, 2)
                     .map((part) => part[0]?.toUpperCase())
                     .join('')}
                 </div>
                 <div>
-                  <strong>{member.user.displayName}</strong>
+                  <strong>{participant.displayName}</strong>
                   <small>
-                    {member.role.toLowerCase()}
-                    {member.user.id === me.data?.principal.userId ? ' · you' : ''}
+                    {participant.roles.map((role) => role.toLowerCase()).join(', ')}
+                    {participant.isSelf ? ' · you' : ''}
                   </small>
                 </div>
-                <span>{member.user.status === 'ACTIVE' ? '●' : '○'}</span>
+                <span title="Online">●</span>
               </div>
             ))}
-            {members.isLoading ? <p className="side-muted">Loading people…</p> : null}
+            {presence.isLoading ? <p className="side-muted">Loading people…</p> : null}
+            {presence.data?.length === 0 ? (
+              <p className="side-muted">No active participants.</p>
+            ) : null}
           </div>
           <div className="side-panel-note">
-            <strong>Workspace directory</strong>
+            <strong>Live session presence</strong>
             <p>
-              Private chat recipients are limited to active members of the current workspace.
-              Socket join/leave events remain realtime session signals.
+              The roster is backed by Redis heartbeats so it can be shared across API
+              instances and recover from stale browser connections.
             </p>
           </div>
         </div>
@@ -200,7 +200,7 @@ export function SessionCollaborationPanel({ sessionId }: { sessionId: string }) 
                 aria-label="Chat audience"
               >
                 <option value="EVERYONE">Everyone</option>
-                {me.data?.principal.roles.some((role) =>
+                {self?.roles.some((role) =>
                   ['OWNER', 'ADMIN', 'HOST'].includes(role),
                 ) ? (
                   <option value="HOSTS">Hosts</option>
@@ -215,15 +215,11 @@ export function SessionCollaborationPanel({ sessionId }: { sessionId: string }) 
                   aria-label="Private message recipient"
                 >
                   <option value="">Choose person…</option>
-                  {members.data
-                    ?.filter(
-                      (member) =>
-                        member.user.id !== me.data?.principal.userId &&
-                        member.user.status === 'ACTIVE',
-                    )
-                    .map((member) => (
-                      <option key={member.user.id} value={member.user.id}>
-                        {member.user.displayName}
+                  {presence.data
+                    ?.filter((participant) => !participant.isSelf)
+                    .map((participant) => (
+                      <option key={participant.userId} value={participant.userId}>
+                        {participant.displayName}
                       </option>
                     ))}
                 </select>
