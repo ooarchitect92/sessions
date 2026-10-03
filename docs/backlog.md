@@ -53,7 +53,8 @@
 - [x] workspace memory list, detail page and database text search
 - [x] transcript segment model with speaker/timestamp fields
 - [x] reviewed summary, decision, action-item and citation model
-- [ ] recording/STT workers, streaming captions and diarization qualification
+- [x] recording-backed STT provider abstraction, worker, segment persistence and durable ready event
+- [ ] streaming captions, diarization qualification and recordless transcription path
 - [ ] transcript correction, revision history and language policy
 - [x] object-storage access, signed playback and secure download paths
 - [ ] PostgreSQL full-text index and optional vector retrieval with workspace filters
