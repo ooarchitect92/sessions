@@ -21,10 +21,10 @@
 
 ## Phase 2 — collaboration and reliable capture
 
-- [x] persistent public and host chat
+- [x] persistent public, host and private direct-message chat with tenant-safe recipient visibility
 - [x] poll creation, launch, answer, results and close lifecycle
 - [x] moderated Q&A with voting and answers
-- [ ] reactions and private direct-message channels
+- [x] Redis-backed live presence, throttled meeting reactions and user-targeted private chat invalidation
 - [ ] whiteboard integration, snapshots and operation compaction
 - [ ] breakout assignment, media-room transition and host broadcast
 - [x] URL-backed agenda content blocks, HTTPS/private-network policy and sandboxed embed rendering
