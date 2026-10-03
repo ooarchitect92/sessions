@@ -119,6 +119,11 @@ export function useSessionRealtime(sessionId: string): SessionRealtimeController
         }, 2600);
         reactionTimers.add(timer);
       });
+      socket.on('media.moderation.updated', () => {
+        void queryClient.invalidateQueries({
+          queryKey: ['media-participants', sessionId],
+        });
+      });
       socket.on('memory.updated', () => {
         void queryClient.invalidateQueries({ queryKey: ['memory'] });
         void queryClient.invalidateQueries({
