@@ -3,7 +3,7 @@ import { LiveKitRoom, VideoConference } from '@livekit/components-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FormEvent, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { api, type MediaToken } from '../api/client';
+import { api, type GeneratedAgenda, type MediaToken } from '../api/client';
 import { AgendaContentStage } from '../components/AgendaContentStage';
 import { SessionCollaborationPanel } from '../components/SessionCollaborationPanel';
 import { useSessionRealtime } from '../hooks/use-session-realtime';
@@ -20,6 +20,10 @@ export function SessionPage() {
   const queryClient = useQueryClient();
   const [media, setMedia] = useState<MediaToken | null>(null);
   const [agendaEditorOpen, setAgendaEditorOpen] = useState(false);
+  const [agendaAiOpen, setAgendaAiOpen] = useState(false);
+  const [agendaObjective, setAgendaObjective] = useState('');
+  const [agendaDesiredItems, setAgendaDesiredItems] = useState(5);
+  const [generatedAgenda, setGeneratedAgenda] = useState<GeneratedAgenda | null>(null);
   const [agendaTitle, setAgendaTitle] = useState('');
   const [agendaDuration, setAgendaDuration] = useState(10);
   const [agendaUrl, setAgendaUrl] = useState('');
@@ -86,6 +90,35 @@ export function SessionPage() {
   const activate = useMutation({
     mutationFn: (agendaItemId: string) => api.activateAgendaItem(sessionId, agendaItemId),
     onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+    },
+  });
+
+  const generateAgenda = useMutation({
+    mutationFn: () =>
+      api.generateAgenda(sessionId, {
+        objective: agendaObjective,
+        desiredItems: agendaDesiredItems,
+      }),
+    onSuccess: (result) => setGeneratedAgenda(result),
+  });
+
+  const applyGeneratedAgenda = useMutation({
+    mutationFn: async () => {
+      if (!generatedAgenda) return;
+      for (const item of generatedAgenda.items) {
+        await api.createAgendaItem(sessionId, {
+          title: item.title,
+          durationSeconds: item.durationSeconds,
+          type: item.type,
+          content: item.notes ? { text: item.notes } : {},
+        });
+      }
+    },
+    onSuccess: async () => {
+      setGeneratedAgenda(null);
+      setAgendaAiOpen(false);
+      setAgendaObjective('');
       await queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
     },
   });
@@ -251,17 +284,111 @@ export function SessionPage() {
             <span className="eyebrow">Run of show</span>
             <div className="rail-title-row">
               <h2>Agenda</h2>
-              <button
-                className="agenda-add-button"
-                type="button"
-                onClick={() => setAgendaEditorOpen((value) => !value)}
-                aria-expanded={agendaEditorOpen}
-              >
-                {agendaEditorOpen ? '×' : '+'}
-              </button>
+              <div className="agenda-rail-actions">
+                <button
+                  className="agenda-ai-button"
+                  type="button"
+                  onClick={() => {
+                    setAgendaAiOpen((value) => !value);
+                    setAgendaEditorOpen(false);
+                  }}
+                  aria-expanded={agendaAiOpen}
+                >
+                  AI
+                </button>
+                <button
+                  className="agenda-add-button"
+                  type="button"
+                  onClick={() => {
+                    setAgendaEditorOpen((value) => !value);
+                    setAgendaAiOpen(false);
+                  }}
+                  aria-expanded={agendaEditorOpen}
+                >
+                  {agendaEditorOpen ? '×' : '+'}
+                </button>
+              </div>
             </div>
             <span>{current.agendaItems.length} items</span>
           </div>
+          {agendaAiOpen ? (
+            <div className="agenda-ai-panel">
+              <span className="eyebrow">AI agenda draft</span>
+              <p>
+                Generate a draft for review. Nothing is added until you approve it.
+              </p>
+              <label>
+                Meeting objective
+                <textarea
+                  rows={4}
+                  maxLength={2000}
+                  value={agendaObjective}
+                  onChange={(event) => setAgendaObjective(event.target.value)}
+                  placeholder="Example: Align the team on launch scope, risks, owners, and next steps."
+                />
+              </label>
+              <label>
+                Suggested items
+                <input
+                  type="number"
+                  min={2}
+                  max={12}
+                  value={agendaDesiredItems}
+                  onChange={(event) =>
+                    setAgendaDesiredItems(
+                      Math.max(2, Math.min(12, Number(event.target.value) || 2)),
+                    )
+                  }
+                />
+              </label>
+              <button
+                className="button primary full-width"
+                type="button"
+                disabled={generateAgenda.isPending || agendaObjective.trim().length < 3}
+                onClick={() => generateAgenda.mutate()}
+              >
+                {generateAgenda.isPending ? 'Generating…' : 'Generate draft'}
+              </button>
+              {generateAgenda.error ? (
+                <div className="error-banner">{generateAgenda.error.message}</div>
+              ) : null}
+              {generatedAgenda ? (
+                <div className="agenda-ai-preview">
+                  <div className="agenda-ai-preview-heading">
+                    <strong>{generatedAgenda.items.length} suggested items</strong>
+                    <small>
+                      {generatedAgenda.provider} · {generatedAgenda.model}
+                    </small>
+                  </div>
+                  <ol>
+                    {generatedAgenda.items.map((item, index) => (
+                      <li key={`${item.title}-${index}`}>
+                        <strong>{item.title}</strong>
+                        <span>
+                          {Math.max(1, Math.round(item.durationSeconds / 60))} min ·{' '}
+                          {item.type.toLowerCase()}
+                        </span>
+                        {item.notes ? <p>{item.notes}</p> : null}
+                      </li>
+                    ))}
+                  </ol>
+                  <button
+                    className="button primary full-width"
+                    type="button"
+                    disabled={applyGeneratedAgenda.isPending}
+                    onClick={() => applyGeneratedAgenda.mutate()}
+                  >
+                    {applyGeneratedAgenda.isPending
+                      ? 'Adding agenda…'
+                      : 'Approve and add all'}
+                  </button>
+                  {applyGeneratedAgenda.error ? (
+                    <div className="error-banner">{applyGeneratedAgenda.error.message}</div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           {agendaEditorOpen ? (
             <form className="agenda-inline-form" onSubmit={submitAgendaItem}>
               <label>
