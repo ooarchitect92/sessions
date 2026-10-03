@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FormEvent, useState } from 'react';
 import {
   api,
@@ -12,11 +12,16 @@ const roles: EventStageRole[] = ['ORGANIZER', 'HOST', 'COHOST', 'SPEAKER'];
 export function EventSpeakerManager({ event }: { event: EventRecord }) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [userId, setUserId] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [title, setTitle] = useState('');
   const [bio, setBio] = useState('');
   const [role, setRole] = useState<EventStageRole>('SPEAKER');
+  const members = useQuery({
+    queryKey: ['workspace-members'],
+    queryFn: () => api.listWorkspaceMembers(),
+  });
 
   const refresh = async () => {
     await queryClient.invalidateQueries({ queryKey: ['events'] });
@@ -27,11 +32,13 @@ export function EventSpeakerManager({ event }: { event: EventRecord }) {
       api.createEventSpeaker(event.id, {
         role,
         displayName,
+        ...(userId ? { userId } : {}),
         ...(email.trim() ? { email: email.trim() } : {}),
         ...(title.trim() ? { title: title.trim() } : {}),
         ...(bio.trim() ? { bio: bio.trim() } : {}),
       }),
     onSuccess: async () => {
+      setUserId('');
       setDisplayName('');
       setEmail('');
       setTitle('');
@@ -137,6 +144,35 @@ export function EventSpeakerManager({ event }: { event: EventRecord }) {
 
           {!['ENDED', 'CANCELLED'].includes(event.status) ? (
             <form className="event-speaker-form" onSubmit={submit}>
+              <label>
+                Workspace user for stage permissions
+                <select
+                  value={userId}
+                  onChange={(inputEvent) => {
+                    const nextUserId = inputEvent.target.value;
+                    setUserId(nextUserId);
+                    const member = members.data?.find(
+                      (entry) => entry.user.id === nextUserId,
+                    );
+                    if (member) {
+                      setDisplayName(member.user.displayName);
+                      setEmail(member.user.email);
+                    }
+                  }}
+                >
+                  <option value="">External / profile only</option>
+                  {members.data?.map((member) => (
+                    <option value={member.user.id} key={member.id}>
+                      {member.user.displayName} · {member.user.email}
+                    </option>
+                  ))}
+                </select>
+                <small>
+                  Linking a workspace user lets the media gateway enforce speaker,
+                  host, or co-host publishing permissions.
+                </small>
+              </label>
+
               <div className="form-grid">
                 <label>
                   Display name
