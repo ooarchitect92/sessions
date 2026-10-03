@@ -8,10 +8,22 @@ export function SessionCollaborationPanel({ sessionId }: { sessionId: string }) 
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<PanelTab>('people');
   const [chatBody, setChatBody] = useState('');
+  const [chatChannel, setChatChannel] = useState<'EVERYONE' | 'HOSTS' | 'PRIVATE'>('EVERYONE');
+  const [recipientUserId, setRecipientUserId] = useState('');
   const [pollQuestion, setPollQuestion] = useState('');
   const [pollOptions, setPollOptions] = useState('Yes\nNo');
   const [questionBody, setQuestionBody] = useState('');
 
+  const me = useQuery({
+    queryKey: ['auth-me'],
+    queryFn: () => api.authMe(),
+    enabled: tab === 'chat' || tab === 'people',
+  });
+  const members = useQuery({
+    queryKey: ['workspace-members'],
+    queryFn: () => api.listWorkspaceMembers(),
+    enabled: tab === 'chat' || tab === 'people',
+  });
   const chat = useQuery({
     queryKey: ['chat', sessionId],
     queryFn: () => api.listChat(sessionId),
@@ -29,7 +41,14 @@ export function SessionCollaborationPanel({ sessionId }: { sessionId: string }) 
   });
 
   const sendChat = useMutation({
-    mutationFn: () => api.createChat(sessionId, { channel: 'EVERYONE', body: chatBody }),
+    mutationFn: () =>
+      api.createChat(sessionId, {
+        channel: chatChannel,
+        body: chatBody,
+        ...(chatChannel === 'PRIVATE' && recipientUserId
+          ? { recipientUserId }
+          : {}),
+      }),
     onSuccess: async () => {
       setChatBody('');
       await queryClient.invalidateQueries({ queryKey: ['chat', sessionId] });
@@ -80,7 +99,12 @@ export function SessionCollaborationPanel({ sessionId }: { sessionId: string }) 
 
   const submitChat = (event: FormEvent) => {
     event.preventDefault();
-    if (chatBody.trim()) sendChat.mutate();
+    if (
+      chatBody.trim() &&
+      (chatChannel !== 'PRIVATE' || Boolean(recipientUserId))
+    ) {
+      sendChat.mutate();
+    }
   };
   const submitPoll = (event: FormEvent) => {
     event.preventDefault();
@@ -103,9 +127,34 @@ export function SessionCollaborationPanel({ sessionId }: { sessionId: string }) 
       {tab === 'people' ? (
         <div className="collaboration-scroll">
           <div className="people-list">
-            <div className="person-row"><div className="avatar">LO</div><div><strong>Local Owner</strong><small>Host · you</small></div><span>•••</span></div>
+            {members.data?.map((member) => (
+              <div className="person-row" key={member.id}>
+                <div className="avatar">
+                  {member.user.displayName
+                    .split(' ')
+                    .slice(0, 2)
+                    .map((part) => part[0]?.toUpperCase())
+                    .join('')}
+                </div>
+                <div>
+                  <strong>{member.user.displayName}</strong>
+                  <small>
+                    {member.role.toLowerCase()}
+                    {member.user.id === me.data?.principal.userId ? ' · you' : ''}
+                  </small>
+                </div>
+                <span>{member.user.status === 'ACTIVE' ? '●' : '○'}</span>
+              </div>
+            ))}
+            {members.isLoading ? <p className="side-muted">Loading people…</p> : null}
           </div>
-          <div className="side-panel-note"><strong>Presence is realtime</strong><p>Authenticated socket joins and leaves are broadcast to the session room. Durable attendance intervals are the next analytics increment.</p></div>
+          <div className="side-panel-note">
+            <strong>Workspace directory</strong>
+            <p>
+              Private chat recipients are limited to active members of the current workspace.
+              Socket join/leave events remain realtime session signals.
+            </p>
+          </div>
         </div>
       ) : null}
 
@@ -114,11 +163,97 @@ export function SessionCollaborationPanel({ sessionId }: { sessionId: string }) 
           <div className="collaboration-scroll message-list">
             {chat.isLoading ? <p className="side-muted">Loading chat…</p> : null}
             {chat.data?.map((message) => (
-              <article className="chat-message" key={message.id}><div><strong>{message.author.displayName}</strong><span>{new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(new Date(message.createdAt))}</span></div><p>{message.body}</p></article>
+              <article
+                className={message.channel === 'PRIVATE' ? 'chat-message private-message' : 'chat-message'}
+                key={message.id}
+              >
+                <div>
+                  <strong>{message.author.displayName}</strong>
+                  <span>
+                    {new Intl.DateTimeFormat(undefined, {
+                      hour: 'numeric',
+                      minute: '2-digit',
+                    }).format(new Date(message.createdAt))}
+                  </span>
+                </div>
+                <small className="chat-channel-label">
+                  {message.channel === 'PRIVATE'
+                    ? `Private · ${message.author.displayName} → ${message.recipient?.displayName ?? 'recipient'}`
+                    : message.channel === 'HOSTS'
+                      ? 'Hosts'
+                      : 'Everyone'}
+                </small>
+                <p>{message.body}</p>
+              </article>
             ))}
             {chat.data?.length === 0 ? <p className="side-muted">No messages yet.</p> : null}
           </div>
-          <form className="side-composer" onSubmit={submitChat}><textarea value={chatBody} onChange={(event) => setChatBody(event.target.value)} maxLength={5000} placeholder="Message everyone" /><button disabled={sendChat.isPending || !chatBody.trim()}>Send</button></form>
+          <form className="side-composer private-chat-composer" onSubmit={submitChat}>
+            <div className="chat-routing-row">
+              <select
+                value={chatChannel}
+                onChange={(event) => {
+                  const next = event.target.value as 'EVERYONE' | 'HOSTS' | 'PRIVATE';
+                  setChatChannel(next);
+                  if (next !== 'PRIVATE') setRecipientUserId('');
+                }}
+                aria-label="Chat audience"
+              >
+                <option value="EVERYONE">Everyone</option>
+                {me.data?.principal.roles.some((role) =>
+                  ['OWNER', 'ADMIN', 'HOST'].includes(role),
+                ) ? (
+                  <option value="HOSTS">Hosts</option>
+                ) : null}
+                <option value="PRIVATE">Private</option>
+              </select>
+              {chatChannel === 'PRIVATE' ? (
+                <select
+                  required
+                  value={recipientUserId}
+                  onChange={(event) => setRecipientUserId(event.target.value)}
+                  aria-label="Private message recipient"
+                >
+                  <option value="">Choose person…</option>
+                  {members.data
+                    ?.filter(
+                      (member) =>
+                        member.user.id !== me.data?.principal.userId &&
+                        member.user.status === 'ACTIVE',
+                    )
+                    .map((member) => (
+                      <option key={member.user.id} value={member.user.id}>
+                        {member.user.displayName}
+                      </option>
+                    ))}
+                </select>
+              ) : null}
+            </div>
+            <textarea
+              value={chatBody}
+              onChange={(event) => setChatBody(event.target.value)}
+              maxLength={5000}
+              placeholder={
+                chatChannel === 'PRIVATE'
+                  ? 'Private message'
+                  : chatChannel === 'HOSTS'
+                    ? 'Message hosts'
+                    : 'Message everyone'
+              }
+            />
+            {sendChat.error ? (
+              <div className="error-banner compact-error">{sendChat.error.message}</div>
+            ) : null}
+            <button
+              disabled={
+                sendChat.isPending ||
+                !chatBody.trim() ||
+                (chatChannel === 'PRIVATE' && !recipientUserId)
+              }
+            >
+              Send
+            </button>
+          </form>
         </div>
       ) : null}
 
