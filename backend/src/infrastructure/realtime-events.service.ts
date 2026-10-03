@@ -19,6 +19,8 @@ export interface SessionRealtimeEvent {
     | 'question.created'
     | 'question.updated'
     | 'question.votes.updated'
+    | 'agenda.timer.updated'
+    | 'media.moderation.updated'
     | 'memory.updated';
   payload: unknown;
   audienceUserIds?: string[];
