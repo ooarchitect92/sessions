@@ -577,6 +577,9 @@ model MemorySummary {
   decisions      Json           @default("[]")
   actionItems    Json           @default("[]") @map("action_items")
   citations      Json           @default("[]")
+  reviewedAt     DateTime?      @map("reviewed_at") @db.Timestamptz(6)
+  reviewedByUserId String?      @map("reviewed_by_user_id") @db.Uuid
+  reviewNote     String?        @map("review_note") @db.VarChar(1000)
   completedAt    DateTime?      @map("completed_at") @db.Timestamptz(6)
   failureCode    String?        @map("failure_code") @db.VarChar(160)
   version        Int            @default(1)
@@ -585,9 +588,29 @@ model MemorySummary {
   organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   workspace      Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   session        Session        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  revisions      MemorySummaryRevision[]
 
   @@index([organizationId, workspaceId, status])
   @@map("memory_summaries")
+}
+
+model MemorySummaryRevision {
+  id                String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId    String        @map("organization_id") @db.Uuid
+  workspaceId       String        @map("workspace_id") @db.Uuid
+  memorySummaryId   String        @map("memory_summary_id") @db.Uuid
+  editedByUserId    String        @map("edited_by_user_id") @db.Uuid
+  summaryVersion    Int           @map("summary_version")
+  summaryText       String        @map("summary_text") @db.Text
+  decisions         Json          @default("[]")
+  actionItems       Json          @default("[]") @map("action_items")
+  reviewNote        String?       @map("review_note") @db.VarChar(1000)
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  memorySummary     MemorySummary @relation(fields: [memorySummaryId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, workspaceId, memorySummaryId, createdAt])
+  @@index([memorySummaryId, summaryVersion])
+  @@map("memory_summary_revisions")
 }
 
 model ChatMessage {
