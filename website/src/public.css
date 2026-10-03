@@ -517,3 +517,81 @@
 .public-form .public-checkbox-field span {
   line-height: 1.5;
 }
+
+
+.public-speaker-section {
+  margin-top: 34px;
+}
+
+.public-speaker-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.public-speaker-card {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 13px;
+  align-items: start;
+  padding: 16px;
+  border: 1px solid #d8d5cc;
+  border-radius: 15px;
+  background: rgba(255, 254, 250, 0.74);
+}
+
+.public-speaker-card img,
+.public-speaker-initials {
+  width: 56px;
+  height: 56px;
+  border-radius: 15px;
+}
+
+.public-speaker-card img {
+  object-fit: cover;
+}
+
+.public-speaker-initials {
+  display: grid;
+  place-items: center;
+  background: #dfeae5;
+  color: #285a4e;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.public-speaker-card > div:last-child {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.public-speaker-card span {
+  color: #688078;
+  font-size: 8px;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+}
+
+.public-speaker-card strong {
+  font-size: 13px;
+}
+
+.public-speaker-card small {
+  color: #6f7c78;
+  font-size: 10px;
+}
+
+.public-speaker-card p {
+  margin: 4px 0 0;
+  color: #697571;
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+@media (max-width: 700px) {
+  .public-speaker-grid {
+    grid-template-columns: 1fr;
+  }
+}
