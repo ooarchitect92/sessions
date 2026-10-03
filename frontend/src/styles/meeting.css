@@ -125,3 +125,84 @@
     flex-direction: column;
   }
 }
+
+
+.media-stage {
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+}
+
+.meeting-stage.with-shared-content {
+  display: grid;
+  grid-template-rows: minmax(240px, 58%) minmax(180px, 42%);
+}
+
+.shared-content-stage {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: #101817;
+}
+
+.shared-content-heading {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.shared-content-heading strong {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+}
+
+.shared-content-heading a {
+  color: #bdd9d2;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.shared-content-frame,
+.shared-video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border: 0;
+  background: #080d0c;
+}
+
+.shared-video {
+  object-fit: contain;
+}
+
+.shared-note-stage {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.shared-note-copy {
+  overflow: auto;
+  padding: 28px;
+  white-space: pre-wrap;
+  line-height: 1.7;
+  color: #d7e2df;
+  font-size: 14px;
+}
+
+.agenda-inline-form textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+@media (max-width: 900px) {
+  .meeting-stage.with-shared-content {
+    grid-template-rows: minmax(220px, 52%) minmax(180px, 48%);
+  }
+}
