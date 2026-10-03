@@ -357,6 +357,13 @@ export function SessionPage() {
         </div>
       </header>
 
+      {realtime.breakoutNotice ? (
+        <div className="breakout-broadcast-banner" role="status">
+          <strong>Breakout broadcast</strong>
+          <span>{realtime.breakoutNotice}</span>
+        </div>
+      ) : null}
+
       {current.recordingEnabled ? (
         <section className="recording-consent-banner" aria-live="polite">
           <div>
