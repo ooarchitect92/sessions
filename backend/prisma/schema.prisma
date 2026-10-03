@@ -402,24 +402,28 @@ model BookingPage {
 }
 
 model BookingReservation {
-  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId String        @map("organization_id") @db.Uuid
-  workspaceId    String        @map("workspace_id") @db.Uuid
-  bookingPageId  String        @map("booking_page_id") @db.Uuid
-  sessionId      String?       @map("session_id") @db.Uuid
-  name           String        @db.VarChar(160)
-  email          String        @db.Citext
-  startsAt       DateTime      @map("starts_at") @db.Timestamptz(6)
-  endsAt         DateTime      @map("ends_at") @db.Timestamptz(6)
-  timezone       String        @db.VarChar(100)
-  answers        Json          @default("{}")
-  status         BookingStatus @default(CONFIRMED)
-  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
-  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  workspace      Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  bookingPage    BookingPage   @relation(fields: [bookingPageId], references: [id], onDelete: Cascade)
-  session        Session?      @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  id                  String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId      String        @map("organization_id") @db.Uuid
+  workspaceId         String        @map("workspace_id") @db.Uuid
+  bookingPageId       String        @map("booking_page_id") @db.Uuid
+  sessionId           String?       @map("session_id") @db.Uuid
+  name                String        @db.VarChar(160)
+  email               String        @db.Citext
+  startsAt            DateTime      @map("starts_at") @db.Timestamptz(6)
+  endsAt              DateTime      @map("ends_at") @db.Timestamptz(6)
+  timezone            String        @db.VarChar(100)
+  answers             Json          @default("{}")
+  status              BookingStatus @default(CONFIRMED)
+  managementTokenHash String?       @unique @map("management_token_hash") @db.VarChar(64)
+  cancelledAt         DateTime?     @map("cancelled_at") @db.Timestamptz(6)
+  rescheduleCount     Int           @default(0) @map("reschedule_count")
+  version             Int           @default(1)
+  createdAt           DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization        Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace           Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  bookingPage         BookingPage   @relation(fields: [bookingPageId], references: [id], onDelete: Cascade)
+  session             Session?      @relation(fields: [sessionId], references: [id], onDelete: SetNull)
 
   @@unique([bookingPageId, startsAt])
   @@index([organizationId, workspaceId, startsAt])
