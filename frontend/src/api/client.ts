@@ -292,8 +292,26 @@ export interface AnalyticsCsvExport {
   content: string;
 }
 
+export type EventStageRole = 'ORGANIZER' | 'HOST' | 'COHOST' | 'SPEAKER';
+
+export interface EventSpeakerRecord {
+  id: string;
+  eventId: string;
+  userId: string | null;
+  role: EventStageRole;
+  position: number;
+  displayName: string;
+  email: string | null;
+  title: string | null;
+  bio: string | null;
+  avatarUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface EventRecord extends PlatformEvent {
-  _count?: { registrations: number };
+  speakers?: EventSpeakerRecord[];
+  _count?: { registrations: number; speakers?: number };
 }
 
 export interface BookingPageRecord extends BookingPage {
@@ -1046,6 +1064,59 @@ export const api = {
       method: "POST",
       headers: { "idempotency-key": crypto.randomUUID() },
       body: JSON.stringify(input),
+    });
+  },
+
+  listEventSpeakers(eventId: string): Promise<EventSpeakerRecord[]> {
+    return request<EventSpeakerRecord[]>(`/events/${eventId}/speakers`);
+  },
+
+  createEventSpeaker(
+    eventId: string,
+    input: {
+      userId?: string;
+      role: EventStageRole;
+      displayName: string;
+      email?: string;
+      title?: string;
+      bio?: string;
+      avatarUrl?: string;
+    },
+  ): Promise<EventSpeakerRecord> {
+    return request<EventSpeakerRecord>(`/events/${eventId}/speakers`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  updateEventSpeaker(
+    eventId: string,
+    speakerId: string,
+    input: Partial<{
+      userId: string | null;
+      role: EventStageRole;
+      displayName: string;
+      email: string | null;
+      title: string | null;
+      bio: string | null;
+      avatarUrl: string | null;
+    }>,
+  ): Promise<EventSpeakerRecord> {
+    return request<EventSpeakerRecord>(
+      `/events/${eventId}/speakers/${speakerId}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(input),
+      },
+    );
+  },
+
+  deleteEventSpeaker(
+    eventId: string,
+    speakerId: string,
+  ): Promise<{ id: string; deleted: true }> {
+    return request(`/events/${eventId}/speakers/${speakerId}`, {
+      method: 'DELETE',
     });
   },
 
