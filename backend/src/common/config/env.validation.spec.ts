@@ -55,6 +55,26 @@ describe('environment validation', () => {
     ).toThrow('requires email verification');
   });
 
+  it('requires STT credentials when transcription worker is enabled', () => {
+    expect(() =>
+      validateEnvironment({
+        ...base,
+        TRANSCRIPTION_WORKER_ENABLED: 'true',
+        STT_API_KEY: '',
+      }),
+    ).toThrow('STT_API_KEY is required');
+  });
+
+  it('requires AI credentials when AI worker is enabled', () => {
+    expect(() =>
+      validateEnvironment({
+        ...base,
+        AI_WORKER_ENABLED: 'true',
+        AI_API_KEY: '',
+      }),
+    ).toThrow('AI_API_KEY is required');
+  });
+
   it('rejects the example auth encryption key in production', () => {
     expect(() =>
       validateEnvironment({
