@@ -5,6 +5,10 @@ import { FormEvent, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api, type GeneratedAgenda, type MediaToken } from '../api/client';
 import { AgendaContentStage } from '../components/AgendaContentStage';
+import {
+  DevicePreflight,
+  type MediaJoinPreferences,
+} from '../components/DevicePreflight';
 import { SessionCollaborationPanel } from '../components/SessionCollaborationPanel';
 import { useSessionRealtime } from '../hooks/use-session-realtime';
 
@@ -19,6 +23,11 @@ export function SessionPage() {
   const { sessionId = '' } = useParams();
   const queryClient = useQueryClient();
   const [media, setMedia] = useState<MediaToken | null>(null);
+  const [preflightOpen, setPreflightOpen] = useState(false);
+  const [mediaPreferences, setMediaPreferences] = useState<MediaJoinPreferences>({
+    audioEnabled: true,
+    videoEnabled: true,
+  });
   const [agendaEditorOpen, setAgendaEditorOpen] = useState(false);
   const [agendaAiOpen, setAgendaAiOpen] = useState(false);
   const [agendaTemplatesOpen, setAgendaTemplatesOpen] = useState(false);
@@ -99,7 +108,10 @@ export function SessionPage() {
 
   const join = useMutation({
     mutationFn: () => api.createMediaToken(sessionId),
-    onSuccess: setMedia,
+    onSuccess: (token) => {
+      setMedia(token);
+      setPreflightOpen(false);
+    },
   });
 
   const saveAgendaTemplate = useMutation({
@@ -308,7 +320,7 @@ export function SessionPage() {
           ) : null}
           <button
             className="button primary"
-            onClick={() => join.mutate()}
+            onClick={() => setPreflightOpen(true)}
             disabled={join.isPending || !consentGranted}
           >
             {!consentGranted
@@ -317,7 +329,7 @@ export function SessionPage() {
                 ? 'Opening stage…'
                 : media
                   ? 'Reconnect media'
-                  : 'Join media stage'}
+                  : 'Check devices & join'}
           </button>
         </div>
       </header>
@@ -365,6 +377,20 @@ export function SessionPage() {
             </div>
           ) : null}
         </section>
+      ) : null}
+
+      {preflightOpen ? (
+        <DevicePreflight
+          busy={join.isPending}
+          error={join.error instanceof Error ? join.error.message : null}
+          onCancel={() => {
+            if (!join.isPending) setPreflightOpen(false);
+          }}
+          onJoin={(preferences) => {
+            setMediaPreferences(preferences);
+            join.mutate();
+          }}
+        />
       ) : null}
 
       <div className="meeting-layout">
@@ -795,8 +821,27 @@ export function SessionPage() {
               token={media.token}
               serverUrl={media.url}
               connect
-              audio
-              video
+              audio={
+                mediaPreferences.audioEnabled
+                  ? {
+                      ...(mediaPreferences.audioDeviceId
+                        ? { deviceId: mediaPreferences.audioDeviceId }
+                        : {}),
+                      echoCancellation: true,
+                      noiseSuppression: true,
+                      autoGainControl: true,
+                    }
+                  : false
+              }
+              video={
+                mediaPreferences.videoEnabled
+                  ? {
+                      ...(mediaPreferences.videoDeviceId
+                        ? { deviceId: mediaPreferences.videoDeviceId }
+                        : {}),
+                    }
+                  : false
+              }
               data-lk-theme="default"
               onDisconnected={() => setMedia(null)}
             >
@@ -816,7 +861,7 @@ export function SessionPage() {
               </p>
               <button
                 className="button primary large"
-                onClick={() => join.mutate()}
+                onClick={() => setPreflightOpen(true)}
                 disabled={join.isPending || !consentGranted}
               >
                 {!consentGranted
