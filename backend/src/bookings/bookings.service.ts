@@ -515,16 +515,6 @@ export class BookingsService {
         );
       }
 
-      const updated = await transaction.bookingReservation.update({
-        where: { id: reservation.id },
-        data: {
-          status: BookingStatus.CANCELLED,
-          cancelledAt: new Date(),
-          version: { increment: 1 },
-        },
-        include: { session: true },
-      });
-
       if (
         reservation.sessionId &&
         reservation.session &&
@@ -538,6 +528,16 @@ export class BookingsService {
           },
         });
       }
+
+      const updated = await transaction.bookingReservation.update({
+        where: { id: reservation.id },
+        data: {
+          status: BookingStatus.CANCELLED,
+          cancelledAt: new Date(),
+          version: { increment: 1 },
+        },
+        include: { session: true },
+      });
 
       const publicReservation = this.publicReservationShape(updated);
       await this.outbox.enqueue(
