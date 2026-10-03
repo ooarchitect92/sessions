@@ -17,6 +17,7 @@ export interface SessionReactionEvent {
 export interface SessionRealtimeController {
   connected: boolean;
   reactions: SessionReactionEvent[];
+  breakoutNotice: string | null;
   sendReaction: (reaction: SessionReaction) => void;
 }
 
@@ -30,6 +31,7 @@ export function useSessionRealtime(sessionId: string): SessionRealtimeController
   const socketRef = useRef<Socket | null>(null);
   const [connected, setConnected] = useState(false);
   const [reactions, setReactions] = useState<SessionReactionEvent[]>([]);
+  const [breakoutNotice, setBreakoutNotice] = useState<string | null>(null);
 
   const sendReaction = useCallback(
     (reaction: SessionReaction) => {
@@ -119,6 +121,24 @@ export function useSessionRealtime(sessionId: string): SessionRealtimeController
         }, 2600);
         reactionTimers.add(timer);
       });
+      for (const eventName of [
+        'breakout.updated',
+        'breakout.opened',
+        'breakout.closed',
+        'breakout.assignment.updated',
+      ]) {
+        socket.on(eventName, () => {
+          void queryClient.invalidateQueries({ queryKey: ['breakouts', sessionId] });
+        });
+      }
+      socket.on(
+        'breakout.broadcast',
+        (event: { sessionId: string; message: string; sentByDisplayName: string }) => {
+          if (event.sessionId !== sessionId) return;
+          setBreakoutNotice(`${event.sentByDisplayName}: ${event.message}`);
+          window.setTimeout(() => setBreakoutNotice(null), 8000);
+        },
+      );
       socket.on('media.moderation.updated', () => {
         void queryClient.invalidateQueries({
           queryKey: ['media-participants', sessionId],
@@ -144,5 +164,5 @@ export function useSessionRealtime(sessionId: string): SessionRealtimeController
     };
   }, [queryClient, sessionId]);
 
-  return { connected, reactions, sendReaction };
+  return { connected, reactions, breakoutNotice, sendReaction };
 }
