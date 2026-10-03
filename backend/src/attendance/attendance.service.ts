@@ -24,7 +24,7 @@ export class AttendanceService {
     return this.database.run(principal, async (transaction) => {
       const session = await transaction.session.findUnique({
         where: { id: sessionId },
-        select: { id: true },
+        select: { id: true, event: { select: { id: true } } },
       });
       if (!session) throw new NotFoundException('Session not found');
 
@@ -56,6 +56,34 @@ export class AttendanceService {
           lastHeartbeatAt: occurredAt,
         },
       });
+
+      if (session.event) {
+        const checkedIn = await transaction.eventRegistration.updateMany({
+          where: {
+            eventId: session.event.id,
+            email: principal.email,
+            status: 'REGISTERED',
+          },
+          data: {
+            status: 'ATTENDED',
+            checkedInAt: occurredAt,
+          },
+        });
+        if (checkedIn.count > 0) {
+          await this.outbox.enqueue(transaction, principal, {
+            aggregateType: 'event',
+            aggregateId: session.event.id,
+            eventType: 'event.registration.attended',
+            payload: {
+              eventId: session.event.id,
+              sessionId,
+              userId: principal.userId,
+              email: principal.email,
+              checkedInAt: occurredAt.toISOString(),
+            },
+          });
+        }
+      }
 
       await this.outbox.enqueue(transaction, principal, {
         aggregateType: 'session_attendance',
