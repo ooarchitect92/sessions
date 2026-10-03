@@ -223,6 +223,7 @@ export interface TranscriptRecord {
   id: string;
   sessionId: string;
   status: ArtifactStatus;
+  version: number;
   language: string | null;
   fullText?: string | null;
   completedAt: string | null;
@@ -234,6 +235,14 @@ export interface TranscriptRecord {
     speakerLabel: string | null;
     text: string;
   }>;
+}
+
+export interface TranscriptRevisionRecord {
+  id: string;
+  transcriptVersion: number;
+  editedByUserId: string;
+  reason: string | null;
+  createdAt: string;
 }
 
 export interface MemorySummaryRecord {
@@ -781,6 +790,31 @@ export const api = {
 
   getMemory(sessionId: string): Promise<MemoryDetail> {
     return request<MemoryDetail>(`/memory/${sessionId}`);
+  },
+
+  listTranscriptRevisions(sessionId: string): Promise<TranscriptRevisionRecord[]> {
+    return request<TranscriptRevisionRecord[]>(
+      `/transcripts/${sessionId}/revisions`,
+    );
+  },
+
+  updateTranscript(
+    sessionId: string,
+    input: {
+      reason?: string;
+      segments: Array<{
+        position: number;
+        startMs: number;
+        endMs: number;
+        speakerLabel?: string | null;
+        text: string;
+      }>;
+    },
+  ): Promise<TranscriptRecord> {
+    return request<TranscriptRecord>(`/transcripts/${sessionId}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
   },
 
   retryMemory(
