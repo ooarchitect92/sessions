@@ -14,11 +14,23 @@ export interface SessionReactionEvent {
   occurredAt: string;
 }
 
+export interface WhiteboardCursorEvent {
+  sessionId: string;
+  userId: string;
+  displayName: string;
+  x: number;
+  y: number;
+  active: boolean;
+  occurredAt: string;
+}
+
 export interface SessionRealtimeController {
   connected: boolean;
   reactions: SessionReactionEvent[];
   breakoutNotice: string | null;
+  whiteboardCursors: WhiteboardCursorEvent[];
   sendReaction: (reaction: SessionReaction) => void;
+  sendWhiteboardCursor: (x: number, y: number, active?: boolean) => void;
 }
 
 function realtimeUrl(): string {
@@ -32,10 +44,25 @@ export function useSessionRealtime(sessionId: string): SessionRealtimeController
   const [connected, setConnected] = useState(false);
   const [reactions, setReactions] = useState<SessionReactionEvent[]>([]);
   const [breakoutNotice, setBreakoutNotice] = useState<string | null>(null);
+  const [whiteboardCursors, setWhiteboardCursors] = useState<
+    WhiteboardCursorEvent[]
+  >([]);
 
   const sendReaction = useCallback(
     (reaction: SessionReaction) => {
       socketRef.current?.emit('reaction.send', { sessionId, reaction });
+    },
+    [sessionId],
+  );
+
+  const sendWhiteboardCursor = useCallback(
+    (x: number, y: number, active = true) => {
+      socketRef.current?.emit('whiteboard.cursor', {
+        sessionId,
+        x,
+        y,
+        active,
+      });
     },
     [sessionId],
   );
@@ -139,6 +166,27 @@ export function useSessionRealtime(sessionId: string): SessionRealtimeController
           window.setTimeout(() => setBreakoutNotice(null), 8000);
         },
       );
+      socket.on('whiteboard.updated', () => {
+        void queryClient.invalidateQueries({
+          queryKey: ['whiteboard', sessionId],
+        });
+      });
+      socket.on('whiteboard.cursor', (event: WhiteboardCursorEvent) => {
+        if (event.sessionId !== sessionId) return;
+        setWhiteboardCursors((current) => {
+          const next = current.filter((cursor) => cursor.userId !== event.userId);
+          return event.active ? [...next, event] : next;
+        });
+        window.setTimeout(() => {
+          setWhiteboardCursors((current) =>
+            current.filter(
+              (cursor) =>
+                cursor.userId !== event.userId ||
+                cursor.occurredAt !== event.occurredAt,
+            ),
+          );
+        }, 3000);
+      });
       socket.on('media.moderation.updated', () => {
         void queryClient.invalidateQueries({
           queryKey: ['media-participants', sessionId],
@@ -164,5 +212,12 @@ export function useSessionRealtime(sessionId: string): SessionRealtimeController
     };
   }, [queryClient, sessionId]);
 
-  return { connected, reactions, breakoutNotice, sendReaction };
+  return {
+    connected,
+    reactions,
+    breakoutNotice,
+    whiteboardCursors,
+    sendReaction,
+    sendWhiteboardCursor,
+  };
 }
