@@ -39,23 +39,25 @@ export class BreakoutsService {
       const rooms = await transaction.breakoutRoom.findMany({
         where: { sessionId },
         orderBy: { position: 'asc' },
-        include: canManage
+        ...(canManage
           ? {
-              assignments: {
-                orderBy: { assignedAt: 'asc' },
-                include: {
-                  user: {
-                    select: {
-                      id: true,
-                      displayName: true,
-                      email: true,
-                      avatarUrl: true,
+              include: {
+                assignments: {
+                  orderBy: { assignedAt: 'asc' as const },
+                  include: {
+                    user: {
+                      select: {
+                        id: true,
+                        displayName: true,
+                        email: true,
+                        avatarUrl: true,
+                      },
                     },
                   },
                 },
               },
             }
-          : undefined,
+          : {}),
       });
       const ownAssignment = await transaction.breakoutAssignment.findUnique({
         where: {
@@ -95,7 +97,12 @@ export class BreakoutsService {
         select: { id: true, status: true },
       });
       if (!session) throw new NotFoundException('Session not found');
-      if (![SessionStatus.DRAFT, SessionStatus.SCHEDULED, SessionStatus.LIVE].includes(session.status)) {
+      const configurableStatuses = new Set<SessionStatus>([
+        SessionStatus.DRAFT,
+        SessionStatus.SCHEDULED,
+        SessionStatus.LIVE,
+      ]);
+      if (!configurableStatuses.has(session.status)) {
         throw new ConflictException(
           `Breakout rooms cannot be configured while session is ${session.status}`,
         );
@@ -119,7 +126,7 @@ export class BreakoutsService {
               organizationId: principal.organizationId,
               workspaceId: principal.workspaceId,
               sessionId,
-              name: names[index],
+              name: names[index]!,
               position: index,
               livekitRoomName: `session-${sessionId}-breakout-${index + 1}`,
             },
@@ -183,6 +190,7 @@ export class BreakoutsService {
       for (let index = 0; index < shuffled.length; index += 1) {
         const participant = shuffled[index];
         const room = rooms[index % rooms.length];
+        if (!participant || !room) continue;
         assignments.push(
           await transaction.breakoutAssignment.create({
             data: {
