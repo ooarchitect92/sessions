@@ -62,6 +62,17 @@ const environmentSchema = z
     STT_BASE_URL: z.string().url().default('https://api.openai.com/v1'),
     STT_MODEL: z.string().min(1).max(160).default('whisper-1'),
     STT_API_KEY: z.string().min(1).optional(),
+    AI_WORKER_ENABLED: optionalBoolean.default(false),
+    AI_PROVIDER: z.enum(['openai-compatible']).default('openai-compatible'),
+    AI_BASE_URL: z.string().url().default('https://api.openai.com/v1'),
+    AI_MODEL: z.string().min(1).max(160).default('gpt-4.1-mini'),
+    AI_API_KEY: z.string().min(1).optional(),
+    AI_MAX_TRANSCRIPT_CHARS: z.coerce
+      .number()
+      .int()
+      .min(1_000)
+      .max(2_000_000)
+      .default(120_000),
     OUTBOX_POLL_MS: z.coerce.number().int().min(250).max(60000).default(1000),
   })
   .superRefine((value, context) => {
@@ -70,6 +81,13 @@ const environmentSchema = z
         code: 'custom',
         path: ['STT_API_KEY'],
         message: 'STT_API_KEY is required when TRANSCRIPTION_WORKER_ENABLED=true',
+      });
+    }
+    if (value.AI_WORKER_ENABLED && !value.AI_API_KEY) {
+      context.addIssue({
+        code: 'custom',
+        path: ['AI_API_KEY'],
+        message: 'AI_API_KEY is required when AI_WORKER_ENABLED=true',
       });
     }
 
@@ -152,6 +170,12 @@ const environmentSchema = z
       productionIssue(
         'STT_BASE_URL',
         'STT_BASE_URL must use HTTPS in production when transcription is enabled',
+      );
+    }
+    if (value.AI_WORKER_ENABLED && !value.AI_BASE_URL.startsWith('https://')) {
+      productionIssue(
+        'AI_BASE_URL',
+        'AI_BASE_URL must use HTTPS in production when AI generation is enabled',
       );
     }
   });
