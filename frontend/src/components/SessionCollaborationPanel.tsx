@@ -21,6 +21,14 @@ export function SessionCollaborationPanel({ sessionId }: { sessionId: string }) 
     refetchInterval: 45_000,
   });
   const self = presence.data?.find((participant) => participant.isSelf);
+  const isHost =
+    self?.roles.some((role) => ['OWNER', 'ADMIN', 'HOST'].includes(role)) ?? false;
+  const mediaParticipants = useQuery({
+    queryKey: ['media-participants', sessionId],
+    queryFn: () => api.listMediaParticipants(sessionId),
+    enabled: tab === 'people' && isHost,
+    refetchInterval: 10_000,
+  });
   const chat = useQuery({
     queryKey: ['chat', sessionId],
     queryFn: () => api.listChat(sessionId),
@@ -93,6 +101,38 @@ export function SessionCollaborationPanel({ sessionId }: { sessionId: string }) 
       api.moderateQuestion(sessionId, questionId, { status: 'ANSWERED', answerText }),
     onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['questions', sessionId] }),
   });
+  const muteTrack = useMutation({
+    mutationFn: ({
+      participantId,
+      trackSid,
+      muted,
+    }: {
+      participantId: string;
+      trackSid: string;
+      muted: boolean;
+    }) => api.muteMediaTrack(sessionId, participantId, trackSid, muted),
+    onSuccess: async () =>
+      queryClient.invalidateQueries({ queryKey: ['media-participants', sessionId] }),
+  });
+  const setPublishPermission = useMutation({
+    mutationFn: ({
+      participantId,
+      canPublish,
+    }: {
+      participantId: string;
+      canPublish: boolean;
+    }) => api.setMediaPublishPermission(sessionId, participantId, canPublish),
+    onSuccess: async () =>
+      queryClient.invalidateQueries({ queryKey: ['media-participants', sessionId] }),
+  });
+  const removeParticipant = useMutation({
+    mutationFn: (participantId: string) =>
+      api.removeMediaParticipant(sessionId, participantId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['media-participants', sessionId] });
+      await queryClient.invalidateQueries({ queryKey: ['session-presence', sessionId] });
+    },
+  });
 
   const submitChat = (event: FormEvent) => {
     event.preventDefault();
@@ -124,37 +164,127 @@ export function SessionCollaborationPanel({ sessionId }: { sessionId: string }) 
       {tab === 'people' ? (
         <div className="collaboration-scroll">
           <div className="people-list">
-            {presence.data?.map((participant) => (
-              <div className="person-row" key={participant.userId}>
-                <div className="avatar">
-                  {participant.displayName
-                    .split(' ')
-                    .slice(0, 2)
-                    .map((part) => part[0]?.toUpperCase())
-                    .join('')}
+            {presence.data?.map((participant) => {
+              const mediaParticipant = mediaParticipants.data?.find(
+                (media) => media.identity === participant.userId,
+              );
+              return (
+                <div className="person-card" key={participant.userId}>
+                  <div className="person-row">
+                    <div className="avatar">
+                      {participant.displayName
+                        .split(' ')
+                        .slice(0, 2)
+                        .map((part) => part[0]?.toUpperCase())
+                        .join('')}
+                    </div>
+                    <div>
+                      <strong>{participant.displayName}</strong>
+                      <small>
+                        {participant.roles.map((role) => role.toLowerCase()).join(', ')}
+                        {participant.isSelf ? ' · you' : ''}
+                      </small>
+                    </div>
+                    <span title="Online">●</span>
+                  </div>
+
+                  {isHost && !participant.isSelf ? (
+                    <div className="media-moderation">
+                      {mediaParticipant ? (
+                        <>
+                          <div className="media-moderation-summary">
+                            <span>
+                              {mediaParticipant.permission.canPublish
+                                ? 'Can publish media'
+                                : 'Publishing blocked'}
+                            </span>
+                            <button
+                              type="button"
+                              disabled={setPublishPermission.isPending}
+                              onClick={() =>
+                                setPublishPermission.mutate({
+                                  participantId: participant.userId,
+                                  canPublish: !mediaParticipant.permission.canPublish,
+                                })
+                              }
+                            >
+                              {mediaParticipant.permission.canPublish
+                                ? 'Block media'
+                                : 'Allow media'}
+                            </button>
+                          </div>
+                          <div className="media-track-list">
+                            {mediaParticipant.tracks.map((track) => (
+                              <button
+                                type="button"
+                                key={track.sid}
+                                disabled={muteTrack.isPending}
+                                onClick={() =>
+                                  muteTrack.mutate({
+                                    participantId: participant.userId,
+                                    trackSid: track.sid,
+                                    muted: !track.muted,
+                                  })
+                                }
+                              >
+                                {track.kind === 'audio' ? 'Mic' : 'Camera'} ·{' '}
+                                {track.muted ? 'Unmute' : 'Mute'}
+                              </button>
+                            ))}
+                            {mediaParticipant.tracks.length === 0 ? (
+                              <small>No published media tracks.</small>
+                            ) : null}
+                          </div>
+                          <button
+                            className="media-remove-button"
+                            type="button"
+                            disabled={removeParticipant.isPending}
+                            onClick={() => {
+                              if (
+                                window.confirm(
+                                  `Remove ${participant.displayName} from the media room and block rejoin for 5 minutes?`,
+                                )
+                              ) {
+                                removeParticipant.mutate(participant.userId);
+                              }
+                            }}
+                          >
+                            Remove from meeting
+                          </button>
+                        </>
+                      ) : (
+                        <small className="media-moderation-offline">
+                          Not connected to the media room.
+                        </small>
+                      )}
+                    </div>
+                  ) : null}
                 </div>
-                <div>
-                  <strong>{participant.displayName}</strong>
-                  <small>
-                    {participant.roles.map((role) => role.toLowerCase()).join(', ')}
-                    {participant.isSelf ? ' · you' : ''}
-                  </small>
-                </div>
-                <span title="Online">●</span>
-              </div>
-            ))}
+              );
+            })}
             {presence.isLoading ? <p className="side-muted">Loading people…</p> : null}
             {presence.data?.length === 0 ? (
               <p className="side-muted">No active participants.</p>
             ) : null}
           </div>
-          <div className="side-panel-note">
-            <strong>Live session presence</strong>
-            <p>
-              The roster is backed by Redis heartbeats so it can be shared across API
-              instances and recover from stale browser connections.
-            </p>
-          </div>
+          {isHost ? (
+            <div className="side-panel-note">
+              <strong>Host moderation</strong>
+              <p>
+                Media controls come from LiveKit room state. Hosts can mute published
+                tracks, block publishing, or remove a participant with a temporary
+                rejoin block.
+              </p>
+            </div>
+          ) : (
+            <div className="side-panel-note">
+              <strong>Live session presence</strong>
+              <p>
+                The roster is backed by Redis heartbeats so it can be shared across API
+                instances and recover from stale browser connections.
+              </p>
+            </div>
+          )}
         </div>
       ) : null}
 
