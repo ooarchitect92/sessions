@@ -75,6 +75,26 @@ describe('environment validation', () => {
     ).toThrow('AI_API_KEY is required');
   });
 
+  it('validates webhook delivery bounds', () => {
+    expect(
+      validateEnvironment({
+        ...base,
+        WEBHOOK_MAX_ATTEMPTS: '12',
+        WEBHOOK_TIMEOUT_MS: '15000',
+      }),
+    ).toMatchObject({
+      WEBHOOK_MAX_ATTEMPTS: 12,
+      WEBHOOK_TIMEOUT_MS: 15000,
+    });
+
+    expect(() =>
+      validateEnvironment({
+        ...base,
+        WEBHOOK_MAX_ATTEMPTS: '0',
+      }),
+    ).toThrow('WEBHOOK_MAX_ATTEMPTS');
+  });
+
   it('rejects the example auth encryption key in production', () => {
     expect(() =>
       validateEnvironment({
