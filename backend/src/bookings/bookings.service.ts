@@ -21,6 +21,8 @@ import { OutboxService } from '../outbox/outbox.service';
 import {
   AvailabilityRuleDto,
   CreateBookingPageDto,
+  IntakeFieldDto,
+  IntakeFieldType,
 } from './dto/create-booking-page.dto';
 import { ManageReservationDto } from './dto/manage-reservation.dto';
 import { RescheduleReservationDto } from './dto/reschedule-reservation.dto';
@@ -55,6 +57,7 @@ export class BookingsService {
     this.assertHost(principal);
     this.assertTimeZone(input.timezone);
     this.assertAvailabilityRules(input.availabilityRules);
+    this.assertIntakeFields(input.intakeFields);
     const requestHash = createHash('sha256')
       .update(JSON.stringify({ operation: 'booking.create', input }))
       .digest('hex');
@@ -160,6 +163,9 @@ export class BookingsService {
     if (input.timezone !== undefined) this.assertTimeZone(input.timezone);
     if (input.availabilityRules !== undefined) {
       this.assertAvailabilityRules(input.availabilityRules);
+    }
+    if (input.intakeFields !== undefined) {
+      this.assertIntakeFields(input.intakeFields);
     }
 
     return this.database.run(principal, async (transaction) => {
@@ -299,6 +305,7 @@ export class BookingsService {
   ) {
     this.assertTimeZone(input.timezone);
     const page = await this.findPublicPage(organizationSlug, workspaceSlug, bookingSlug);
+    const normalizedAnswers = this.validateIntakeAnswers(page, input.answers);
     const requested = new Date(input.startsAt);
     const requestedParts = this.getZonedParts(requested, page.timezone);
     const localDate = this.formatCalendarDate(requestedParts);
@@ -350,7 +357,7 @@ export class BookingsService {
           startsAt: requested,
           endsAt,
           timezone: input.timezone,
-          answers: input.answers as Prisma.InputJsonValue,
+          answers: normalizedAnswers,
           managementTokenHash,
         },
         include: { session: true },
@@ -872,6 +879,119 @@ export class BookingsService {
       .replaceAll(';', '\\;')
       .replaceAll(',', '\\,')
       .replace(/\r?\n/g, '\\n');
+  }
+
+  private assertIntakeFields(fields: IntakeFieldDto[]): void {
+    const keys = new Set<string>();
+    for (const field of fields) {
+      if (keys.has(field.key)) {
+        throw new BadRequestException(`Duplicate intake field key: ${field.key}`);
+      }
+      keys.add(field.key);
+
+      const options = (field.options ?? []).map((option) => option.trim());
+      if (field.type === IntakeFieldType.SELECT) {
+        if (options.length === 0) {
+          throw new BadRequestException(
+            `Select intake field "${field.label}" requires at least one option`,
+          );
+        }
+        if (
+          options.some((option) => option.length === 0 || option.length > 160) ||
+          new Set(options).size !== options.length
+        ) {
+          throw new BadRequestException(
+            `Select intake field "${field.label}" has invalid or duplicate options`,
+          );
+        }
+      } else if (options.length > 0) {
+        throw new BadRequestException(
+          `Only select intake fields may define options`,
+        );
+      }
+    }
+  }
+
+  private validateIntakeAnswers(
+    page: BookingPage,
+    answers: Record<string, unknown>,
+  ): Prisma.InputJsonObject {
+    const fields = page.intakeFields as unknown as IntakeFieldDto[];
+    this.assertIntakeFields(fields);
+    const fieldByKey = new Map(fields.map((field) => [field.key, field]));
+    for (const key of Object.keys(answers)) {
+      if (!fieldByKey.has(key)) {
+        throw new BadRequestException(`Unknown intake field: ${key}`);
+      }
+    }
+
+    const normalized: Record<string, Prisma.InputJsonValue> = {};
+    for (const field of fields) {
+      const value = answers[field.key];
+      if (value === undefined || value === null || value === '') {
+        if (field.required) {
+          throw new BadRequestException(
+            `Intake field "${field.label}" is required`,
+          );
+        }
+        continue;
+      }
+
+      if (
+        field.type === IntakeFieldType.CHECKBOX ||
+        field.type === IntakeFieldType.CONSENT
+      ) {
+        if (typeof value !== 'boolean') {
+          throw new BadRequestException(
+            `Intake field "${field.label}" must be true or false`,
+          );
+        }
+        if (field.required && value !== true) {
+          throw new BadRequestException(
+            `Intake field "${field.label}" must be accepted`,
+          );
+        }
+        normalized[field.key] = value;
+        continue;
+      }
+
+      if (typeof value !== 'string') {
+        throw new BadRequestException(
+          `Intake field "${field.label}" must be text`,
+        );
+      }
+      const text = value.trim();
+      const maxLength =
+        field.type === IntakeFieldType.TEXTAREA ? 5000 : 1000;
+      if (!text && field.required) {
+        throw new BadRequestException(
+          `Intake field "${field.label}" is required`,
+        );
+      }
+      if (text.length > maxLength) {
+        throw new BadRequestException(
+          `Intake field "${field.label}" is too long`,
+        );
+      }
+      if (
+        field.type === IntakeFieldType.EMAIL &&
+        !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text)
+      ) {
+        throw new BadRequestException(
+          `Intake field "${field.label}" must be a valid email address`,
+        );
+      }
+      if (
+        field.type === IntakeFieldType.SELECT &&
+        !(field.options ?? []).map((option) => option.trim()).includes(text)
+      ) {
+        throw new BadRequestException(
+          `Intake field "${field.label}" contains an invalid option`,
+        );
+      }
+      normalized[field.key] = text;
+    }
+    return normalized as Prisma.InputJsonObject;
   }
 
   private assertAvailabilityRules(rules: AvailabilityRuleDto[]): void {
