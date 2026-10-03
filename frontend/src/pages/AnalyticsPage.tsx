@@ -127,6 +127,16 @@ export function AnalyticsPage() {
               </small>
             </article>
             <article className="analytics-metric-card">
+              <span>Attendance time</span>
+              <strong>
+                {formatMinutes(Math.round(analytics.data.attendance.totalSeconds / 60))}
+              </strong>
+              <small>
+                {analytics.data.attendance.participantSessions} participant-session
+                presences across {analytics.data.attendance.intervalCount} intervals
+              </small>
+            </article>
+            <article className="analytics-metric-card">
               <span>Engagement actions</span>
               <strong>{analytics.data.engagement.totalActions}</strong>
               <small>
@@ -196,6 +206,34 @@ export function AnalyticsPage() {
           </section>
 
           <div className="analytics-detail-grid">
+            <section className="panel analytics-detail-card">
+              <span className="eyebrow">Actual presence</span>
+              <h2>Attendance intervals</h2>
+              <dl>
+                <div>
+                  <dt>Participant sessions</dt>
+                  <dd>{analytics.data.attendance.participantSessions}</dd>
+                </div>
+                <div>
+                  <dt>Presence intervals</dt>
+                  <dd>{analytics.data.attendance.intervalCount}</dd>
+                </div>
+                <div>
+                  <dt>Tracked attendance</dt>
+                  <dd>
+                    {formatMinutes(
+                      Math.round(analytics.data.attendance.totalSeconds / 60),
+                    )}
+                  </dd>
+                </div>
+              </dl>
+              <p>
+                Presence is calculated from durable realtime join/heartbeat/leave
+                intervals rather than assuming everyone attended for the scheduled
+                meeting duration.
+              </p>
+            </section>
+
             <section className="panel analytics-detail-card">
               <span className="eyebrow">Audience funnel</span>
               <h2>Event outcomes</h2>
