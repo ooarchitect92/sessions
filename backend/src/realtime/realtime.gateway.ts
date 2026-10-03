@@ -17,6 +17,7 @@ import type { Server, Socket } from "socket.io";
 import type { Subscription } from "rxjs";
 import { z } from "zod";
 import { AgendasService } from "../agendas/agendas.service";
+import { AttendanceService } from "../attendance/attendance.service";
 import { AuthService } from "../auth/auth.service";
 import type { AccessTokenClaims, Principal } from "../common/auth/principal";
 import {
@@ -84,6 +85,7 @@ export class RealtimeGateway
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly auth: AuthService,
+    private readonly attendance: AttendanceService,
     private readonly sessions: SessionsService,
     private readonly agendas: AgendasService,
     private readonly realtimeEvents: RealtimeEventsService,
@@ -162,6 +164,7 @@ export class RealtimeGateway
           });
 
         if (result.departed) {
+          await this.attendance.leave(principal, sessionId);
           this.server.to(this.roomName(sessionId)).emit("participant.left", {
             sessionId,
             userId: principal.userId,
@@ -188,6 +191,7 @@ export class RealtimeGateway
     const principal = this.requirePrincipal(client);
     const { sessionId } = joinSchema.parse(payload);
     await this.sessions.getById(principal, sessionId);
+    await this.attendance.join(principal, sessionId);
     await client.join(this.roomName(sessionId));
     client.data.sessionIds?.add(sessionId);
 
@@ -222,6 +226,7 @@ export class RealtimeGateway
       throw new Error("Join the session before sending presence heartbeats");
     }
     await this.presence.heartbeat(sessionId, principal, client.id);
+    await this.attendance.heartbeat(principal, sessionId);
     return { ok: true };
   }
 
