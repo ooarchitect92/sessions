@@ -312,12 +312,18 @@ export interface ChatMessageRecord {
   id: string;
   sessionId: string;
   authorUserId: string;
+  recipientUserId: string | null;
   channel: ChatChannel;
   body: string;
   editedAt: string | null;
   deletedAt: string | null;
   createdAt: string;
   author: { displayName: string; avatarUrl: string | null };
+  recipient: {
+    id: string;
+    displayName: string;
+    avatarUrl: string | null;
+  } | null;
 }
 
 export interface PollOptionRecord {
@@ -912,7 +918,7 @@ export const api = {
 
   createChat(
     sessionId: string,
-    input: { channel: ChatChannel; body: string },
+    input: { channel: ChatChannel; body: string; recipientUserId?: string },
   ): Promise<ChatMessageRecord> {
     return request<ChatMessageRecord>(`/sessions/${sessionId}/chat-messages`, {
       method: "POST",
