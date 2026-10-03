@@ -6,6 +6,7 @@ import type {
 } from '@sessions/contracts';
 import { FormEvent, useMemo, useState } from 'react';
 import { api, type EventRecord } from '../api/client';
+import { EventSpeakerManager } from '../components/EventSpeakerManager';
 
 function toSlug(value: string): string {
   return value
@@ -91,7 +92,7 @@ export function EventsPage() {
         <div className="feature-state-card">
           <span>Implemented vertical slice</span>
           <strong>Event → registration → webinar</strong>
-          <small>Dynamic registration fields are now validated and rendered end to end. Reminder delivery, speaker profiles, and the visual landing-page builder remain separate increments.</small>
+          <small>Dynamic registration fields and webinar stage profiles are now managed end to end. Reminder delivery and the visual landing-page builder remain separate increments.</small>
         </div>
       </section>
 
@@ -108,7 +109,7 @@ export function EventsPage() {
           ) : null}
           <div className="workflow-card-list">
             {events.data?.map((event) => (
-              <article className="workflow-card" key={event.id}>
+              <article className="workflow-card event-workflow-card" key={event.id}>
                 <div className="workflow-card-main">
                   <div className="workflow-card-title">
                     <span className={`status-badge status-${event.status.toLowerCase()}`}>{event.status.toLowerCase()}</span>
@@ -129,6 +130,7 @@ export function EventsPage() {
                     <button className="button secondary" onClick={() => cancel.mutate(event)} disabled={cancel.isPending}>Cancel</button>
                   ) : null}
                 </div>
+                <EventSpeakerManager event={event} />
               </article>
             ))}
           </div>
