@@ -23,6 +23,7 @@ import { RecordingsModule } from "./recordings/recordings.module";
 import { RoomsModule } from "./rooms/rooms.module";
 import { SessionsModule } from "./sessions/sessions.module";
 import { TranscriptionModule } from "./transcription/transcription.module";
+import { WebhooksModule } from "./webhooks/webhooks.module";
 import { WorkspacesModule } from "./workspaces/workspaces.module";
 
 @Module({
@@ -51,6 +52,7 @@ import { WorkspacesModule } from "./workspaces/workspaces.module";
     CollaborationModule,
     MediaModule,
     RealtimeModule,
+    WebhooksModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: PrincipalGuard },
