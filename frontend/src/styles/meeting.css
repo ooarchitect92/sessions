@@ -610,3 +610,238 @@
   color: #7f928e;
   font-size: 8px;
 }
+
+
+.device-preflight-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(5, 10, 9, 0.78);
+  backdrop-filter: blur(10px);
+}
+
+.device-preflight {
+  width: min(880px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  padding: 20px;
+  background: #111a18;
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.45);
+}
+
+.device-preflight-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: flex-start;
+  margin-bottom: 18px;
+}
+
+.device-preflight-heading h2 {
+  margin: 4px 0 6px;
+  font-size: 22px;
+}
+
+.device-preflight-heading p {
+  max-width: 68ch;
+  margin: 0;
+  color: #8fa19d;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.preflight-close {
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.04);
+  color: #dce7e4;
+  font-size: 22px;
+}
+
+.device-preflight-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(260px, 0.75fr);
+  gap: 18px;
+}
+
+.device-preview {
+  position: relative;
+  min-height: 360px;
+  overflow: hidden;
+  border-radius: 14px;
+  background: #070c0b;
+}
+
+.device-preview video {
+  width: 100%;
+  height: 100%;
+  min-height: 360px;
+  object-fit: cover;
+  transform: scaleX(-1);
+}
+
+.device-preview-disabled {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #829591;
+  font-size: 12px;
+  background: radial-gradient(circle at center, #182521 0%, #0b1110 72%);
+}
+
+.device-preflight-controls {
+  display: grid;
+  gap: 11px;
+  align-content: start;
+}
+
+.device-preflight-controls label {
+  display: grid;
+  gap: 5px;
+  color: #aebfbb;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.device-preflight-controls select {
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 0 9px;
+  background: #0e1715;
+  color: #e0e9e7;
+}
+
+.preflight-toggle {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 8px !important;
+}
+
+.preflight-toggle input {
+  width: 16px;
+  height: 16px;
+}
+
+.preflight-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  border-radius: 9px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.035);
+  color: #9aada8;
+  font-size: 9px;
+}
+
+.preflight-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #6d7d79;
+}
+
+.preflight-status-ready {
+  background: #6fd0a3;
+}
+
+.preflight-status-checking {
+  background: #d7b462;
+}
+
+.preflight-status-error {
+  background: #ef8069;
+}
+
+.device-preflight-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.person-card {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.media-moderation {
+  display: grid;
+  gap: 7px;
+  margin-left: 46px;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.media-moderation-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.media-moderation-summary span,
+.media-moderation-offline,
+.media-track-list small {
+  color: #829591;
+  font-size: 8px;
+}
+
+.media-moderation button,
+.media-track-list button {
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 7px;
+  padding: 5px 7px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #dce7e4;
+  font-size: 8px;
+}
+
+.media-track-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.media-remove-button {
+  justify-self: start;
+  border-color: rgba(238, 123, 99, 0.28) !important;
+  color: #ffab96 !important;
+}
+
+@media (max-width: 760px) {
+  .device-preflight-backdrop {
+    padding: 10px;
+  }
+
+  .device-preflight {
+    max-height: calc(100vh - 20px);
+    padding: 14px;
+  }
+
+  .device-preflight-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .device-preview,
+  .device-preview video {
+    min-height: 240px;
+  }
+
+  .device-preflight-actions {
+    grid-template-columns: 1fr;
+  }
+}
