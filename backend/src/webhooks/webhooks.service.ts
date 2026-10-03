@@ -203,14 +203,17 @@ export class WebhooksService {
         select: { id: true },
       });
       if (!existing) throw new NotFoundException('Webhook subscription not found');
-      await transaction.webhookSubscription.delete({ where: { id } });
+      await transaction.webhookSubscription.update({
+        where: { id },
+        data: { active: false, version: { increment: 1 } },
+      });
       await this.audit.record(transaction, principal, {
-        action: 'webhook_subscription.deleted',
+        action: 'webhook_subscription.disabled',
         resourceType: 'webhook_subscription',
         resourceId: id,
-        metadata: {},
+        metadata: { preservedDeliveryHistory: true },
       });
-      return { id, deleted: true };
+      return { id, disabled: true };
     });
   }
 
