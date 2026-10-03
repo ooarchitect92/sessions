@@ -113,6 +113,11 @@ Access tokens are short-lived JWTs. Managed browser sessions use opaque, hashed 
 | `GET`   | `/v1/public/{orgSlug}/{workspaceSlug}/bookings/{bookingSlug}`              | public page metadata                                                 |
 | `GET`   | `/v1/public/{orgSlug}/{workspaceSlug}/bookings/{bookingSlug}/slots`        | generate available slots for a bounded date range                    |
 | `POST`  | `/v1/public/{orgSlug}/{workspaceSlug}/bookings/{bookingSlug}/reservations` | lock a slot and atomically create reservation plus scheduled session |
+| `POST`  | `/v1/public/{orgSlug}/{workspaceSlug}/bookings/{bookingSlug}/reservations/{reservationId}/reschedule` | securely move an existing reservation and linked scheduled session |
+| `POST`  | `/v1/public/{orgSlug}/{workspaceSlug}/bookings/{bookingSlug}/reservations/{reservationId}/cancel` | securely cancel reservation and eligible linked session |
+| `GET`   | `/v1/public/{orgSlug}/{workspaceSlug}/bookings/{bookingSlug}/reservations/{reservationId}/calendar` | create authenticated ICS content for the reservation |
+
+Booking creation returns a one-time, high-entropy management token to the booking client. Only its SHA-256 hash is persisted. Reschedule, cancellation and calendar export require the raw token, and cancellation releases the slot for future bookings through a database-level partial uniqueness rule on confirmed reservations. Booking intake fields are validated against a typed form definition before answers are stored.
 
 ### In-session collaboration
 
@@ -158,7 +163,7 @@ The current single-replica event bridge is in-process. A Redis/NATS adapter is a
 
 The following families define the remaining contract direction; they are not claimed as implemented:
 
-- `/v1/availability/connections`, `/calendar-connections`, `/reschedules`, `/cancellations`
+- `/v1/availability/connections`, `/calendar-connections`
 - `/v1/artifacts/{id}/playback`, `/shares`, `/retention`, `/exports`, `/deletions`
 - `/v1/whiteboards`, `/breakout-rooms`, `/attendance`, `/engagement-events`
 - `/v1/integrations`, `/oauth/connections`, `/webhooks`, `/api-keys`
