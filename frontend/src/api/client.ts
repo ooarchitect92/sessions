@@ -160,6 +160,20 @@ export interface MediaToken {
   expiresAt: string;
 }
 
+export interface AgendaSuggestion {
+  title: string;
+  durationSeconds: number;
+  type: AgendaItemType;
+  notes: string;
+}
+
+export interface GeneratedAgenda {
+  sessionId: string;
+  provider: string;
+  model: string;
+  items: AgendaSuggestion[];
+}
+
 export interface EventRecord extends PlatformEvent {
   _count?: { registrations: number };
 }
@@ -630,6 +644,16 @@ export const api = {
     },
   ): Promise<AgendaItem> {
     return request<AgendaItem>(`/sessions/${sessionId}/agenda-items`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+
+  generateAgenda(
+    sessionId: string,
+    input: { objective: string; desiredItems: number },
+  ): Promise<GeneratedAgenda> {
+    return request<GeneratedAgenda>(`/sessions/${sessionId}/agenda-items/generate`, {
       method: "POST",
       body: JSON.stringify(input),
     });
