@@ -22,7 +22,11 @@ export class WebhookEgressPolicyService {
       throw new BadRequestException('Webhook URL must use the standard HTTPS port');
     }
 
-    const hostname = url.hostname.toLowerCase().replace(/\.$/, '');
+    const hostname = url.hostname
+      .toLowerCase()
+      .replace(/\.$/, '')
+      .replace(/^\[/, '')
+      .replace(/\]$/, '');
     if (
       hostname === 'localhost' ||
       hostname.endsWith('.localhost') ||
@@ -43,7 +47,11 @@ export class WebhookEgressPolicyService {
 
   async assertDeliveryTarget(value: string): Promise<URL> {
     const url = this.validateConfiguration(value);
-    const hostname = url.hostname.toLowerCase().replace(/\.$/, '');
+    const hostname = url.hostname
+      .toLowerCase()
+      .replace(/\.$/, '')
+      .replace(/^\[/, '')
+      .replace(/\]$/, '');
     if (isIP(hostname)) return url;
 
     let addresses: Array<{ address: string; family: number }>;
