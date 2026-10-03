@@ -1,4 +1,5 @@
 import { Logger, OnModuleDestroy } from "@nestjs/common";
+import { randomUUID } from "node:crypto";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import {
@@ -19,6 +20,7 @@ import { AgendasService } from "../agendas/agendas.service";
 import { AuthService } from "../auth/auth.service";
 import type { AccessTokenClaims, Principal } from "../common/auth/principal";
 import { RealtimeEventsService } from "../infrastructure/realtime-events.service";
+import { RedisService } from "../infrastructure/redis.service";
 import { SessionsService } from "../sessions/sessions.service";
 
 const principalSchema = z.object({
@@ -37,6 +39,10 @@ const joinSchema = z.object({ sessionId: z.string().uuid() });
 const activateSchema = z.object({
   sessionId: z.string().uuid(),
   agendaItemId: z.string().uuid(),
+});
+const reactionSchema = z.object({
+  sessionId: z.string().uuid(),
+  reaction: z.enum(["👍", "❤️", "😂", "👏", "🎉", "🙌"]),
 });
 
 type SocketData = {
@@ -76,6 +82,7 @@ export class RealtimeGateway
     private readonly sessions: SessionsService,
     private readonly agendas: AgendasService,
     private readonly realtimeEvents: RealtimeEventsService,
+    private readonly redis: RedisService,
   ) {}
 
   afterInit(server: Server): void {
@@ -88,6 +95,14 @@ export class RealtimeGateway
     );
     this.sessionEventSubscription =
       this.realtimeEvents.sessionEvents$.subscribe((event) => {
+        if (event.audienceUserIds?.length) {
+          for (const userId of new Set(event.audienceUserIds)) {
+            server
+              .to(this.userRoomName(userId))
+              .emit(event.eventName, event.payload);
+          }
+          return;
+        }
         server
           .to(this.roomName(event.sessionId))
           .emit(event.eventName, event.payload);
@@ -112,6 +127,7 @@ export class RealtimeGateway
       const parsed = principalSchema.parse(claims) as AccessTokenClaims;
       client.data.principal = await this.auth.resolvePrincipalFromClaims(parsed);
       client.data.sessionIds = new Set<string>();
+      await client.join(this.userRoomName(client.data.principal.userId));
     } catch {
       client.emit("authorization.error", {
         message: "Invalid or expired access token",
@@ -171,6 +187,35 @@ export class RealtimeGateway
     return { ok: true, ...result };
   }
 
+  @SubscribeMessage("reaction.send")
+  async sendReaction(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() payload: unknown,
+  ): Promise<{ ok: true; reactionId: string }> {
+    const principal = this.requirePrincipal(client);
+    const { sessionId, reaction } = reactionSchema.parse(payload);
+    if (!client.data.sessionIds?.has(sessionId)) {
+      throw new Error("Join the session before sending a reaction");
+    }
+
+    const throttleKey = `reaction:v1:${sessionId}:${principal.userId}`;
+    const accepted = await this.redis.set(throttleKey, "1", "PX", 700, "NX");
+    if (accepted !== "OK") {
+      throw new Error("Please wait before sending another reaction");
+    }
+
+    const event = {
+      reactionId: randomUUID(),
+      sessionId,
+      userId: principal.userId,
+      displayName: principal.displayName,
+      reaction,
+      occurredAt: new Date().toISOString(),
+    };
+    this.server.to(this.roomName(sessionId)).emit("reaction.received", event);
+    return { ok: true, reactionId: event.reactionId };
+  }
+
   private requirePrincipal(client: AuthenticatedSocket): Principal {
     if (!client.data.principal) {
       this.logger.warn(`Unauthenticated socket message rejected: ${client.id}`);
@@ -181,5 +226,9 @@ export class RealtimeGateway
 
   private roomName(sessionId: string): string {
     return `session:${sessionId}`;
+  }
+
+  private userRoomName(userId: string): string {
+    return `user:${userId}`;
   }
 }
