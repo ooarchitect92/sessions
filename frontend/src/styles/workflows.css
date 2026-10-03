@@ -777,3 +777,140 @@
   color: #7b5648;
   font-size: 15px;
 }
+
+
+.memory-summary-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.memory-summary-editor {
+  display: grid;
+  gap: 1rem;
+}
+
+.memory-summary-editor label {
+  display: grid;
+  gap: 0.45rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.memory-summary-editor textarea,
+.memory-summary-editor input,
+.summary-edit-row input,
+.action-edit-card input {
+  width: 100%;
+}
+
+.summary-review-notice {
+  padding: 0.85rem 0.95rem;
+  border: 1px solid #d7ddd9;
+  border-radius: 0.8rem;
+  background: #f5f7f4;
+  color: #53635e;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.summary-edit-group {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.summary-edit-group-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.summary-edit-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.action-edit-card {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.8rem;
+  border: 1px solid #dfe4df;
+  border-radius: 0.8rem;
+  background: #fafaf8;
+}
+
+.compact-button {
+  min-height: 32px;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.78rem;
+}
+
+.summary-review-list {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+  padding-left: 1.15rem;
+  color: #3f4d49;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.summary-action-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.summary-action-list article {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: 0.75rem;
+  background: #f5f3ee;
+}
+
+.summary-action-list strong {
+  color: #2f3b38;
+  font-size: 0.9rem;
+}
+
+.summary-action-list span {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.summary-review-status {
+  display: grid;
+  gap: 0.2rem;
+  margin-top: 1rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--border);
+}
+
+.summary-review-status strong {
+  font-size: 0.9rem;
+}
+
+.summary-review-status span,
+.summary-review-status small {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.compact-placeholder {
+  padding: 0.8rem 0.9rem;
+}
+
+@media (max-width: 760px) {
+  .memory-summary-heading {
+    flex-direction: column;
+  }
+
+  .summary-edit-row {
+    grid-template-columns: 1fr;
+  }
+}
