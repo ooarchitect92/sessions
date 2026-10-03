@@ -221,6 +221,52 @@ export interface GeneratedAgenda {
   items: AgendaSuggestion[];
 }
 
+export interface AnalyticsDailyPoint {
+  date: string;
+  sessions: number;
+  registrations: number;
+  bookings: number;
+}
+
+export interface WorkspaceAnalyticsOverview {
+  range: { days: number; since: string; until: string };
+  sessions: {
+    total: number;
+    completed: number;
+    webinars: number;
+    scheduledMinutes: number;
+  };
+  events: {
+    registrations: number;
+    attended: number;
+    noShows: number;
+    waitlisted: number;
+  };
+  bookings: {
+    total: number;
+    confirmed: number;
+    cancelled: number;
+    completed: number;
+  };
+  engagement: {
+    chatMessages: number;
+    pollAnswers: number;
+    questions: number;
+    totalActions: number;
+  };
+  memory: {
+    readyRecordings: number;
+    readySummaries: number;
+  };
+  daily: AnalyticsDailyPoint[];
+}
+
+export interface AnalyticsCsvExport {
+  filename: string;
+  contentType: string;
+  content: string;
+}
+
 export interface EventRecord extends PlatformEvent {
   _count?: { registrations: number };
 }
@@ -896,6 +942,18 @@ export const api = {
     sessionId: string,
   ): Promise<{ recordingId: string; sessionId: string; accepted: true }> {
     return request(`/recordings/${sessionId}`, { method: "DELETE" });
+  },
+
+  getAnalyticsOverview(days = 30): Promise<WorkspaceAnalyticsOverview> {
+    return request<WorkspaceAnalyticsOverview>(
+      `/analytics/overview?days=${encodeURIComponent(String(days))}`,
+    );
+  },
+
+  exportAnalytics(days = 30): Promise<AnalyticsCsvExport> {
+    return request<AnalyticsCsvExport>(
+      `/analytics/export?days=${encodeURIComponent(String(days))}`,
+    );
   },
 
   listEvents(): Promise<EventRecord[]> {
