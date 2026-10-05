@@ -70,7 +70,7 @@
 
 ## Phase 5 — platform and enterprise
 
-- [ ] API keys
+- [x] workspace API keys with hashed secret storage, role binding, expiry/revocation and read/write scopes
 - [x] webhook subscriptions, HMAC-SHA256 signatures, bounded retries and manual replay
 - [ ] webhook delivery reconciliation/operational dashboards
 - [ ] provider integration framework, credential governance and SSRF-safe egress
