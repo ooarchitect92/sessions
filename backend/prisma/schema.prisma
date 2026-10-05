@@ -205,6 +205,8 @@ model Organization {
   whiteboards          WhiteboardDocument[]
   whiteboardOperations WhiteboardOperation[]
   fileAssets           FileAsset[]
+  calendarConnections  CalendarConnection[]
+  calendarBusyBlocks   CalendarBusyBlock[]
   webhookSubscriptions WebhookSubscription[]
   webhookDeliveries   WebhookDelivery[]
   authSessions        AuthSession[]
@@ -298,6 +300,7 @@ model User {
   breakoutAssignments     BreakoutAssignment[]
   whiteboardOperations    WhiteboardOperation[]
   fileAssets               FileAsset[]
+  calendarConnections      CalendarConnection[]
   createdWebhookSubscriptions WebhookSubscription[] @relation("WebhookSubscriptionCreator")
 
   @@index([status])
