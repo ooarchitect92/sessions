@@ -5,7 +5,7 @@ import { useSearchParams } from 'react-router-dom';
 import { api, type WorkspaceMember } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 
-const TABS = ['workspace', 'members', 'workspaces', 'security'] as const;
+const TABS = ['workspace', 'members', 'workspaces', 'integrations', 'security'] as const;
 type SettingsTab = (typeof TABS)[number];
 
 const MEMBER_ROLES: WorkspaceRole[] = ['ADMIN', 'HOST', 'MEMBER', 'ANALYST', 'GUEST'];
@@ -63,7 +63,9 @@ export function SettingsPage() {
                     ? '◎'
                     : item === 'workspaces'
                       ? '▦'
-                      : '⌾'}
+                      : item === 'integrations'
+                        ? '↗'
+                        : '⌾'}
               </span>
               {item === 'workspace'
                 ? 'Workspace profile'
@@ -71,7 +73,9 @@ export function SettingsPage() {
                   ? 'Members and invites'
                   : item === 'workspaces'
                     ? 'Your workspaces'
-                    : 'Security'}
+                    : item === 'integrations'
+                      ? 'Integrations'
+                      : 'Security'}
             </button>
           ))}
         </nav>
@@ -79,6 +83,7 @@ export function SettingsPage() {
           {tab === 'workspace' ? <WorkspaceProfile /> : null}
           {tab === 'members' ? <MembersAndInvitations /> : null}
           {tab === 'workspaces' ? <WorkspaceDirectory /> : null}
+          {tab === 'integrations' ? <CalendarIntegrations /> : null}
           {tab === 'security' ? <SecuritySettings /> : null}
         </section>
       </div>
@@ -545,6 +550,160 @@ function WorkspaceDirectory() {
             </button>
           </div>
         </form>
+      </section>
+    </div>
+  );
+}
+
+function CalendarIntegrations() {
+  const [searchParams] = useSearchParams();
+  const queryClient = useQueryClient();
+  const connections = useQuery({
+    queryKey: ['calendar-connections'],
+    queryFn: () => api.listCalendarConnections(),
+  });
+
+  const connect = useMutation({
+    mutationFn: (provider: 'google' | 'microsoft') =>
+      api.startCalendarOauth(provider),
+    onSuccess: (result) => {
+      window.location.assign(result.authorizationUrl);
+    },
+  });
+
+  const sync = useMutation({
+    mutationFn: (id: string) => api.syncCalendarConnection(id),
+    onSuccess: async () =>
+      queryClient.invalidateQueries({ queryKey: ['calendar-connections'] }),
+  });
+
+  const disconnect = useMutation({
+    mutationFn: (id: string) => api.disconnectCalendarConnection(id),
+    onSuccess: async () =>
+      queryClient.invalidateQueries({ queryKey: ['calendar-connections'] }),
+  });
+
+  const oauthStatus = searchParams.get('calendar');
+  const oauthReason = searchParams.get('reason');
+
+  return (
+    <div className="settings-stack">
+      <section className="panel settings-panel">
+        <div className="settings-panel-heading">
+          <div>
+            <span className="eyebrow">Scheduling providers</span>
+            <h2>Calendar connections</h2>
+            <p>
+              Connect Google or Microsoft Calendar. Busy intervals are synchronized
+              into the workspace availability cache and automatically removed from
+              public booking slots.
+            </p>
+          </div>
+        </div>
+
+        {oauthStatus === 'connected' ? (
+          <div className="success-banner">
+            Calendar connected. Initial availability synchronization has started.
+          </div>
+        ) : null}
+        {oauthStatus === 'error' ? (
+          <div className="error-banner">
+            Calendar connection failed{oauthReason ? `: ${oauthReason}` : '.'}
+          </div>
+        ) : null}
+
+        <div className="calendar-provider-grid">
+          <article className="calendar-provider-card">
+            <div>
+              <strong>Google Calendar</strong>
+              <span>Read-only free/busy access with offline refresh.</span>
+            </div>
+            <button
+              type="button"
+              className="button primary"
+              disabled={connect.isPending}
+              onClick={() => connect.mutate('google')}
+            >
+              Connect Google
+            </button>
+          </article>
+          <article className="calendar-provider-card">
+            <div>
+              <strong>Microsoft Calendar</strong>
+              <span>Microsoft Graph schedule access with offline refresh.</span>
+            </div>
+            <button
+              type="button"
+              className="button primary"
+              disabled={connect.isPending}
+              onClick={() => connect.mutate('microsoft')}
+            >
+              Connect Microsoft
+            </button>
+          </article>
+        </div>
+        {connect.error ? <div className="error-banner">{connect.error.message}</div> : null}
+      </section>
+
+      <section className="panel settings-panel">
+        <div className="settings-panel-heading compact-settings-heading">
+          <div>
+            <span className="eyebrow">Availability cache</span>
+            <h2>Connected accounts</h2>
+          </div>
+          <span className="count-pill">{connections.data?.length ?? 0}</span>
+        </div>
+        {connections.isLoading ? <SettingsLoading /> : null}
+        {connections.error ? <SettingsError message={connections.error.message} /> : null}
+        <div className="settings-table">
+          {connections.data?.map((connection) => (
+            <div className="settings-table-row calendar-connection-row" key={connection.id}>
+              <div className="member-copy">
+                <strong>
+                  {connection.provider === 'GOOGLE' ? 'Google Calendar' : 'Microsoft Calendar'}
+                </strong>
+                <span>
+                  {connection.accountEmail ?? connection.user.email} · {connection.user.displayName}
+                </span>
+                <small>
+                  {connection.busyBlockCount} busy intervals · Last synchronized{' '}
+                  {formatDate(connection.lastSyncedAt)}
+                </small>
+                {connection.lastError ? (
+                  <small className="danger-text">{connection.lastError}</small>
+                ) : null}
+              </div>
+              <span className={`invitation-status status-${connection.status.toLowerCase()}`}>
+                {connection.status.toLowerCase().replace('_', ' ')}
+              </span>
+              <button
+                type="button"
+                className="settings-row-action"
+                disabled={sync.isPending || connection.status === 'REVOKED'}
+                onClick={() => sync.mutate(connection.id)}
+              >
+                Sync now
+              </button>
+              <button
+                type="button"
+                className="settings-row-action danger-text"
+                disabled={disconnect.isPending || connection.status === 'REVOKED'}
+                onClick={() => {
+                  if (window.confirm('Disconnect this calendar account?')) {
+                    disconnect.mutate(connection.id);
+                  }
+                }}
+              >
+                Disconnect
+              </button>
+            </div>
+          ))}
+          {connections.data?.length === 0 ? (
+            <div className="settings-empty-row">No calendar accounts are connected.</div>
+          ) : null}
+        </div>
+        {sync.error ? <div className="error-banner">{sync.error.message}</div> : null}
+        {disconnect.error ? <div className="error-banner">{disconnect.error.message}</div> : null}
       </section>
     </div>
   );
