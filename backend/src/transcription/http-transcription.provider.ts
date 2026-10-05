@@ -35,9 +35,10 @@ export class HttpTranscriptionProvider implements TranscriptionProvider {
     const apiKey = this.config.get<string>('STT_API_KEY');
 
     const form = new FormData();
+    const bytes = Uint8Array.from(request.audio);
     form.set(
       'file',
-      new Blob([request.audio], { type: request.mimeType }),
+      new Blob([bytes.buffer], { type: request.mimeType }),
       request.filename,
     );
     form.set('model', model);
@@ -80,12 +81,14 @@ export class HttpTranscriptionProvider implements TranscriptionProvider {
       throw new Error('STT provider response did not contain transcript text');
     }
 
+    const language =
+      typeof payload.language === 'string' && payload.language.trim()
+        ? payload.language.trim().slice(0, 32)
+        : undefined;
+
     return {
       provider: this.name,
-      language:
-        typeof payload.language === 'string' && payload.language.trim()
-          ? payload.language.trim().slice(0, 32)
-          : undefined,
+      ...(language ? { language } : {}),
       text: effectiveText,
       segments:
         segments.length > 0
