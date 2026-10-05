@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Interval } from '@nestjs/schedule';
 import { EmailDeliveryStatus } from '@prisma/client';
 import { WorkerPrismaService } from '../database/worker-prisma.service';
+import { RealtimeEventsService } from '../infrastructure/realtime-events.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { HttpEmailProvider } from './http-email.provider';
 import type { EmailProvider } from './email.types';
@@ -18,6 +19,7 @@ export class EmailWorker {
     private readonly config: ConfigService,
     private readonly httpProvider: HttpEmailProvider,
     private readonly outbox: OutboxService,
+    private readonly realtime: RealtimeEventsService,
   ) {
     this.enabled = config.get<boolean>('EMAIL_ENABLED', false);
   }
@@ -86,8 +88,8 @@ export class EmailWorker {
         text: delivery.body,
       });
 
-      await this.prisma.$transaction(async (transaction) => {
-        const sent = await transaction.emailDelivery.update({
+      const sent = await this.prisma.$transaction(async (transaction) => {
+        const sentRecord = await transaction.emailDelivery.update({
           where: { id: delivery.id },
           data: {
             status: EmailDeliveryStatus.SENT,
@@ -100,22 +102,32 @@ export class EmailWorker {
         await this.outbox.enqueue(
           transaction,
           {
-            organizationId: sent.organizationId,
-            workspaceId: sent.workspaceId,
+            organizationId: sentRecord.organizationId,
+            workspaceId: sentRecord.workspaceId,
           },
           {
             aggregateType: 'email_delivery',
-            aggregateId: sent.id,
+            aggregateId: sentRecord.id,
             eventType: 'email.delivery.sent',
             payload: {
-              emailDeliveryId: sent.id,
-              sessionId: sent.sessionId,
-              memorySummaryId: sent.memorySummaryId,
+              emailDeliveryId: sentRecord.id,
+              sessionId: sentRecord.sessionId,
+              memorySummaryId: sentRecord.memorySummaryId,
               provider: result.provider,
               providerMessageId: result.messageId ?? null,
             },
           },
         );
+        return sentRecord;
+      });
+      this.realtime.publishSessionEvent({
+        sessionId: sent.sessionId,
+        eventName: 'email.delivery.sent',
+        payload: {
+          emailDeliveryId: sent.id,
+          status: sent.status,
+          sentAt: sent.sentAt?.toISOString(),
+        },
       });
     } catch (error: unknown) {
       const message =
@@ -132,8 +144,8 @@ export class EmailWorker {
   }
 
   private async fail(deliveryId: string, reason: string): Promise<void> {
-    await this.prisma.$transaction(async (transaction) => {
-      const failed = await transaction.emailDelivery.update({
+    const failed = await this.prisma.$transaction(async (transaction) => {
+      const failedRecord = await transaction.emailDelivery.update({
         where: { id: deliveryId },
         data: {
           status: EmailDeliveryStatus.FAILED,
@@ -143,21 +155,31 @@ export class EmailWorker {
       await this.outbox.enqueue(
         transaction,
         {
-          organizationId: failed.organizationId,
-          workspaceId: failed.workspaceId,
+          organizationId: failedRecord.organizationId,
+          workspaceId: failedRecord.workspaceId,
         },
         {
           aggregateType: 'email_delivery',
-          aggregateId: failed.id,
+          aggregateId: failedRecord.id,
           eventType: 'email.delivery.failed',
           payload: {
-            emailDeliveryId: failed.id,
-            sessionId: failed.sessionId,
-            memorySummaryId: failed.memorySummaryId,
-            failureCode: failed.failureCode,
+            emailDeliveryId: failedRecord.id,
+            sessionId: failedRecord.sessionId,
+            memorySummaryId: failedRecord.memorySummaryId,
+            failureCode: failedRecord.failureCode,
           },
         },
       );
+      return failedRecord;
+    });
+    this.realtime.publishSessionEvent({
+      sessionId: failed.sessionId,
+      eventName: 'email.delivery.failed',
+      payload: {
+        emailDeliveryId: failed.id,
+        status: failed.status,
+        failureCode: failed.failureCode,
+      },
     });
   }
 }
