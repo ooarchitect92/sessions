@@ -311,6 +311,28 @@ export interface AgendaDraft {
   persisted: false;
 }
 
+export interface AgendaTemplateRecord {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  createdById: string;
+  name: string;
+  description: string | null;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  items: Array<{
+    id: string;
+    templateId: string;
+    position: number;
+    title: string;
+    durationSeconds: number;
+    type: AgendaItemType;
+    content: Record<string, unknown>;
+  }>;
+  createdBy: { id: string; displayName: string };
+}
+
 export interface SessionDetail extends Session {
   livekitRoomName: string;
   agendaItems: AgendaItem[];
@@ -1033,6 +1055,68 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ items }),
     });
+  },
+
+  listAgendaTemplates(): Promise<AgendaTemplateRecord[]> {
+    return request<AgendaTemplateRecord[]>('/agenda-templates');
+  },
+
+  createAgendaTemplate(input: {
+    name: string;
+    description?: string;
+    items: AgendaDraftItem[];
+  }): Promise<AgendaTemplateRecord> {
+    return request<AgendaTemplateRecord>('/agenda-templates', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  updateAgendaTemplate(
+    templateId: string,
+    version: number,
+    input: {
+      name?: string;
+      description?: string;
+      items?: AgendaDraftItem[];
+    },
+  ): Promise<AgendaTemplateRecord> {
+    return request<AgendaTemplateRecord>(`/agenda-templates/${templateId}`, {
+      method: 'PATCH',
+      headers: { 'if-match': String(version) },
+      body: JSON.stringify(input),
+    });
+  },
+
+  deleteAgendaTemplate(templateId: string): Promise<{ id: string; deleted: true }> {
+    return request(`/agenda-templates/${templateId}`, { method: 'DELETE' });
+  },
+
+  saveSessionAgendaAsTemplate(
+    sessionId: string,
+    input: { name: string; description?: string },
+  ): Promise<AgendaTemplateRecord> {
+    return request<AgendaTemplateRecord>(
+      `/sessions/${sessionId}/agenda-items/save-template`,
+      {
+        method: 'POST',
+        body: JSON.stringify(input),
+      },
+    );
+  },
+
+  applyAgendaTemplate(
+    sessionId: string,
+    templateId: string,
+    replaceExisting = false,
+  ): Promise<AgendaItem[]> {
+    return request<AgendaItem[]>(
+      `/sessions/${sessionId}/agenda-items/apply-template/${templateId}`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ replaceExisting }),
+      },
+    );
   },
 
   activateAgendaItem(sessionId: string, agendaItemId: string) {
