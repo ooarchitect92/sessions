@@ -27,6 +27,8 @@ import { CreateChatMessageDto } from "./dto/create-chat-message.dto";
 import { CreatePollDto } from "./dto/create-poll.dto";
 import { CreateQuestionDto } from "./dto/create-question.dto";
 import { ModerateQuestionDto } from "./dto/moderate-question.dto";
+import { SendReactionDto } from "./dto/send-reaction.dto";
+import { SetHandRaiseDto } from "./dto/set-hand-raise.dto";
 import { SubmitPollAnswerDto } from "./dto/submit-poll-answer.dto";
 
 const ACTIVE_SESSION_STATUSES: SessionStatus[] = [
@@ -217,6 +219,52 @@ export class CollaborationService {
       }
     }
     return result.created;
+  }
+
+  async sendReaction(
+    principal: Principal,
+    sessionId: string,
+    input: SendReactionDto,
+  ) {
+    await this.database.run(principal, async (transaction) => {
+      await this.assertSessionActive(transaction, sessionId);
+    });
+    const payload = {
+      sessionId,
+      userId: principal.userId,
+      displayName: principal.displayName,
+      reaction: input.reaction,
+      occurredAt: new Date().toISOString(),
+    };
+    this.realtime.publishSessionEvent({
+      sessionId,
+      eventName: "session.reaction",
+      payload,
+    });
+    return payload;
+  }
+
+  async setHandRaise(
+    principal: Principal,
+    sessionId: string,
+    input: SetHandRaiseDto,
+  ) {
+    await this.database.run(principal, async (transaction) => {
+      await this.assertSessionActive(transaction, sessionId);
+    });
+    const payload = {
+      sessionId,
+      userId: principal.userId,
+      displayName: principal.displayName,
+      raised: input.raised,
+      occurredAt: new Date().toISOString(),
+    };
+    this.realtime.publishSessionEvent({
+      sessionId,
+      eventName: "session.hand_raise",
+      payload,
+    });
+    return payload;
   }
 
   async listPolls(principal: Principal, sessionId: string) {
