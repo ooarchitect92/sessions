@@ -43,9 +43,53 @@ describe('HttpAiProvider', () => {
     expect(result.citations).toEqual([{ segmentPosition: 1 }]);
   });
 
+  it('normalizes a bounded agenda draft', () => {
+    const result = provider.normalizeAgenda(
+      {
+        model: 'agenda-model',
+        items: [
+          {
+            title: 'Welcome',
+            durationSeconds: 300,
+            type: 'TEXT',
+            content: {},
+            rationale: 'Set context',
+          },
+          {
+            title: 'Demo',
+            durationSeconds: 900,
+            type: 'SCREEN_SHARE',
+            content: {},
+          },
+          {
+            title: 'Invalid',
+            durationSeconds: 1,
+            type: 'TEXT',
+          },
+        ],
+      },
+      'fallback',
+      30,
+    );
+
+    expect(result.model).toBe('agenda-model');
+    expect(result.items).toHaveLength(2);
+    expect(result.items[0]).toMatchObject({
+      title: 'Welcome',
+      durationSeconds: 300,
+      type: 'TEXT',
+    });
+  });
+
   it('rejects responses without a summary', () => {
     expect(() => provider.normalize({}, 'model', 2)).toThrow(
       'AI provider response did not contain a summary',
+    );
+  });
+
+  it('rejects agenda responses without valid items', () => {
+    expect(() => provider.normalizeAgenda({ items: [] }, 'model', 30)).toThrow(
+      'AI provider response did not contain valid agenda items',
     );
   });
 });
