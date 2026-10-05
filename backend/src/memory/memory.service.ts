@@ -10,12 +10,15 @@ import {
   SessionStatus,
   type Session,
 } from '@prisma/client';
+import { HttpAiProvider } from '../ai/http-ai.provider';
+import type { AiActionItem, AiDecision } from '../ai/ai.types';
 import { AuditService } from '../audit/audit.service';
 import { HOST_ROLES, hasAnyRole, type Principal } from '../common/auth/principal';
 import { TenantDatabaseService } from '../database/tenant-database.service';
 import { RealtimeEventsService } from '../infrastructure/realtime-events.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { ListMemoryQuery } from './dto/list-memory.query';
+import { UpdateFollowUpDraftDto } from './dto/update-follow-up-draft.dto';
 import { UpdateMemorySummaryDto } from './dto/update-memory-summary.dto';
 import { UpdateTranscriptSegmentDto } from './dto/update-transcript-segment.dto';
 
@@ -23,6 +26,7 @@ import { UpdateTranscriptSegmentDto } from './dto/update-transcript-segment.dto'
 export class MemoryService {
   constructor(
     private readonly database: TenantDatabaseService,
+    private readonly ai: HttpAiProvider,
     private readonly audit: AuditService,
     private readonly outbox: OutboxService,
     private readonly realtime: RealtimeEventsService,
