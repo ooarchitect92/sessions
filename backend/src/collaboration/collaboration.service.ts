@@ -156,7 +156,7 @@ export class CollaborationService {
           authorUserId: principal.userId,
           recipientUserId:
             input.channel === ChatChannel.PRIVATE
-              ? input.recipientUserId
+              ? (input.recipientUserId ?? null)
               : null,
           channel: input.channel,
           body: input.body.trim(),
