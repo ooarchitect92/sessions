@@ -774,3 +774,167 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
+
+.chat-channel-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  padding: 9px 10px;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.02);
+}
+
+.chat-channel-controls select {
+  min-width: 0;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 8px;
+  background: #111b19;
+  color: #dce7e3;
+  padding: 7px 8px;
+  font-size: 8px;
+}
+
+.chat-channel-label {
+  display: inline-flex;
+  width: max-content;
+  margin-top: 4px;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: rgba(79,124,112,.15);
+  color: #8fb5aa;
+  font-size: 7px;
+  font-weight: 800;
+}
+
+.session-reaction-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid rgba(36,73,63,.14);
+  border-radius: 10px;
+  background: rgba(255,255,255,.56);
+}
+
+.reaction-button,
+.hand-raise-button {
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  min-height: 30px;
+  padding: 5px 7px;
+  cursor: pointer;
+}
+
+.reaction-button {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.reaction-button:hover,
+.hand-raise-button:hover {
+  background: rgba(35,89,76,.08);
+}
+
+.hand-raise-button {
+  color: #365149;
+  font-size: 8px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.hand-raise-button.active {
+  background: #fff0b0;
+  color: #655318;
+}
+
+.reaction-button:disabled,
+.hand-raise-button:disabled {
+  opacity: .45;
+  cursor: wait;
+}
+
+.reaction-feed {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  z-index: 20;
+  display: grid;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.reaction-feed > div {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: max-content;
+  margin-left: auto;
+  padding: 7px 9px;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 999px;
+  background: rgba(12,28,24,.88);
+  color: #eef6f3;
+  box-shadow: 0 8px 28px rgba(0,0,0,.2);
+  animation: reaction-pop .18s ease-out;
+}
+
+.reaction-feed span {
+  font-size: 17px;
+}
+
+.reaction-feed small {
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.raised-hands-badge {
+  position: absolute;
+  left: 18px;
+  bottom: 18px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  max-width: min(420px, calc(100% - 36px));
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: rgba(89,70,17,.9);
+  color: #fff6cf;
+  box-shadow: 0 8px 28px rgba(0,0,0,.2);
+}
+
+.raised-hands-badge span {
+  font-size: 14px;
+}
+
+.raised-hands-badge strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 8px;
+}
+
+@keyframes reaction-pop {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(.94);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (max-width: 880px) {
+  .session-reaction-controls {
+    order: 3;
+    width: 100%;
+    justify-content: flex-start;
+    overflow-x: auto;
+  }
+
+  .chat-channel-controls {
+    grid-template-columns: 1fr;
+  }
+}
