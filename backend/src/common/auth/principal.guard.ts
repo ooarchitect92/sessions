@@ -1,6 +1,7 @@
 import {
   CanActivate,
   ExecutionContext,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -53,7 +54,20 @@ export class PrincipalGuard implements CanActivate {
 
     const token = authorization.slice('Bearer '.length).trim();
     if (token.startsWith('sk_sessions_')) {
-      request.principal = await this.apiKeys.resolveBearerToken(token);
+      const principal = await this.apiKeys.resolveBearerToken(token);
+      const scopes = new Set(principal.apiKeyScopes ?? []);
+      const readOnlyMethod = ['GET', 'HEAD', 'OPTIONS'].includes(request.method);
+      const allowed = readOnlyMethod
+        ? scopes.has('read') || scopes.has('write')
+        : scopes.has('write');
+      if (!allowed) {
+        throw new ForbiddenException(
+          readOnlyMethod
+            ? 'This API key requires the read scope'
+            : 'This API key requires the write scope',
+        );
+      }
+      request.principal = principal;
       return true;
     }
 
