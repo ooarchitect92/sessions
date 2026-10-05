@@ -125,3 +125,130 @@
     flex-direction: column;
   }
 }
+
+.rail-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.agenda-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.agenda-ai-button,
+.agenda-add-button {
+  min-width: 30px;
+  height: 30px;
+  border: 1px solid rgba(255,255,255,.11);
+  border-radius: 9px;
+  background: rgba(255,255,255,.04);
+  color: #dce8e4;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.agenda-ai-button:hover,
+.agenda-add-button:hover {
+  background: rgba(255,255,255,.09);
+}
+
+.agenda-ai-panel {
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid rgba(255,255,255,.09);
+  border-radius: 12px;
+  background: #182724;
+}
+
+.agenda-ai-panel h3 {
+  margin: 4px 0 6px;
+  font-size: 13px;
+}
+
+.agenda-ai-panel > p {
+  margin: 0 0 12px;
+  color: #879a95;
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.agenda-ai-panel label {
+  display: grid;
+  gap: 5px;
+  margin-bottom: 9px;
+  color: #9fb0ac;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.agenda-ai-panel input,
+.agenda-ai-panel textarea {
+  width: 100%;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 9px;
+  background: #111c1a;
+  color: #edf4f1;
+  padding: 8px 9px;
+  font: inherit;
+  resize: vertical;
+}
+
+.agenda-ai-draft {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,.08);
+}
+
+.agenda-ai-draft-heading {
+  display: grid;
+  gap: 3px;
+}
+
+.agenda-ai-draft-heading strong {
+  font-size: 10px;
+}
+
+.agenda-ai-draft-heading small {
+  color: #81928e;
+  font-size: 8px;
+}
+
+.agenda-ai-draft ol {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding-left: 19px;
+}
+
+.agenda-ai-draft li {
+  color: #cbd7d3;
+  font-size: 9px;
+}
+
+.agenda-ai-draft li strong,
+.agenda-ai-draft li span {
+  display: block;
+}
+
+.agenda-ai-draft li span,
+.agenda-ai-draft li p {
+  color: #81928e;
+  font-size: 8px;
+}
+
+.agenda-ai-draft li p {
+  margin: 3px 0 0;
+  line-height: 1.45;
+}
+
+.agenda-ai-draft-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
