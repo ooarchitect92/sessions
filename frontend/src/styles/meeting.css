@@ -252,3 +252,123 @@
   flex-wrap: wrap;
   gap: 7px;
 }
+
+.agenda-inline-form label > small {
+  color: #738883;
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.agenda-inline-form textarea {
+  width: 100%;
+  min-height: 88px;
+  resize: vertical;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 10px;
+  background: rgba(255,255,255,.04);
+  color: #eef4f1;
+  padding: 10px 11px;
+  outline: 0;
+  font: inherit;
+  line-height: 1.5;
+}
+
+.agenda-inline-form textarea:focus {
+  border-color: rgba(118,171,158,.8);
+  box-shadow: 0 0 0 3px rgba(65,118,105,.15);
+}
+
+.agenda-content-stage {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  background: #0c1413;
+}
+
+.agenda-content-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  background: #111c1a;
+}
+
+.agenda-content-toolbar strong,
+.agenda-content-toolbar small {
+  display: block;
+}
+
+.agenda-content-toolbar strong {
+  margin-top: 3px;
+  font-size: 13px;
+}
+
+.agenda-content-toolbar small {
+  margin-top: 2px;
+  color: #849a94;
+  font-size: 9px;
+  text-transform: capitalize;
+}
+
+.agenda-embed-frame {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border: 0;
+  background: #fff;
+}
+
+.agenda-text-content {
+  overflow: auto;
+  padding: 34px;
+  background:
+    radial-gradient(circle at top right, rgba(54,91,82,.16), transparent 34%),
+    #0f1817;
+}
+
+.agenda-text-content p {
+  max-width: 820px;
+  margin: 0 auto;
+  color: #dce8e4;
+  font-size: 18px;
+  line-height: 1.75;
+  white-space: pre-wrap;
+}
+
+.agenda-content-empty {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  text-align: center;
+  padding: 30px;
+  color: #8fa19c;
+}
+
+.agenda-content-empty > span {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  margin-bottom: 14px;
+  border-radius: 18px;
+  background: rgba(255,255,255,.05);
+  font-size: 24px;
+}
+
+.agenda-content-empty h3 {
+  margin: 0 0 7px;
+  color: #e3ebe8;
+  font-size: 18px;
+}
+
+.agenda-content-empty p {
+  max-width: 420px;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.6;
+}
