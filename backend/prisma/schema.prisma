@@ -133,6 +133,12 @@ enum QuestionStatus {
   HIDDEN
 }
 
+enum BreakoutRoomStatus {
+  DRAFT
+  ACTIVE
+  CLOSED
+}
+
 model Organization {
   id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name                String                @db.VarChar(160)
@@ -162,6 +168,10 @@ model Organization {
   pollAnswers         PollAnswer[]
   questions           Question[]
   questionVotes       QuestionVote[]
+  breakoutRooms       BreakoutRoom[]
+  breakoutAssignments BreakoutAssignment[]
+  breakoutRooms       BreakoutRoom[]
+  breakoutAssignments BreakoutAssignment[]
   authSessions        AuthSession[]
   authChallenges      AuthChallenge[]
   workspaceInvitations WorkspaceInvitation[]
@@ -242,6 +252,7 @@ model User {
   requestedEmailDeliveries EmailDelivery[]          @relation("EmailDeliveryRequester")
   createdWebhookSubscriptions WebhookSubscription[]  @relation("WebhookSubscriptionCreator")
   createdApiKeys              ApiKey[]                 @relation("ApiKeyCreator")
+  breakoutAssignments          BreakoutAssignment[]      @relation("BreakoutAssignmentUser")
 
   @@index([status])
   @@map("users")
@@ -319,6 +330,8 @@ model Session {
   chatMessages         ChatMessage[]
   polls                Poll[]
   questions            Question[]
+  breakoutRooms         BreakoutRoom[]
+  breakoutAssignments   BreakoutAssignment[]
 
   @@index([organizationId, workspaceId, startsAt])
   @@index([workspaceId, status, startsAt])
@@ -773,6 +786,48 @@ model IdempotencyKey {
   @@unique([workspaceId, key])
   @@index([expiresAt])
   @@map("idempotency_keys")
+}
+
+model BreakoutRoom {
+  id              String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String             @map("organization_id") @db.Uuid
+  workspaceId     String             @map("workspace_id") @db.Uuid
+  sessionId       String             @map("session_id") @db.Uuid
+  name            String             @db.VarChar(160)
+  position        Int
+  status          BreakoutRoomStatus @default(DRAFT)
+  livekitRoomName String             @unique @map("livekit_room_name") @db.VarChar(220)
+  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization    Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace       Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  session         Session            @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  assignments     BreakoutAssignment[]
+
+  @@unique([sessionId, position])
+  @@index([organizationId, workspaceId, sessionId])
+  @@index([sessionId, status])
+  @@map("breakout_rooms")
+}
+
+model BreakoutAssignment {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  workspaceId    String       @map("workspace_id") @db.Uuid
+  sessionId      String       @map("session_id") @db.Uuid
+  breakoutRoomId String       @map("breakout_room_id") @db.Uuid
+  userId         String       @map("user_id") @db.Uuid
+  assignedAt     DateTime     @default(now()) @map("assigned_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  session        Session      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  breakoutRoom   BreakoutRoom @relation(fields: [breakoutRoomId], references: [id], onDelete: Cascade)
+  user           User         @relation("BreakoutAssignmentUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, userId])
+  @@index([organizationId, workspaceId, sessionId])
+  @@index([breakoutRoomId])
+  @@map("breakout_assignments")
 }
 
 model ApiKey {
