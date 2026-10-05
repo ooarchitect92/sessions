@@ -14,6 +14,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentPrincipal } from '../common/auth/current-principal.decorator';
 import type { Principal } from '../common/auth/principal';
 import { ListMemoryQuery } from './dto/list-memory.query';
+import { UpdateFollowUpDraftDto } from './dto/update-follow-up-draft.dto';
 import { UpdateMemorySummaryDto } from './dto/update-memory-summary.dto';
 import { MemoryService } from './memory.service';
 
@@ -67,6 +68,42 @@ export class MemoryController {
     @Headers('if-match') ifMatch: string | undefined,
   ) {
     return this.memory.approveSummary(
+      principal,
+      sessionId,
+      parseVersion(ifMatch),
+    );
+  }
+
+  @Post(':sessionId/follow-up/generate')
+  generateFollowUp(
+    @CurrentPrincipal() principal: Principal,
+    @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
+  ) {
+    return this.memory.generateFollowUp(principal, sessionId);
+  }
+
+  @Patch(':sessionId/follow-up')
+  updateFollowUp(
+    @CurrentPrincipal() principal: Principal,
+    @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
+    @Headers('if-match') ifMatch: string | undefined,
+    @Body() body: UpdateFollowUpDraftDto,
+  ) {
+    return this.memory.updateFollowUp(
+      principal,
+      sessionId,
+      parseVersion(ifMatch),
+      body,
+    );
+  }
+
+  @Post(':sessionId/follow-up/approve')
+  approveFollowUp(
+    @CurrentPrincipal() principal: Principal,
+    @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
+    @Headers('if-match') ifMatch: string | undefined,
+  ) {
+    return this.memory.approveFollowUp(
       principal,
       sessionId,
       parseVersion(ifMatch),
