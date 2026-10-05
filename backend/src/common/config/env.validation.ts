@@ -51,6 +51,13 @@ const environmentSchema = z
     STT_MODEL: z.string().min(1).max(160).default('default'),
     STT_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1000).max(900000).default(120000),
     STT_WORKER_BATCH_SIZE: z.coerce.number().int().min(1).max(20).default(2),
+    AI_ENABLED: optionalBoolean.default(false),
+    AI_PROVIDER: z.enum(['http']).default('http'),
+    AI_HTTP_ENDPOINT: z.string().url().default('http://localhost:8090/v1/meeting-summary'),
+    AI_API_KEY: z.string().optional(),
+    AI_MODEL: z.string().min(1).max(160).default('default'),
+    AI_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1000).max(900000).default(120000),
+    AI_WORKER_BATCH_SIZE: z.coerce.number().int().min(1).max(20).default(2),
     S3_ENDPOINT: z.string().url(),
     S3_PUBLIC_ENDPOINT: z.string().url().default('http://localhost:9000'),
     S3_REGION: z.string().min(1).max(100),
@@ -134,6 +141,18 @@ const environmentSchema = z
       productionIssue(
         'STT_API_KEY',
         'Enabled production STT requires a provider API key',
+      );
+    }
+    if (value.AI_ENABLED && !value.AI_HTTP_ENDPOINT.startsWith('https://')) {
+      productionIssue(
+        'AI_HTTP_ENDPOINT',
+        'Enabled production AI endpoint must use HTTPS',
+      );
+    }
+    if (value.AI_ENABLED && !value.AI_API_KEY) {
+      productionIssue(
+        'AI_API_KEY',
+        'Enabled production AI requires a provider API key',
       );
     }
     if (!value.S3_ENDPOINT.startsWith('https://')) {
