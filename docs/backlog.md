@@ -64,7 +64,8 @@
 - [x] versioned summary editor and explicit human approval
 - [x] structured action-item editor with approval invalidation
 - [x] review-first AI follow-up email drafting and approval
-- [ ] outbound email delivery and CRM write controls
+- [x] governed outbound email delivery queue with provider abstraction and delivery history
+- [ ] CRM write controls
 - [ ] groundedness, privacy, prompt-injection, cost and latency evaluation suite
 
 ## Phase 5 — platform and enterprise
