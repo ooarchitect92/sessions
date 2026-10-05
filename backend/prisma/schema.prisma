@@ -139,6 +139,15 @@ enum BreakoutRoomStatus {
   CLOSED
 }
 
+enum WhiteboardOperationKind {
+  STROKE
+  SHAPE
+  TEXT
+  STICKY
+  IMAGE
+  CLEAR
+}
+
 model Organization {
   id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name                String                @db.VarChar(160)
@@ -170,6 +179,8 @@ model Organization {
   questionVotes       QuestionVote[]
   breakoutRooms       BreakoutRoom[]
   breakoutAssignments BreakoutAssignment[]
+  whiteboardDocuments WhiteboardDocument[]
+  whiteboardOperations WhiteboardOperation[]
   authSessions        AuthSession[]
   authChallenges      AuthChallenge[]
   workspaceInvitations WorkspaceInvitation[]
@@ -212,6 +223,8 @@ model Workspace {
   questionVotes       QuestionVote[]
   breakoutRooms       BreakoutRoom[]
   breakoutAssignments BreakoutAssignment[]
+  whiteboardDocuments WhiteboardDocument[]
+  whiteboardOperations WhiteboardOperation[]
   authSessions        AuthSession[]
   authChallenges      AuthChallenge[]
   workspaceInvitations WorkspaceInvitation[]
@@ -253,6 +266,7 @@ model User {
   createdWebhookSubscriptions WebhookSubscription[]  @relation("WebhookSubscriptionCreator")
   createdApiKeys              ApiKey[]                 @relation("ApiKeyCreator")
   breakoutAssignments          BreakoutAssignment[]      @relation("BreakoutAssignmentUser")
+  whiteboardOperations          WhiteboardOperation[]     @relation("WhiteboardOperationAuthor")
 
   @@index([status])
   @@map("users")
@@ -332,6 +346,8 @@ model Session {
   questions            Question[]
   breakoutRooms         BreakoutRoom[]
   breakoutAssignments   BreakoutAssignment[]
+  whiteboardDocument    WhiteboardDocument?
+  whiteboardOperations  WhiteboardOperation[]
 
   @@index([organizationId, workspaceId, startsAt])
   @@index([workspaceId, status, startsAt])
@@ -786,6 +802,50 @@ model IdempotencyKey {
   @@unique([workspaceId, key])
   @@index([expiresAt])
   @@map("idempotency_keys")
+}
+
+model WhiteboardDocument {
+  id              String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String               @map("organization_id") @db.Uuid
+  workspaceId     String               @map("workspace_id") @db.Uuid
+  sessionId       String               @unique @map("session_id") @db.Uuid
+  version         Int                  @default(0)
+  snapshotVersion Int                  @default(0) @map("snapshot_version")
+  snapshot        Json                 @default("[]")
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization    Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace       Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  session         Session              @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  operations      WhiteboardOperation[]
+
+  @@index([organizationId, workspaceId, sessionId])
+  @@map("whiteboard_documents")
+}
+
+model WhiteboardOperation {
+  id             String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String                  @map("organization_id") @db.Uuid
+  workspaceId    String                  @map("workspace_id") @db.Uuid
+  sessionId      String                  @map("session_id") @db.Uuid
+  documentId     String                  @map("document_id") @db.Uuid
+  operationId    String                  @map("operation_id") @db.Uuid
+  authorUserId   String                  @map("author_user_id") @db.Uuid
+  sequence       Int
+  kind           WhiteboardOperationKind
+  payload        Json
+  createdAt      DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization   Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  session        Session                 @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  document       WhiteboardDocument      @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  author         User                    @relation("WhiteboardOperationAuthor", fields: [authorUserId], references: [id], onDelete: Restrict)
+
+  @@unique([documentId, sequence])
+  @@unique([documentId, operationId])
+  @@index([organizationId, workspaceId, sessionId])
+  @@index([documentId, sequence])
+  @@map("whiteboard_operations")
 }
 
 model BreakoutRoom {
