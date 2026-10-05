@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -15,6 +16,7 @@ import { TenantDatabaseService } from '../database/tenant-database.service';
 import { RealtimeEventsService } from '../infrastructure/realtime-events.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { ListMemoryQuery } from './dto/list-memory.query';
+import { UpdateTranscriptSegmentDto } from './dto/update-transcript-segment.dto';
 
 @Injectable()
 export class MemoryService {
@@ -27,6 +29,14 @@ export class MemoryService {
 
   async list(principal: Principal, query: ListMemoryQuery) {
     return this.database.run(principal, async (transaction) => {
+      const transcriptSessionIds = query.query
+        ? await transaction.$queryRaw<Array<{ session_id: string }>>(Prisma.sql`
+            SELECT session_id
+            FROM transcripts
+            WHERE to_tsvector('simple', coalesce(full_text, ''))
+              @@ websearch_to_tsquery('simple', ${query.query})
+          `)
+        : [];
       const where: Prisma.SessionWhereInput = {
         OR: [
           {
@@ -55,16 +65,17 @@ export class MemoryService {
                         mode: 'insensitive',
                       },
                     },
-                    {
-                      transcript: {
-                        is: {
-                          fullText: {
-                            contains: query.query,
-                            mode: 'insensitive',
+                    ...(transcriptSessionIds.length
+                      ? [
+                          {
+                            id: {
+                              in: transcriptSessionIds.map(
+                                (item) => item.session_id,
+                              ),
+                            },
                           },
-                        },
-                      },
-                    },
+                        ]
+                      : []),
                   ],
                 },
               ],
@@ -107,7 +118,10 @@ export class MemoryService {
           agendaItems: { orderBy: { position: 'asc' } },
           recording: true,
           transcript: {
-            include: { segments: { orderBy: { position: 'asc' } } },
+            include: {
+              segments: { orderBy: { position: 'asc' } },
+              revisions: { orderBy: { createdAt: 'desc' }, take: 50 },
+            },
           },
           memorySummary: true,
           chatMessages: {
@@ -148,11 +162,134 @@ export class MemoryService {
     return this.database.run(principal, async (transaction) => {
       const transcript = await transaction.transcript.findUnique({
         where: { sessionId },
-        include: { segments: { orderBy: { position: 'asc' } } },
+        include: {
+          segments: { orderBy: { position: 'asc' } },
+          revisions: { orderBy: { createdAt: 'desc' }, take: 100 },
+        },
       });
       if (!transcript) throw new NotFoundException('Transcript not found');
       return transcript;
     });
+  }
+
+  async updateTranscriptSegment(
+    principal: Principal,
+    sessionId: string,
+    segmentId: string,
+    expectedVersion: number,
+    body: UpdateTranscriptSegmentDto,
+  ) {
+    this.assertHost(principal);
+    const result = await this.database.run(principal, async (transaction) => {
+      const transcript = await transaction.transcript.findUnique({
+        where: { sessionId },
+        include: { segments: { orderBy: { position: 'asc' } } },
+      });
+      if (!transcript) throw new NotFoundException('Transcript not found');
+      if (transcript.status !== ArtifactStatus.READY) {
+        throw new ConflictException('Only ready transcripts can be corrected');
+      }
+      if (transcript.version !== expectedVersion) {
+        throw new ConflictException(
+          `Transcript version mismatch. Current version is ${transcript.version}`,
+        );
+      }
+
+      const segment = transcript.segments.find((item) => item.id === segmentId);
+      if (!segment) throw new NotFoundException('Transcript segment not found');
+
+      const nextSpeakerLabel = body.speakerLabel?.trim() || null;
+      const nextText = body.text.trim();
+      const before = {
+        text: segment.text,
+        speakerLabel: segment.speakerLabel,
+      };
+      const after = {
+        text: nextText,
+        speakerLabel: nextSpeakerLabel,
+      };
+
+      if (
+        before.text === after.text &&
+        before.speakerLabel === after.speakerLabel
+      ) {
+        return transcript;
+      }
+
+      await transaction.transcriptSegment.update({
+        where: { id: segment.id },
+        data: {
+          text: nextText,
+          speakerLabel: nextSpeakerLabel,
+        },
+      });
+
+      const fullText = transcript.segments
+        .map((item) => (item.id === segment.id ? nextText : item.text))
+        .join(' ')
+        .trim();
+
+      await transaction.transcriptRevision.create({
+        data: {
+          organizationId: principal.organizationId,
+          workspaceId: principal.workspaceId,
+          transcriptId: transcript.id,
+          segmentId: segment.id,
+          editedByUserId: principal.userId,
+          before,
+          after,
+        },
+      });
+
+      const updated = await transaction.transcript.update({
+        where: { id: transcript.id },
+        data: {
+          fullText,
+          version: { increment: 1 },
+        },
+        include: {
+          segments: { orderBy: { position: 'asc' } },
+          revisions: { orderBy: { createdAt: 'desc' }, take: 100 },
+        },
+      });
+
+      await this.audit.record(transaction, principal, {
+        action: 'transcript.segment_corrected',
+        resourceType: 'transcript',
+        resourceId: transcript.id,
+        metadata: {
+          sessionId,
+          segmentId,
+          previousVersion: transcript.version,
+          version: updated.version,
+        },
+      });
+
+      await this.outbox.enqueue(transaction, principal, {
+        aggregateType: 'transcript',
+        aggregateId: transcript.id,
+        eventType: 'transcript.corrected',
+        payload: {
+          transcriptId: transcript.id,
+          sessionId,
+          segmentId,
+          version: updated.version,
+        },
+      });
+
+      return updated;
+    });
+
+    this.realtime.publishSessionEvent({
+      sessionId,
+      eventName: 'transcript.corrected',
+      payload: {
+        transcriptId: result.id,
+        segmentId,
+        version: result.version,
+      },
+    });
+    return result;
   }
 
   async retryFailed(principal: Principal, sessionId: string) {
