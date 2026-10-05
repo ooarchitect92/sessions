@@ -142,6 +142,45 @@ export interface CalendarConnectionRecord {
   user: { id: string; displayName: string; email: string };
 }
 
+export type NotificationKind =
+  | 'BOOKING_CONFIRMATION'
+  | 'BOOKING_REMINDER_24H'
+  | 'BOOKING_REMINDER_1H'
+  | 'EVENT_REGISTRATION_CONFIRMATION'
+  | 'EVENT_REMINDER_24H'
+  | 'EVENT_REMINDER_1H';
+
+export interface NotificationTemplateRecord {
+  kind: NotificationKind;
+  custom: boolean;
+  id: string | null;
+  active: boolean;
+  version: number;
+  subjectTemplate: string;
+  textTemplate: string;
+  htmlTemplate: string | null;
+  updatedAt: string | null;
+}
+
+export interface NotificationDeliveryRecord {
+  id: string;
+  kind: NotificationKind;
+  sourceId: string;
+  recipientEmail: string;
+  recipientName: string | null;
+  subject: string;
+  status: 'PENDING' | 'DELIVERING' | 'RETRYING' | 'SENT' | 'FAILED' | 'CANCELLED';
+  provider: string | null;
+  providerMessageId: string | null;
+  attemptCount: number;
+  scheduledFor: string;
+  nextAttemptAt: string;
+  sentAt: string | null;
+  lastError: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface WorkspaceInvitation {
   id: string;
   email: string;
@@ -905,6 +944,44 @@ export const api = {
     return request(`/integrations/calendars/${id}`, {
       method: 'DELETE',
     });
+  },
+
+  listNotificationTemplates(): Promise<NotificationTemplateRecord[]> {
+    return request<NotificationTemplateRecord[]>('/notifications/templates');
+  },
+
+  saveNotificationTemplate(input: {
+    kind: NotificationKind;
+    subjectTemplate: string;
+    textTemplate: string;
+    htmlTemplate?: string | null;
+    active?: boolean;
+  }): Promise<NotificationTemplateRecord> {
+    return request<NotificationTemplateRecord>('/notifications/templates', {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    });
+  },
+
+  resetNotificationTemplate(
+    kind: NotificationKind,
+  ): Promise<{ kind: NotificationKind; reset: true }> {
+    return request(`/notifications/templates/${encodeURIComponent(kind)}`, {
+      method: 'DELETE',
+    });
+  },
+
+  listNotificationDeliveries(limit = 100): Promise<NotificationDeliveryRecord[]> {
+    return request<NotificationDeliveryRecord[]>(
+      `/notifications/deliveries?limit=${encodeURIComponent(String(limit))}`,
+    );
+  },
+
+  retryNotificationDelivery(id: string): Promise<NotificationDeliveryRecord> {
+    return request<NotificationDeliveryRecord>(
+      `/notifications/deliveries/${id}/retry`,
+      { method: 'PATCH' },
+    );
   },
 
   listWorkspaceMembers(): Promise<WorkspaceMember[]> {
