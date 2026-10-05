@@ -22,6 +22,10 @@ export function SessionPage() {
   const [media, setMedia] = useState<MediaToken | null>(null);
   const [agendaEditorOpen, setAgendaEditorOpen] = useState(false);
   const [aiAgendaOpen, setAiAgendaOpen] = useState(false);
+  const [templatePanelOpen, setTemplatePanelOpen] = useState(false);
+  const [templateName, setTemplateName] = useState('');
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [replaceAgendaWithTemplate, setReplaceAgendaWithTemplate] = useState(false);
   const [aiObjective, setAiObjective] = useState('');
   const [aiAudience, setAiAudience] = useState('');
   const [agendaDraft, setAgendaDraft] = useState<AgendaDraft | null>(null);
@@ -109,6 +113,12 @@ export function SessionPage() {
     queryKey: ['session', sessionId],
     queryFn: () => api.getSession(sessionId),
     enabled: Boolean(sessionId),
+  });
+
+  const agendaTemplates = useQuery({
+    queryKey: ['agenda-templates'],
+    queryFn: () => api.listAgendaTemplates(),
+    enabled: templatePanelOpen,
   });
 
   const recordingConsent = useQuery({
@@ -226,6 +236,39 @@ export function SessionPage() {
       setAiAudience('');
       setAiAgendaOpen(false);
       await queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+    },
+  });
+
+  const saveAgendaTemplate = useMutation({
+    mutationFn: () =>
+      api.saveSessionAgendaAsTemplate(sessionId, { name: templateName }),
+    onSuccess: async (template) => {
+      setTemplateName('');
+      setSelectedTemplateId(template.id);
+      await queryClient.invalidateQueries({ queryKey: ['agenda-templates'] });
+    },
+  });
+
+  const applyAgendaTemplate = useMutation({
+    mutationFn: () => {
+      if (!selectedTemplateId) throw new Error('Choose an agenda template first');
+      return api.applyAgendaTemplate(
+        sessionId,
+        selectedTemplateId,
+        replaceAgendaWithTemplate,
+      );
+    },
+    onSuccess: async () => {
+      setTemplatePanelOpen(false);
+      await queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+    },
+  });
+
+  const deleteAgendaTemplate = useMutation({
+    mutationFn: (templateId: string) => api.deleteAgendaTemplate(templateId),
+    onSuccess: async (_, templateId) => {
+      if (selectedTemplateId === templateId) setSelectedTemplateId('');
+      await queryClient.invalidateQueries({ queryKey: ['agenda-templates'] });
     },
   });
 
@@ -391,6 +434,14 @@ export function SessionPage() {
               <h2>Agenda</h2>
               <div className="agenda-heading-actions">
                 <button
+                  className="agenda-template-button"
+                  type="button"
+                  onClick={() => setTemplatePanelOpen((value) => !value)}
+                  aria-expanded={templatePanelOpen}
+                >
+                  Templates
+                </button>
+                <button
                   className="agenda-ai-button"
                   type="button"
                   onClick={() => setAiAgendaOpen((value) => !value)}
@@ -410,6 +461,111 @@ export function SessionPage() {
             </div>
             <span>{current.agendaItems.length} items</span>
           </div>
+          {templatePanelOpen ? (
+            <section className="agenda-template-panel">
+              <span className="eyebrow">Reusable agenda library</span>
+              <h3>Agenda templates</h3>
+              <p>
+                Save this run of show for reuse, or apply a workspace template to this session.
+              </p>
+              <label>
+                Save current agenda
+                <div className="agenda-template-save-row">
+                  <input
+                    maxLength={160}
+                    value={templateName}
+                    onChange={(event) => setTemplateName(event.target.value)}
+                    placeholder="Sales discovery"
+                  />
+                  <button
+                    className="button secondary"
+                    type="button"
+                    disabled={
+                      saveAgendaTemplate.isPending ||
+                      !templateName.trim() ||
+                      current.agendaItems.length === 0
+                    }
+                    onClick={() => saveAgendaTemplate.mutate()}
+                  >
+                    {saveAgendaTemplate.isPending ? 'Saving…' : 'Save'}
+                  </button>
+                </div>
+              </label>
+              {saveAgendaTemplate.error ? (
+                <div className="error-banner">{saveAgendaTemplate.error.message}</div>
+              ) : null}
+              <label>
+                Apply template
+                <select
+                  value={selectedTemplateId}
+                  onChange={(event) => setSelectedTemplateId(event.target.value)}
+                >
+                  <option value="">Choose a template</option>
+                  {agendaTemplates.data?.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name} · {template.items.length} items
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="agenda-template-checkbox">
+                <input
+                  type="checkbox"
+                  checked={replaceAgendaWithTemplate}
+                  onChange={(event) =>
+                    setReplaceAgendaWithTemplate(event.target.checked)
+                  }
+                />
+                Replace existing agenda instead of appending
+              </label>
+              {selectedTemplateId ? (
+                <div className="agenda-template-preview">
+                  {agendaTemplates.data
+                    ?.find((template) => template.id === selectedTemplateId)
+                    ?.items.map((item) => (
+                      <div key={item.id}>
+                        <strong>{item.title}</strong>
+                        <span>
+                          {Math.round(item.durationSeconds / 60)} min ·{' '}
+                          {item.type.toLowerCase().replace('_', ' ')}
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              ) : null}
+              <div className="agenda-template-actions">
+                <button
+                  className="button primary"
+                  type="button"
+                  disabled={applyAgendaTemplate.isPending || !selectedTemplateId}
+                  onClick={() => applyAgendaTemplate.mutate()}
+                >
+                  {applyAgendaTemplate.isPending ? 'Applying…' : 'Apply template'}
+                </button>
+                {selectedTemplateId ? (
+                  <button
+                    className="button secondary"
+                    type="button"
+                    disabled={deleteAgendaTemplate.isPending}
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          'Delete this agenda template from the workspace library?',
+                        )
+                      ) {
+                        deleteAgendaTemplate.mutate(selectedTemplateId);
+                      }
+                    }}
+                  >
+                    Delete
+                  </button>
+                ) : null}
+              </div>
+              {applyAgendaTemplate.error ? (
+                <div className="error-banner">{applyAgendaTemplate.error.message}</div>
+              ) : null}
+            </section>
+          ) : null}
           {aiAgendaOpen ? (
             <section className="agenda-ai-panel">
               <span className="eyebrow">AI copilot</span>
