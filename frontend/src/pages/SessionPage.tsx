@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FormEvent, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api, type AgendaDraft, type MediaToken } from '../api/client';
+import { AgendaContentStage } from '../components/AgendaContentStage';
 import { SessionCollaborationPanel } from '../components/SessionCollaborationPanel';
 import { useSessionRealtime } from '../hooks/use-session-realtime';
 
@@ -25,6 +26,9 @@ export function SessionPage() {
   const [agendaDraft, setAgendaDraft] = useState<AgendaDraft | null>(null);
   const [agendaTitle, setAgendaTitle] = useState('');
   const [agendaDuration, setAgendaDuration] = useState(10);
+  const [agendaUrl, setAgendaUrl] = useState('');
+  const [agendaText, setAgendaText] = useState('');
+  const [showSharedContent, setShowSharedContent] = useState(true);
   const [agendaType, setAgendaType] = useState<
     | 'TEXT'
     | 'PRESENTATION'
@@ -97,11 +101,18 @@ export function SessionPage() {
         title: agendaTitle,
         durationSeconds: agendaDuration * 60,
         type: agendaType,
-        content: {},
+        content:
+          agendaType === 'TEXT'
+            ? { text: agendaText.trim() }
+            : ['WEBSITE', 'PRESENTATION', 'VIDEO'].includes(agendaType)
+              ? { url: agendaUrl.trim() }
+              : {},
       }),
     onSuccess: async () => {
       setAgendaTitle('');
       setAgendaDuration(10);
+      setAgendaUrl('');
+      setAgendaText('');
       setAgendaType('TEXT');
       setAgendaEditorOpen(false);
       await queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
@@ -164,6 +175,12 @@ export function SessionPage() {
   const consentGranted =
     !current.recordingEnabled ||
     recordingConsent.data?.currentDecision === 'GRANTED';
+  const activeAgendaItem =
+    current.agendaItems.find((item) => item.id === current.currentAgendaItemId) ?? null;
+  const activeHasSharedContent =
+    activeAgendaItem !== null &&
+    (activeAgendaItem.type === 'TEXT' ||
+      ['WEBSITE', 'PRESENTATION', 'VIDEO'].includes(activeAgendaItem.type));
 
   return (
     <div className="session-workspace">
@@ -406,7 +423,14 @@ export function SessionPage() {
                   Content
                   <select
                     value={agendaType}
-                    onChange={(event) => setAgendaType(event.target.value as typeof agendaType)}
+                    onChange={(event) => {
+                      const nextType = event.target.value as typeof agendaType;
+                      setAgendaType(nextType);
+                      if (!['WEBSITE', 'PRESENTATION', 'VIDEO'].includes(nextType)) {
+                        setAgendaUrl('');
+                      }
+                      if (nextType !== 'TEXT') setAgendaText('');
+                    }}
                   >
                     <option value="TEXT">Discussion</option>
                     <option value="PRESENTATION">Presentation</option>
@@ -420,6 +444,37 @@ export function SessionPage() {
                   </select>
                 </label>
               </div>
+              {['WEBSITE', 'PRESENTATION', 'VIDEO'].includes(agendaType) ? (
+                <label>
+                  HTTPS content URL
+                  <input
+                    type="url"
+                    required
+                    value={agendaUrl}
+                    onChange={(event) => setAgendaUrl(event.target.value)}
+                    placeholder={
+                      agendaType === 'VIDEO'
+                        ? 'https://www.youtube.com/watch?v=…'
+                        : 'https://example.com/shared-content'
+                    }
+                  />
+                  <small>
+                    External content is rendered in a restricted sandboxed frame.
+                  </small>
+                </label>
+              ) : null}
+              {agendaType === 'TEXT' ? (
+                <label>
+                  Shared notes
+                  <textarea
+                    rows={4}
+                    maxLength={20000}
+                    value={agendaText}
+                    onChange={(event) => setAgendaText(event.target.value)}
+                    placeholder="Discussion context, prompts, or talking points"
+                  />
+                </label>
+              ) : null}
               {createAgendaItem.error ? (
                 <div className="error-banner">{createAgendaItem.error.message}</div>
               ) : null}
@@ -465,7 +520,12 @@ export function SessionPage() {
         </aside>
 
         <section className="meeting-stage">
-          {media ? (
+          {activeHasSharedContent && showSharedContent && activeAgendaItem ? (
+            <AgendaContentStage
+              item={activeAgendaItem}
+              onShowMedia={() => setShowSharedContent(false)}
+            />
+          ) : media ? (
             <LiveKitRoom
               token={media.token}
               serverUrl={media.url}
@@ -489,6 +549,15 @@ export function SessionPage() {
                 handles camera, microphone, screen sharing, adaptive subscriptions, and
                 reconnect behavior.
               </p>
+              {activeHasSharedContent ? (
+                <button
+                  className="button secondary large"
+                  type="button"
+                  onClick={() => setShowSharedContent(true)}
+                >
+                  Show shared agenda content
+                </button>
+              ) : null}
               <button
                 className="button primary large"
                 onClick={() => join.mutate()}
