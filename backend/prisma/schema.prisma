@@ -563,6 +563,10 @@ model MemorySummary {
   failureCode    String?        @map("failure_code") @db.VarChar(160)
   reviewedAt     DateTime?      @map("reviewed_at") @db.Timestamptz(6)
   reviewedByUserId String?      @map("reviewed_by_user_id") @db.Uuid
+  followUpDraft  Json           @default("{}") @map("follow_up_draft")
+  followUpGeneratedAt DateTime? @map("follow_up_generated_at") @db.Timestamptz(6)
+  followUpApprovedAt DateTime?  @map("follow_up_approved_at") @db.Timestamptz(6)
+  followUpApprovedByUserId String? @map("follow_up_approved_by_user_id") @db.Uuid
   version        Int            @default(1)
   createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -572,6 +576,7 @@ model MemorySummary {
 
   @@index([organizationId, workspaceId, status])
   @@index([reviewedByUserId])
+  @@index([followUpApprovedByUserId])
   @@map("memory_summaries")
 }
 
