@@ -14,6 +14,7 @@ import { CurrentPrincipal } from '../common/auth/current-principal.decorator';
 import type { Principal } from '../common/auth/principal';
 import { BookingsService } from './bookings.service';
 import { CreateBookingPageDto } from './dto/create-booking-page.dto';
+import { RescheduleReservationDto } from './dto/reschedule-reservation.dto';
 import { UpdateBookingPageDto } from './dto/update-booking-page.dto';
 
 function parseVersion(value: string | undefined): number {
@@ -64,6 +65,50 @@ export class BookingsController {
     @Body() body: UpdateBookingPageDto,
   ) {
     return this.bookings.update(principal, id, parseVersion(ifMatch), body);
+  }
+
+  @Get(':id/reservations/:reservationId/calendar')
+  reservationCalendar(
+    @CurrentPrincipal() principal: Principal,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Param('reservationId', new ParseUUIDPipe({ version: '4' }))
+    reservationId: string,
+  ) {
+    return this.bookings.getReservationCalendar(principal, id, reservationId);
+  }
+
+  @Patch(':id/reservations/:reservationId/reschedule')
+  rescheduleReservation(
+    @CurrentPrincipal() principal: Principal,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Param('reservationId', new ParseUUIDPipe({ version: '4' }))
+    reservationId: string,
+    @Headers('if-match') ifMatch: string | undefined,
+    @Body() body: RescheduleReservationDto,
+  ) {
+    return this.bookings.rescheduleReservation(
+      principal,
+      id,
+      reservationId,
+      parseVersion(ifMatch),
+      body,
+    );
+  }
+
+  @Post(':id/reservations/:reservationId/cancel')
+  cancelReservation(
+    @CurrentPrincipal() principal: Principal,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Param('reservationId', new ParseUUIDPipe({ version: '4' }))
+    reservationId: string,
+    @Headers('if-match') ifMatch: string | undefined,
+  ) {
+    return this.bookings.cancelReservation(
+      principal,
+      id,
+      reservationId,
+      parseVersion(ifMatch),
+    );
   }
 
   @Get(':id/reservations')
