@@ -474,7 +474,10 @@ export class BookingsService {
         },
         select: { startsAt: true, endsAt: true },
       });
-      const slots = this.generateSlots(page, localDate, localDate, reservations);
+      const slots = this.generateSlots(page, localDate, localDate, [
+        ...reservations,
+        ...calendarBusy,
+      ]);
       const selected = slots.find((slot) => slot.startsAt === requested.toISOString());
       if (!selected) throw new ConflictException('The selected slot is no longer available');
 
