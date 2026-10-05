@@ -113,6 +113,32 @@ export function useSessionRealtime(sessionId: string): void {
           );
         }
       });
+      socket.on(
+        'transcript.live.segment',
+        (payload: {
+          transcriptId?: string;
+          sessionId?: string;
+          segmentId?: string;
+          position?: number;
+          startMs?: number;
+          endMs?: number;
+          speakerLabel?: string | null;
+          text?: string;
+          userId?: string;
+          displayName?: string;
+          language?: string | null;
+          isFinal?: boolean;
+        }) => {
+          if (payload?.segmentId && payload.text) {
+            window.dispatchEvent(
+              new CustomEvent('sessions:live-caption', { detail: payload }),
+            );
+          }
+          void queryClient.invalidateQueries({
+            queryKey: ['memory-detail', sessionId],
+          });
+        },
+      );
       socket.on('memory.updated', () => {
         void queryClient.invalidateQueries({ queryKey: ['memory'] });
         void queryClient.invalidateQueries({
