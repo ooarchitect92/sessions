@@ -3,7 +3,7 @@ import { LiveKitRoom, VideoConference } from '@livekit/components-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FormEvent, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { api, type MediaToken } from '../api/client';
+import { api, type AgendaDraft, type MediaToken } from '../api/client';
 import { SessionCollaborationPanel } from '../components/SessionCollaborationPanel';
 import { useSessionRealtime } from '../hooks/use-session-realtime';
 
@@ -19,6 +19,10 @@ export function SessionPage() {
   const queryClient = useQueryClient();
   const [media, setMedia] = useState<MediaToken | null>(null);
   const [agendaEditorOpen, setAgendaEditorOpen] = useState(false);
+  const [aiAgendaOpen, setAiAgendaOpen] = useState(false);
+  const [aiObjective, setAiObjective] = useState('');
+  const [aiAudience, setAiAudience] = useState('');
+  const [agendaDraft, setAgendaDraft] = useState<AgendaDraft | null>(null);
   const [agendaTitle, setAgendaTitle] = useState('');
   const [agendaDuration, setAgendaDuration] = useState(10);
   const [agendaType, setAgendaType] = useState<
@@ -100,6 +104,32 @@ export function SessionPage() {
       setAgendaDuration(10);
       setAgendaType('TEXT');
       setAgendaEditorOpen(false);
+      await queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+    },
+  });
+
+  const generateAgendaDraft = useMutation({
+    mutationFn: () =>
+      api.generateAgendaDraft(sessionId, {
+        ...(aiObjective.trim() ? { objective: aiObjective.trim() } : {}),
+        ...(aiAudience.trim() ? { audience: aiAudience.trim() } : {}),
+        durationMinutes: session.data?.durationMinutes,
+      }),
+    onSuccess: (draft) => {
+      setAgendaDraft(draft);
+    },
+  });
+
+  const applyAgendaDraft = useMutation({
+    mutationFn: () => {
+      if (!agendaDraft) throw new Error('Generate an agenda draft first');
+      return api.applyAgendaDraft(sessionId, agendaDraft.items);
+    },
+    onSuccess: async () => {
+      setAgendaDraft(null);
+      setAiObjective('');
+      setAiAudience('');
+      setAiAgendaOpen(false);
       await queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
     },
   });
@@ -236,17 +266,116 @@ export function SessionPage() {
             <span className="eyebrow">Run of show</span>
             <div className="rail-title-row">
               <h2>Agenda</h2>
-              <button
-                className="agenda-add-button"
-                type="button"
-                onClick={() => setAgendaEditorOpen((value) => !value)}
-                aria-expanded={agendaEditorOpen}
-              >
-                {agendaEditorOpen ? '×' : '+'}
-              </button>
+              <div className="agenda-heading-actions">
+                <button
+                  className="agenda-ai-button"
+                  type="button"
+                  onClick={() => setAiAgendaOpen((value) => !value)}
+                  aria-expanded={aiAgendaOpen}
+                >
+                  AI
+                </button>
+                <button
+                  className="agenda-add-button"
+                  type="button"
+                  onClick={() => setAgendaEditorOpen((value) => !value)}
+                  aria-expanded={agendaEditorOpen}
+                >
+                  {agendaEditorOpen ? '×' : '+'}
+                </button>
+              </div>
             </div>
             <span>{current.agendaItems.length} items</span>
           </div>
+          {aiAgendaOpen ? (
+            <section className="agenda-ai-panel">
+              <span className="eyebrow">AI copilot</span>
+              <h3>Draft a reviewable agenda</h3>
+              <p>
+                AI suggestions are not saved until you review and apply them.
+              </p>
+              <label>
+                Objective
+                <textarea
+                  rows={3}
+                  maxLength={2000}
+                  value={aiObjective}
+                  onChange={(event) => setAiObjective(event.target.value)}
+                  placeholder="Align on launch scope and assign owners"
+                />
+              </label>
+              <label>
+                Audience
+                <input
+                  maxLength={1000}
+                  value={aiAudience}
+                  onChange={(event) => setAiAudience(event.target.value)}
+                  placeholder="Product, engineering, and marketing"
+                />
+              </label>
+              <button
+                className="button secondary full-width"
+                type="button"
+                disabled={generateAgendaDraft.isPending}
+                onClick={() => generateAgendaDraft.mutate()}
+              >
+                {generateAgendaDraft.isPending ? 'Generating…' : 'Generate draft'}
+              </button>
+              {generateAgendaDraft.error ? (
+                <div className="error-banner">
+                  {generateAgendaDraft.error.message}
+                </div>
+              ) : null}
+              {agendaDraft ? (
+                <div className="agenda-ai-draft">
+                  <div className="agenda-ai-draft-heading">
+                    <strong>
+                      {agendaDraft.items.length} suggested items ·{' '}
+                      {Math.round(agendaDraft.totalDurationSeconds / 60)} min
+                    </strong>
+                    <small>
+                      {agendaDraft.provider} / {agendaDraft.model}
+                    </small>
+                  </div>
+                  <ol>
+                    {agendaDraft.items.map((item, index) => (
+                      <li key={`${item.title}-${index}`}>
+                        <strong>{item.title}</strong>
+                        <span>
+                          {Math.round(item.durationSeconds / 60)} min ·{' '}
+                          {item.type.toLowerCase().replace('_', ' ')}
+                        </span>
+                        {item.rationale ? <p>{item.rationale}</p> : null}
+                      </li>
+                    ))}
+                  </ol>
+                  <div className="agenda-ai-draft-actions">
+                    <button
+                      className="button primary"
+                      type="button"
+                      disabled={applyAgendaDraft.isPending}
+                      onClick={() => applyAgendaDraft.mutate()}
+                    >
+                      {applyAgendaDraft.isPending ? 'Applying…' : 'Apply reviewed draft'}
+                    </button>
+                    <button
+                      className="button secondary"
+                      type="button"
+                      disabled={applyAgendaDraft.isPending}
+                      onClick={() => setAgendaDraft(null)}
+                    >
+                      Discard
+                    </button>
+                  </div>
+                  {applyAgendaDraft.error ? (
+                    <div className="error-banner">
+                      {applyAgendaDraft.error.message}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </section>
+          ) : null}
           {agendaEditorOpen ? (
             <form className="agenda-inline-form" onSubmit={submitAgendaItem}>
               <label>
