@@ -1,7 +1,7 @@
 import '@livekit/components-styles';
 import { LiveKitRoom, VideoConference } from '@livekit/components-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api, type AgendaDraft, type MediaToken } from '../api/client';
 import { AgendaContentStage } from '../components/AgendaContentStage';
@@ -29,6 +29,7 @@ export function SessionPage() {
   const [agendaUrl, setAgendaUrl] = useState('');
   const [agendaText, setAgendaText] = useState('');
   const [showSharedContent, setShowSharedContent] = useState(true);
+  const [breakoutNotice, setBreakoutNotice] = useState<string | null>(null);
   const [agendaType, setAgendaType] = useState<
     | 'TEXT'
     | 'PRESENTATION'
@@ -41,6 +42,20 @@ export function SessionPage() {
     | 'SCREEN_SHARE'
   >('TEXT');
   useSessionRealtime(sessionId);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ message?: string }>).detail;
+      if (!detail?.message) return;
+      setBreakoutNotice(detail.message);
+      const timeout = window.setTimeout(() => setBreakoutNotice(null), 8000);
+      return () => window.clearTimeout(timeout);
+    };
+    window.addEventListener('sessions:breakout-broadcast', handler);
+    return () => {
+      window.removeEventListener('sessions:breakout-broadcast', handler);
+    };
+  }, []);
 
   const session = useQuery({
     queryKey: ['session', sessionId],
@@ -590,6 +605,12 @@ export function SessionPage() {
           onJoinBreakout={(breakoutRoomId) => joinBreakout.mutate(breakoutRoomId)}
         />
       </div>
+      {breakoutNotice ? (
+        <div className="breakout-toast">
+          <strong>Host announcement</strong>
+          <span>{breakoutNotice}</span>
+        </div>
+      ) : null}
       {joinBreakout.error ? (
         <div className="breakout-toast error-banner">
           {joinBreakout.error.message}
