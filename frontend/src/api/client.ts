@@ -212,6 +212,7 @@ export interface TranscriptRecord {
   language: string | null;
   fullText?: string | null;
   completedAt: string | null;
+  version: number;
   segments?: Array<{
     id: string;
     position: number;
@@ -219,6 +220,14 @@ export interface TranscriptRecord {
     endMs: number;
     speakerLabel: string | null;
     text: string;
+  }>;
+  revisions?: Array<{
+    id: string;
+    segmentId: string;
+    editedByUserId: string;
+    before: { text?: string; speakerLabel?: string | null };
+    after: { text?: string; speakerLabel?: string | null };
+    createdAt: string;
   }>;
 }
 
@@ -757,6 +766,22 @@ export const api = {
 
   getMemory(sessionId: string): Promise<MemoryDetail> {
     return request<MemoryDetail>(`/memory/${sessionId}`);
+  },
+
+  updateTranscriptSegment(
+    sessionId: string,
+    segmentId: string,
+    version: number,
+    input: { text: string; speakerLabel?: string | null },
+  ): Promise<TranscriptRecord> {
+    return request<TranscriptRecord>(
+      `/transcripts/${sessionId}/segments/${segmentId}`,
+      {
+        method: "PATCH",
+        headers: { "if-match": String(version) },
+        body: JSON.stringify(input),
+      },
+    );
   },
 
   retryMemory(
