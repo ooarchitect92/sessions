@@ -279,6 +279,15 @@ export interface MemorySummaryRecord {
   failureCode: string | null;
   reviewedAt: string | null;
   reviewedByUserId: string | null;
+  followUpDraft: {
+    subject?: string;
+    body?: string;
+    provider?: string;
+    model?: string;
+  };
+  followUpGeneratedAt: string | null;
+  followUpApprovedAt: string | null;
+  followUpApprovedByUserId: string | null;
   version: number;
 }
 
@@ -868,6 +877,38 @@ export const api = {
   ): Promise<MemorySummaryRecord> {
     return request<MemorySummaryRecord>(
       `/memory/${sessionId}/summary/approve`,
+      {
+        method: "POST",
+        headers: { "if-match": String(version) },
+      },
+    );
+  },
+
+  generateFollowUpDraft(sessionId: string): Promise<MemorySummaryRecord> {
+    return request<MemorySummaryRecord>(
+      `/memory/${sessionId}/follow-up/generate`,
+      { method: "POST" },
+    );
+  },
+
+  updateFollowUpDraft(
+    sessionId: string,
+    version: number,
+    input: { subject: string; body: string },
+  ): Promise<MemorySummaryRecord> {
+    return request<MemorySummaryRecord>(`/memory/${sessionId}/follow-up`, {
+      method: "PATCH",
+      headers: { "if-match": String(version) },
+      body: JSON.stringify(input),
+    });
+  },
+
+  approveFollowUpDraft(
+    sessionId: string,
+    version: number,
+  ): Promise<MemorySummaryRecord> {
+    return request<MemorySummaryRecord>(
+      `/memory/${sessionId}/follow-up/approve`,
       {
         method: "POST",
         headers: { "if-match": String(version) },
