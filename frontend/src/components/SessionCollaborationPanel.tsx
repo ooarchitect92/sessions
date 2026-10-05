@@ -2,8 +2,15 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FormEvent, useState } from 'react';
 import { api, type PollRecord } from '../api/client';
 import { BreakoutPanel } from './BreakoutPanel';
+import { WhiteboardPanel } from './WhiteboardPanel';
 
-type PanelTab = 'people' | 'chat' | 'polls' | 'questions' | 'breakouts';
+type PanelTab =
+  | 'people'
+  | 'chat'
+  | 'polls'
+  | 'questions'
+  | 'breakouts'
+  | 'whiteboard';
 
 export function SessionCollaborationPanel({
   sessionId,
@@ -100,12 +107,13 @@ export function SessionCollaborationPanel({
 
   return (
     <aside className="meeting-side-panel collaboration-panel">
-      <div className="side-tabs five-tabs">
+      <div className="side-tabs six-tabs">
         <button className={tab === 'people' ? 'active' : ''} onClick={() => setTab('people')}>People</button>
         <button className={tab === 'chat' ? 'active' : ''} onClick={() => setTab('chat')}>Chat</button>
         <button className={tab === 'polls' ? 'active' : ''} onClick={() => setTab('polls')}>Polls</button>
         <button className={tab === 'questions' ? 'active' : ''} onClick={() => setTab('questions')}>Q&amp;A</button>
         <button className={tab === 'breakouts' ? 'active' : ''} onClick={() => setTab('breakouts')}>Breakouts</button>
+        <button className={tab === 'whiteboard' ? 'active' : ''} onClick={() => setTab('whiteboard')}>Board</button>
       </div>
 
       {tab === 'people' ? (
@@ -150,6 +158,10 @@ export function SessionCollaborationPanel({
 
       {tab === 'breakouts' ? (
         <BreakoutPanel sessionId={sessionId} onJoinBreakout={onJoinBreakout} />
+      ) : null}
+
+      {tab === 'whiteboard' ? (
+        <WhiteboardPanel sessionId={sessionId} />
       ) : null}
 
       {tab === 'questions' ? (
