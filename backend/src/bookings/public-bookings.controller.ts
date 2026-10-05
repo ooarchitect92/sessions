@@ -64,6 +64,24 @@ export class PublicBookingsController {
     );
   }
 
+  @Get(':bookingSlug/reservations/:reservationId')
+  managedReservation(
+    @Param('organizationSlug') organizationSlug: string,
+    @Param('workspaceSlug') workspaceSlug: string,
+    @Param('bookingSlug') bookingSlug: string,
+    @Param('reservationId', new ParseUUIDPipe({ version: '4' }))
+    reservationId: string,
+    @Query() query: ManageReservationQueryDto,
+  ) {
+    return this.bookings.getManagedReservation(
+      organizationSlug,
+      workspaceSlug,
+      bookingSlug,
+      reservationId,
+      query.token,
+    );
+  }
+
   @Post(':bookingSlug/reservations/:reservationId/reschedule')
   reschedule(
     @Param('organizationSlug') organizationSlug: string,
