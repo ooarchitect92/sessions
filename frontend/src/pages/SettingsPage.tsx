@@ -794,6 +794,18 @@ function WebhookSettings() {
   const queryClient = useQueryClient();
   const currentRole = auth.me?.principal.roles[0] ?? 'GUEST';
   const canManage = ['OWNER', 'ADMIN'].includes(currentRole);
+  const [apiKeyName, setApiKeyName] = useState('');
+  const [apiKeyRole, setApiKeyRole] = useState<'HOST' | 'MEMBER' | 'ANALYST'>(
+    'HOST',
+  );
+  const [apiKeyRead, setApiKeyRead] = useState(true);
+  const [apiKeyWrite, setApiKeyWrite] = useState(false);
+  const [apiKeyExpiry, setApiKeyExpiry] = useState('');
+  const [revealedApiKey, setRevealedApiKey] = useState<{
+    id: string;
+    token: string;
+    warning: string;
+  } | null>(null);
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
   const [eventTypes, setEventTypes] = useState(
@@ -804,6 +816,47 @@ function WebhookSettings() {
     secret: string;
     warning: string;
   } | null>(null);
+
+  const apiKeys = useQuery({
+    queryKey: ['api-keys'],
+    queryFn: () => api.listApiKeys(),
+    enabled: canManage,
+  });
+
+  const createApiKey = useMutation({
+    mutationFn: () =>
+      api.createApiKey({
+        name: apiKeyName,
+        role: apiKeyRole,
+        scopes: [
+          ...(apiKeyRead ? ['read'] : []),
+          ...(apiKeyWrite ? ['write'] : []),
+        ],
+        ...(apiKeyExpiry
+          ? { expiresAt: new Date(apiKeyExpiry).toISOString() }
+          : {}),
+      }),
+    onSuccess: async (result) => {
+      setApiKeyName('');
+      setApiKeyRole('HOST');
+      setApiKeyRead(true);
+      setApiKeyWrite(false);
+      setApiKeyExpiry('');
+      setRevealedApiKey({
+        id: result.id,
+        token: result.token,
+        warning: result.tokenWarning,
+      });
+      await queryClient.invalidateQueries({ queryKey: ['api-keys'] });
+    },
+  });
+
+  const revokeApiKey = useMutation({
+    mutationFn: (id: string) => api.revokeApiKey(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['api-keys'] });
+    },
+  });
 
   const webhooks = useQuery({
     queryKey: ['webhooks'],
@@ -867,8 +920,11 @@ function WebhookSettings() {
           <div className="settings-panel-heading">
             <div>
               <span className="eyebrow">External automation</span>
-              <h2>Webhook integrations</h2>
-              <p>Workspace owner or admin access is required to manage webhook endpoints.</p>
+              <h2>API and webhook integrations</h2>
+              <p>
+                Workspace owner or admin access is required to manage API credentials
+                and webhook endpoints.
+              </p>
             </div>
           </div>
         </section>
@@ -878,6 +934,183 @@ function WebhookSettings() {
 
   return (
     <div className="settings-stack">
+      <section className="panel settings-panel">
+        <div className="settings-panel-heading">
+          <div>
+            <span className="eyebrow">Workspace API access</span>
+            <h2>Create API key</h2>
+            <p>
+              Create a scoped bearer credential for server-to-server automation.
+              Tokens are stored as hashes and the full value is shown only once.
+            </p>
+          </div>
+        </div>
+        <form
+          className="settings-form"
+          onSubmit={(event: FormEvent) => {
+            event.preventDefault();
+            createApiKey.mutate();
+          }}
+        >
+          <div className="settings-form-grid">
+            <label>
+              Key name
+              <input
+                required
+                maxLength={160}
+                value={apiKeyName}
+                onChange={(event) => setApiKeyName(event.target.value)}
+                placeholder="Production CRM"
+              />
+            </label>
+            <label>
+              Runtime role
+              <select
+                value={apiKeyRole}
+                onChange={(event) =>
+                  setApiKeyRole(
+                    event.target.value as 'HOST' | 'MEMBER' | 'ANALYST',
+                  )
+                }
+              >
+                <option value="HOST">host</option>
+                <option value="MEMBER">member</option>
+                <option value="ANALYST">analyst</option>
+              </select>
+            </label>
+            <label>
+              Optional expiry
+              <input
+                type="datetime-local"
+                value={apiKeyExpiry}
+                onChange={(event) => setApiKeyExpiry(event.target.value)}
+              />
+            </label>
+            <div className="api-key-scope-field">
+              <span>Scopes</span>
+              <label className="api-key-scope-option">
+                <input
+                  type="checkbox"
+                  checked={apiKeyRead}
+                  onChange={(event) => setApiKeyRead(event.target.checked)}
+                />
+                <span>
+                  <strong>Read</strong>
+                  <small>Allow GET/HEAD/OPTIONS API requests.</small>
+                </span>
+              </label>
+              <label className="api-key-scope-option">
+                <input
+                  type="checkbox"
+                  checked={apiKeyWrite}
+                  onChange={(event) => setApiKeyWrite(event.target.checked)}
+                />
+                <span>
+                  <strong>Write</strong>
+                  <small>Allow mutating API requests. Write also permits reads.</small>
+                </span>
+              </label>
+            </div>
+          </div>
+          {createApiKey.error ? (
+            <div className="error-banner">{createApiKey.error.message}</div>
+          ) : null}
+          <div className="settings-actions">
+            <button
+              className="button primary"
+              disabled={
+                createApiKey.isPending ||
+                !apiKeyName.trim() ||
+                (!apiKeyRead && !apiKeyWrite)
+              }
+            >
+              {createApiKey.isPending ? 'Creating…' : 'Create API key'}
+            </button>
+          </div>
+        </form>
+
+        {revealedApiKey ? (
+          <div className="webhook-secret-box">
+            <div>
+              <strong>API key</strong>
+              <small>{revealedApiKey.warning}</small>
+            </div>
+            <code>{revealedApiKey.token}</code>
+            <button
+              type="button"
+              className="button secondary"
+              onClick={() => {
+                void navigator.clipboard.writeText(revealedApiKey.token);
+              }}
+            >
+              Copy API key
+            </button>
+          </div>
+        ) : null}
+      </section>
+
+      <section className="panel settings-panel">
+        <div className="settings-panel-heading compact-settings-heading">
+          <div>
+            <span className="eyebrow">Server credentials</span>
+            <h2>API keys</h2>
+          </div>
+          <span className="count-pill">{apiKeys.data?.length ?? 0}</span>
+        </div>
+        {apiKeys.isLoading ? <SettingsLoading /> : null}
+        {apiKeys.error ? <SettingsError message={apiKeys.error.message} /> : null}
+        <div className="webhook-card-list">
+          {apiKeys.data?.map((key) => (
+            <article className="webhook-card" key={key.id}>
+              <div className="webhook-card-heading">
+                <div>
+                  <strong>{key.name}</strong>
+                  <span>{key.tokenPrefix}••••••••</span>
+                </div>
+                <span className={key.revokedAt ? 'state-chip' : 'state-chip enabled'}>
+                  {key.revokedAt ? 'Revoked' : 'Active'}
+                </span>
+              </div>
+              <div className="webhook-event-tags">
+                <code>{key.role.toLowerCase()}</code>
+                {key.scopes.map((scope) => (
+                  <code key={scope}>{scope}</code>
+                ))}
+              </div>
+              <div className="webhook-card-meta">
+                <span>Created {formatDate(key.createdAt)}</span>
+                <span>Last used {formatDate(key.lastUsedAt)}</span>
+                <span>
+                  {key.expiresAt ? `Expires ${formatDate(key.expiresAt)}` : 'No expiry'}
+                </span>
+              </div>
+              {!key.revokedAt ? (
+                <div className="webhook-card-actions">
+                  <button
+                    type="button"
+                    className="button danger"
+                    disabled={revokeApiKey.isPending}
+                    onClick={() => {
+                      if (window.confirm(`Revoke API key "${key.name}"?`)) {
+                        revokeApiKey.mutate(key.id);
+                      }
+                    }}
+                  >
+                    Revoke
+                  </button>
+                </div>
+              ) : null}
+            </article>
+          ))}
+          {apiKeys.data?.length === 0 ? (
+            <div className="settings-empty-row">No API keys have been created.</div>
+          ) : null}
+        </div>
+        {revokeApiKey.error ? (
+          <div className="error-banner">{revokeApiKey.error.message}</div>
+        ) : null}
+      </section>
+
       <section className="panel settings-panel">
         <div className="settings-panel-heading">
           <div>
