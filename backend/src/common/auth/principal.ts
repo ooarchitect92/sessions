@@ -8,6 +8,9 @@ export interface Principal {
   displayName: string;
   roles: WorkspaceRole[];
   sessionId?: string;
+  authType?: 'SESSION' | 'API_KEY';
+  apiKeyId?: string;
+  apiKeyScopes?: string[];
 }
 
 export interface AccessTokenClaims {
