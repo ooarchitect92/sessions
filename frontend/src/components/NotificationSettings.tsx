@@ -3,7 +3,6 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import {
   api,
   type NotificationKind,
-  type NotificationTemplateRecord,
 } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 
