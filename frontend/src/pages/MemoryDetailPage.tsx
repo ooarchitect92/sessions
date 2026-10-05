@@ -66,7 +66,9 @@ export function MemoryDetailPage() {
         input.version,
         {
           text: input.text,
-          speakerLabel: input.speakerLabel,
+          ...(input.speakerLabel !== undefined
+            ? { speakerLabel: input.speakerLabel }
+            : {}),
         },
       ),
     onSuccess: async () => {
@@ -395,9 +397,9 @@ export function MemoryDetailPage() {
                     setActionDrafts(
                       (item.memorySummary?.actionItems ?? []).map((action) => ({
                         ...action,
-                        citations: action.citations
-                          ? [...action.citations]
-                          : undefined,
+                        ...(action.citations
+                          ? { citations: [...action.citations] }
+                          : {}),
                       })),
                     );
                     setEditingActions(true);
@@ -434,10 +436,9 @@ export function MemoryDetailPage() {
                             value={action.owner ?? ''}
                             onChange={(event) => {
                               const next = [...actionDrafts];
-                              next[index] = {
-                                ...action,
-                                owner: event.target.value || undefined,
-                              };
+                              next[index] = event.target.value
+                                ? { ...action, owner: event.target.value }
+                                : (({ owner: _owner, ...rest }) => rest)(action);
                               setActionDrafts(next);
                             }}
                           />
@@ -449,10 +450,9 @@ export function MemoryDetailPage() {
                             value={action.dueDate ?? ''}
                             onChange={(event) => {
                               const next = [...actionDrafts];
-                              next[index] = {
-                                ...action,
-                                dueDate: event.target.value || undefined,
-                              };
+                              next[index] = event.target.value
+                                ? { ...action, dueDate: event.target.value }
+                                : (({ dueDate: _dueDate, ...rest }) => rest)(action);
                               setActionDrafts(next);
                             }}
                           />
@@ -498,14 +498,16 @@ export function MemoryDetailPage() {
                         version: item.memorySummary?.version ?? 1,
                         summaryText: item.memorySummary?.summaryText ?? '',
                         actionItems: actionDrafts.map((action) => ({
-                          ...action,
                           text: action.text.trim(),
                           ...(action.owner?.trim()
                             ? { owner: action.owner.trim() }
-                            : { owner: undefined }),
+                            : {}),
                           ...(action.dueDate?.trim()
                             ? { dueDate: action.dueDate.trim() }
-                            : { dueDate: undefined }),
+                            : {}),
+                          ...(action.citations
+                            ? { citations: action.citations }
+                            : {}),
                         })),
                       })
                     }
