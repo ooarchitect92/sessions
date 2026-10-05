@@ -71,6 +71,17 @@ const environmentSchema = z
     FILE_SCAN_PORT: z.coerce.number().int().min(1).max(65535).default(3310),
     FILE_SCAN_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120000).default(15000),
     FILE_SCAN_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(3),
+    CALENDAR_INTEGRATIONS_ENABLED: optionalBoolean.default(false),
+    CALENDAR_SYNC_HORIZON_DAYS: z.coerce.number().int().min(7).max(365).default(60),
+    CALENDAR_BUSY_MAX_AGE_SECONDS: z.coerce.number().int().min(30).max(3600).default(300),
+    CALENDAR_OAUTH_SUCCESS_URL: z.string().url().default('http://localhost:3000/settings?tab=integrations'),
+    GOOGLE_CALENDAR_CLIENT_ID: z.string().min(1).optional(),
+    GOOGLE_CALENDAR_CLIENT_SECRET: z.string().min(1).optional(),
+    GOOGLE_CALENDAR_REDIRECT_URI: z.string().url().optional(),
+    MICROSOFT_CALENDAR_CLIENT_ID: z.string().min(1).optional(),
+    MICROSOFT_CALENDAR_CLIENT_SECRET: z.string().min(1).optional(),
+    MICROSOFT_CALENDAR_REDIRECT_URI: z.string().url().optional(),
+    MICROSOFT_CALENDAR_TENANT: z.string().min(1).max(200).default('common'),
     TRANSCRIPTION_WORKER_ENABLED: optionalBoolean.default(false),
     TRANSCRIPTION_MAX_SOURCE_BYTES: z.coerce
       .number()
@@ -111,6 +122,23 @@ const environmentSchema = z
         path: ['AI_API_KEY'],
         message: 'AI_API_KEY is required when AI_WORKER_ENABLED=true',
       });
+    }
+
+    if (value.CALENDAR_INTEGRATIONS_ENABLED) {
+      const googleConfigured =
+        Boolean(value.GOOGLE_CALENDAR_CLIENT_ID) &&
+        Boolean(value.GOOGLE_CALENDAR_CLIENT_SECRET);
+      const microsoftConfigured =
+        Boolean(value.MICROSOFT_CALENDAR_CLIENT_ID) &&
+        Boolean(value.MICROSOFT_CALENDAR_CLIENT_SECRET);
+      if (!googleConfigured && !microsoftConfigured) {
+        context.addIssue({
+          code: 'custom',
+          path: ['CALENDAR_INTEGRATIONS_ENABLED'],
+          message:
+            'At least one Google or Microsoft calendar OAuth client must be configured',
+        });
+      }
     }
 
     if (value.NODE_ENV !== 'production') return;
@@ -184,6 +212,27 @@ const environmentSchema = z
         'S3_PUBLIC_ENDPOINT',
         'S3_PUBLIC_ENDPOINT must use HTTPS in production',
       );
+    }
+    if (
+      value.CALENDAR_INTEGRATIONS_ENABLED &&
+      !value.CALENDAR_OAUTH_SUCCESS_URL.startsWith('https://')
+    ) {
+      productionIssue(
+        'CALENDAR_OAUTH_SUCCESS_URL',
+        'CALENDAR_OAUTH_SUCCESS_URL must use HTTPS in production',
+      );
+    }
+    for (const [path, redirectUri] of [
+      ['GOOGLE_CALENDAR_REDIRECT_URI', value.GOOGLE_CALENDAR_REDIRECT_URI],
+      ['MICROSOFT_CALENDAR_REDIRECT_URI', value.MICROSOFT_CALENDAR_REDIRECT_URI],
+    ] as const) {
+      if (
+        value.CALENDAR_INTEGRATIONS_ENABLED &&
+        redirectUri &&
+        !redirectUri.startsWith('https://')
+      ) {
+        productionIssue(path, `${path} must use HTTPS in production`);
+      }
     }
     if (
       value.TRANSCRIPTION_WORKER_ENABLED &&
