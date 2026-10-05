@@ -32,6 +32,7 @@ export function MemoryDetailPage() {
   const [editingFollowUp, setEditingFollowUp] = useState(false);
   const [followUpSubject, setFollowUpSubject] = useState('');
   const [followUpBody, setFollowUpBody] = useState('');
+  const [followUpRecipients, setFollowUpRecipients] = useState('');
   const memory = useQuery({
     queryKey: ['memory-detail', sessionId],
     queryFn: () => api.getMemory(sessionId),
@@ -148,6 +149,26 @@ export function MemoryDetailPage() {
     mutationFn: (version: number) =>
       api.approveFollowUpDraft(sessionId, version),
     onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ['memory-detail', sessionId],
+      });
+      await queryClient.invalidateQueries({ queryKey: ['memory'] });
+    },
+  });
+
+  const sendFollowUp = useMutation({
+    mutationFn: () => {
+      const recipients = followUpRecipients
+        .split(/[\n,;]/)
+        .map((value) => value.trim())
+        .filter(Boolean);
+      if (!recipients.length) {
+        throw new Error('Add at least one recipient email address');
+      }
+      return api.sendFollowUpDraft(sessionId, recipients);
+    },
+    onSuccess: async () => {
+      setFollowUpRecipients('');
       await queryClient.invalidateQueries({
         queryKey: ['memory-detail', sessionId],
       });
@@ -661,17 +682,70 @@ export function MemoryDetailPage() {
                           : 'Approve follow-up'}
                     </button>
                   </div>
+
+                  {item.memorySummary.followUpApprovedAt ? (
+                    <div className="follow-up-send-panel">
+                      <label>
+                        Recipients
+                        <textarea
+                          rows={3}
+                          value={followUpRecipients}
+                          onChange={(event) =>
+                            setFollowUpRecipients(event.target.value)
+                          }
+                          placeholder="alice@example.com, bob@example.com"
+                        />
+                      </label>
+                      <button
+                        className="button primary"
+                        disabled={sendFollowUp.isPending}
+                        onClick={() => sendFollowUp.mutate()}
+                      >
+                        {sendFollowUp.isPending
+                          ? 'Queueing delivery…'
+                          : 'Send approved follow-up'}
+                      </button>
+                      <small>
+                        Delivery is queued to the configured email provider and
+                        never occurs before approval.
+                      </small>
+                    </div>
+                  ) : null}
+
+                  {item.emailDeliveries?.length ? (
+                    <div className="email-delivery-list">
+                      <strong>Delivery history</strong>
+                      {item.emailDeliveries.map((delivery) => (
+                        <article key={delivery.id}>
+                          <span>
+                            {delivery.status.toLowerCase()} ·{' '}
+                            {delivery.recipients.join(', ')}
+                          </span>
+                          <small>
+                            {delivery.sentAt
+                              ? new Intl.DateTimeFormat(undefined, {
+                                  dateStyle: 'medium',
+                                  timeStyle: 'short',
+                                }).format(new Date(delivery.sentAt))
+                              : delivery.failureCode ?? 'Awaiting worker'}
+                          </small>
+                        </article>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               )}
 
               {generateFollowUp.error ||
               updateFollowUp.error ||
-              approveFollowUp.error ? (
+              approveFollowUp.error ||
+              sendFollowUp.error ? (
                 <div className="error-banner compact-error">
                   {(
                     generateFollowUp.error ??
                     updateFollowUp.error ??
-                    approveFollowUp.error
+                    approveFollowUp.error ??
+                    sendFollowUp.error
                   )?.message}
                 </div>
               ) : null}
