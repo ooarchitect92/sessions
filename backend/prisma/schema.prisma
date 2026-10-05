@@ -187,8 +187,6 @@ model Organization {
   workspaceInvitations WorkspaceInvitation[]
   agendaTemplates     AgendaTemplate[]
   agendaTemplateItems AgendaTemplateItem[]
-  agendaTemplates     AgendaTemplate[]
-  agendaTemplateItems AgendaTemplateItem[]
 
   @@map("organizations")
 }
@@ -233,6 +231,8 @@ model Workspace {
   authSessions        AuthSession[]
   authChallenges      AuthChallenge[]
   workspaceInvitations WorkspaceInvitation[]
+  agendaTemplates     AgendaTemplate[]
+  agendaTemplateItems AgendaTemplateItem[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
