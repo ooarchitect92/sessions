@@ -14,6 +14,7 @@ import {
 } from '@prisma/client';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { AuditService } from '../audit/audit.service';
+import { SecurityService } from '../auth/security.service';
 import { CalendarIntegrationsService } from '../calendar/calendar-integrations.service';
 import { HOST_ROLES, hasAnyRole, type Principal } from '../common/auth/principal';
 import { TenantDatabaseService } from '../database/tenant-database.service';
@@ -58,6 +59,7 @@ export class BookingsService {
     private readonly database: TenantDatabaseService,
     private readonly publicDatabase: WorkerPrismaService,
     private readonly calendars: CalendarIntegrationsService,
+    private readonly security: SecurityService,
     private readonly audit: AuditService,
     private readonly outbox: OutboxService,
   ) {}
@@ -363,8 +365,13 @@ export class BookingsService {
       if (!selected) throw new ConflictException('The selected slot is no longer available');
 
       const sessionId = randomUUID();
+      const reservationId = randomUUID();
       const managementToken = randomBytes(32).toString('base64url');
       const managementTokenHash = this.hashManagementToken(managementToken);
+      const managementTokenEncrypted = this.security.encryptSensitiveValue(
+        managementToken,
+        'booking-management:' + reservationId,
+      );
       const endsAt = new Date(selected.endsAt);
       await transaction.session.create({
         data: {
@@ -385,6 +392,7 @@ export class BookingsService {
       });
       const reservation = await transaction.bookingReservation.create({
         data: {
+          id: reservationId,
           organizationId: page.organizationId,
           workspaceId: page.workspaceId,
           bookingPageId: page.id,
@@ -396,6 +404,7 @@ export class BookingsService {
           timezone: input.timezone,
           answers: normalizedAnswers,
           managementTokenHash,
+          managementTokenEncrypted,
         },
         include: { session: true },
       });
@@ -600,6 +609,31 @@ export class BookingsService {
       );
       return publicReservation;
     });
+  }
+
+  async getManagedReservation(
+    organizationSlug: string,
+    workspaceSlug: string,
+    bookingSlug: string,
+    reservationId: string,
+    managementToken: string,
+  ) {
+    const page = await this.findPublicPage(
+      organizationSlug,
+      workspaceSlug,
+      bookingSlug,
+      false,
+    );
+    const reservation = await this.publicDatabase.bookingReservation.findFirst({
+      where: {
+        id: reservationId,
+        bookingPageId: page.id,
+        managementTokenHash: this.hashManagementToken(managementToken),
+      },
+      include: { session: true },
+    });
+    if (!reservation) throw new NotFoundException('Booking reservation not found');
+    return this.publicReservationShape(reservation);
   }
 
   async calendarFile(
