@@ -14,6 +14,7 @@ import {
 } from '@prisma/client';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { AuditService } from '../audit/audit.service';
+import { CalendarIntegrationsService } from '../calendar/calendar-integrations.service';
 import { HOST_ROLES, hasAnyRole, type Principal } from '../common/auth/principal';
 import { TenantDatabaseService } from '../database/tenant-database.service';
 import { WorkerPrismaService } from '../database/worker-prisma.service';
@@ -56,6 +57,7 @@ export class BookingsService {
   constructor(
     private readonly database: TenantDatabaseService,
     private readonly publicDatabase: WorkerPrismaService,
+    private readonly calendars: CalendarIntegrationsService,
     private readonly audit: AuditService,
     private readonly outbox: OutboxService,
   ) {}
@@ -299,16 +301,27 @@ export class BookingsService {
   ): Promise<Slot[]> {
     const page = await this.findPublicPage(organizationSlug, workspaceSlug, bookingSlug);
     const range = this.validateDateRange(dateFrom, dateTo);
-    const reservations = await this.publicDatabase.bookingReservation.findMany({
-      where: {
-        bookingPageId: page.id,
-        status: BookingStatus.CONFIRMED,
-        startsAt: { lt: range.endExclusive },
-        endsAt: { gt: range.start },
-      },
-      select: { startsAt: true, endsAt: true },
-    });
-    return this.generateSlots(page, dateFrom, dateTo, reservations);
+    const [reservations, calendarBusy] = await Promise.all([
+      this.publicDatabase.bookingReservation.findMany({
+        where: {
+          bookingPageId: page.id,
+          status: BookingStatus.CONFIRMED,
+          startsAt: { lt: range.endExclusive },
+          endsAt: { gt: range.start },
+        },
+        select: { startsAt: true, endsAt: true },
+      }),
+      this.calendars.ensureFreshUserBusy(
+        page.workspaceId,
+        page.createdById,
+        range.start,
+        range.endExclusive,
+      ),
+    ]);
+    return this.generateSlots(page, dateFrom, dateTo, [
+      ...reservations,
+      ...calendarBusy,
+    ]);
   }
 
   async reserve(
@@ -323,6 +336,13 @@ export class BookingsService {
     const requested = new Date(input.startsAt);
     const requestedParts = this.getZonedParts(requested, page.timezone);
     const localDate = this.formatCalendarDate(requestedParts);
+    const requestedRange = this.validateDateRange(localDate, localDate);
+    const calendarBusy = await this.calendars.ensureFreshUserBusy(
+      page.workspaceId,
+      page.createdById,
+      requestedRange.start,
+      requestedRange.endExclusive,
+    );
 
     return this.publicDatabase.$transaction(async (transaction) => {
       await transaction.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${page.id}, 0))`;
@@ -335,7 +355,10 @@ export class BookingsService {
         },
         select: { startsAt: true, endsAt: true },
       });
-      const slots = this.generateSlots(page, localDate, localDate, reservations);
+      const slots = this.generateSlots(page, localDate, localDate, [
+        ...reservations,
+        ...calendarBusy,
+      ]);
       const selected = slots.find((slot) => slot.startsAt === requested.toISOString());
       if (!selected) throw new ConflictException('The selected slot is no longer available');
 
@@ -408,6 +431,13 @@ export class BookingsService {
     const requested = new Date(input.startsAt);
     const localDate = this.formatCalendarDate(
       this.getZonedParts(requested, page.timezone),
+    );
+    const requestedRange = this.validateDateRange(localDate, localDate);
+    const calendarBusy = await this.calendars.ensureFreshUserBusy(
+      page.workspaceId,
+      page.createdById,
+      requestedRange.start,
+      requestedRange.endExclusive,
     );
     const managementTokenHash = this.hashManagementToken(input.managementToken);
 
