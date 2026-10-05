@@ -353,6 +353,31 @@ export interface BookingPageRecord extends BookingPage {
   _count?: { reservations: number };
 }
 
+export interface BookingReservationRecord {
+  id: string;
+  bookingPageId: string;
+  sessionId: string | null;
+  name: string;
+  email: string;
+  startsAt: string;
+  endsAt: string;
+  timezone: string;
+  answers: Record<string, unknown>;
+  status: 'CONFIRMED' | 'CANCELLED' | 'COMPLETED' | 'NO_SHOW';
+  version: number;
+  rescheduledAt: string | null;
+  cancelledAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  session: Session | null;
+}
+
+export interface CalendarInvitePayload {
+  filename: string;
+  mimeType: string;
+  content: string;
+}
+
 export interface RecordingRecord {
   id: string;
   sessionId: string;
@@ -1282,6 +1307,49 @@ export const api = {
       headers: { "if-match": String(version) },
       body: JSON.stringify(input),
     });
+  },
+
+  listBookingReservations(bookingId: string): Promise<BookingReservationRecord[]> {
+    return request<BookingReservationRecord[]>(`/bookings/${bookingId}/reservations`);
+  },
+
+  rescheduleBookingReservation(
+    bookingId: string,
+    reservationId: string,
+    version: number,
+    input: { startsAt: string; timezone: string },
+  ): Promise<BookingReservationRecord> {
+    return request<BookingReservationRecord>(
+      `/bookings/${bookingId}/reservations/${reservationId}/reschedule`,
+      {
+        method: 'PATCH',
+        headers: { 'if-match': String(version) },
+        body: JSON.stringify(input),
+      },
+    );
+  },
+
+  cancelBookingReservation(
+    bookingId: string,
+    reservationId: string,
+    version: number,
+  ): Promise<BookingReservationRecord> {
+    return request<BookingReservationRecord>(
+      `/bookings/${bookingId}/reservations/${reservationId}/cancel`,
+      {
+        method: 'POST',
+        headers: { 'if-match': String(version) },
+      },
+    );
+  },
+
+  getBookingReservationCalendar(
+    bookingId: string,
+    reservationId: string,
+  ): Promise<CalendarInvitePayload> {
+    return request<CalendarInvitePayload>(
+      `/bookings/${bookingId}/reservations/${reservationId}/calendar`,
+    );
   },
 
   listMemory(query?: string): Promise<Paginated<MemoryListItem>> {
