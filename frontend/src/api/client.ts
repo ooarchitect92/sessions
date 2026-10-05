@@ -139,7 +139,7 @@ export interface WebhookDeliveryRecord {
   subscriptionId: string;
   outboxEventId: string;
   eventType: string;
-  status: 'PENDING' | 'PROCESSING' | 'DELIVERED' | 'FAILED';
+  status: "PENDING" | "PROCESSING" | "DELIVERED" | "FAILED";
   attempts: number;
   lastStatusCode: number | null;
   lastResponseBody: string | null;
@@ -163,7 +163,13 @@ export interface WebhookSubscriptionRecord {
   deliveries?: Array<
     Pick<
       WebhookDeliveryRecord,
-      'id' | 'status' | 'eventType' | 'attempts' | 'deliveredAt' | 'lastError' | 'createdAt'
+      | "id"
+      | "status"
+      | "eventType"
+      | "attempts"
+      | "deliveredAt"
+      | "lastError"
+      | "createdAt"
     >
   >;
 }
@@ -498,26 +504,26 @@ export const api = {
     workspaceSlug: string;
     timezone: string;
   }): Promise<AuthTokenBundle | { verificationRequired: true; email: string; developmentVerificationToken?: string }> {
-    return publicRequest('/auth/signup', { method: 'POST', body: JSON.stringify(input) });
+    return publicRequest('/auth/signup', { method: "POST", body: JSON.stringify(input) });
   },
 
   login(input: { email: string; password: string; workspaceSlug?: string }): Promise<
     | AuthTokenBundle
     | { mfaRequired: true; challengeToken: string; expiresIn: number }
   > {
-    return publicRequest('/auth/login', { method: 'POST', body: JSON.stringify(input) });
+    return publicRequest('/auth/login', { method: "POST", body: JSON.stringify(input) });
   },
 
   completeMfa(input: { challengeToken: string; code: string }): Promise<AuthTokenBundle> {
     return publicRequest<AuthTokenBundle>('/auth/mfa/complete', {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify(input),
     });
   },
 
   verifyEmail(token: string): Promise<AuthTokenBundle> {
     return publicRequest<AuthTokenBundle>('/auth/verify-email', {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify({ token }),
     });
   },
@@ -527,21 +533,21 @@ export const api = {
     developmentVerificationToken?: string;
   }> {
     return publicRequest('/auth/verify-email/request', {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify({ email }),
     });
   },
 
   requestPasswordReset(email: string): Promise<{ accepted: true; developmentResetToken?: string }> {
     return publicRequest('/auth/password-reset/request', {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify({ email }),
     });
   },
 
   resetPassword(token: string, password: string): Promise<{ reset: true }> {
     return publicRequest('/auth/password-reset/complete', {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify({ token, password }),
     });
   },
@@ -550,7 +556,7 @@ export const api = {
     AuthTokenBundle | { mfaRequired: true; challengeToken: string; expiresIn: number }
   > {
     return publicRequest('/auth/invitations/accept', {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify(input),
     });
   },
@@ -566,14 +572,14 @@ export const api = {
       throw new ApiError('A managed login session is required', 401);
     }
     return request<AuthTokenBundle>('/auth/workspace/switch', {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify({ workspaceId, refreshToken }),
     });
   },
 
   logout(): Promise<{ loggedOut: true }> {
     return request('/auth/logout', {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify({}),
     });
   },
@@ -583,26 +589,26 @@ export const api = {
   },
 
   revokeLoginSession(sessionId: string): Promise<{ id: string; revoked: true }> {
-    return request(`/auth/sessions/${sessionId}`, { method: 'DELETE' });
+    return request(`/auth/sessions/${sessionId}`, { method: "DELETE" });
   },
 
   changePassword(currentPassword: string, newPassword: string): Promise<{ changed: true }> {
     return request('/auth/password', {
-      method: 'PATCH',
+      method: "PATCH",
       body: JSON.stringify({ currentPassword, newPassword }),
     });
   },
 
   setupMfa(): Promise<{ secret: string; otpauthUri: string; recoveryCodes: string[] }> {
-    return request('/auth/mfa/setup', { method: 'POST' });
+    return request('/auth/mfa/setup', { method: "POST" });
   },
 
   confirmMfa(code: string): Promise<{ enabled: true }> {
-    return request('/auth/mfa/confirm', { method: 'POST', body: JSON.stringify({ code }) });
+    return request('/auth/mfa/confirm', { method: "POST", body: JSON.stringify({ code }) });
   },
 
   disableMfa(code: string): Promise<{ enabled: false }> {
-    return request('/auth/mfa', { method: 'DELETE', body: JSON.stringify({ code }) });
+    return request('/auth/mfa', { method: "DELETE", body: JSON.stringify({ code }) });
   },
 
   listWorkspaces(): Promise<Array<{
@@ -625,7 +631,7 @@ export const api = {
 
   createWorkspace(input: { name: string; slug: string; timezone: string }): Promise<WorkspaceRecord> {
     return request('/workspaces', {
-      method: 'POST',
+      method: "POST",
       headers: { 'idempotency-key': crypto.randomUUID() },
       body: JSON.stringify(input),
     });
@@ -640,8 +646,8 @@ export const api = {
     input: Partial<Pick<WorkspaceRecord, 'name' | 'slug' | 'timezone' | 'settings'>>,
   ): Promise<WorkspaceRecord> {
     return request('/workspaces/current', {
-      method: 'PATCH',
-      headers: { 'if-match': String(version) },
+      method: "PATCH",
+      headers: { "if-match": String(version) },
       body: JSON.stringify(input),
     });
   },
@@ -652,13 +658,13 @@ export const api = {
 
   updateWorkspaceMemberRole(membershipId: string, role: WorkspaceRole): Promise<WorkspaceMember> {
     return request(`/workspaces/current/members/${membershipId}`, {
-      method: 'PATCH',
+      method: "PATCH",
       body: JSON.stringify({ role }),
     });
   },
 
   removeWorkspaceMember(membershipId: string): Promise<{ id: string; removed: true }> {
-    return request(`/workspaces/current/members/${membershipId}`, { method: 'DELETE' });
+    return request(`/workspaces/current/members/${membershipId}`, { method: "DELETE" });
   },
 
   listWorkspaceInvitations(): Promise<WorkspaceInvitation[]> {
@@ -667,17 +673,17 @@ export const api = {
 
   inviteWorkspaceMember(email: string, role: WorkspaceRole): Promise<WorkspaceInvitation> {
     return request('/workspaces/current/invitations', {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify({ email, role }),
     });
   },
 
   revokeWorkspaceInvitation(invitationId: string): Promise<{ id: string; revoked: true }> {
-    return request(`/workspaces/current/invitations/${invitationId}`, { method: 'DELETE' });
+    return request(`/workspaces/current/invitations/${invitationId}`, { method: "DELETE" });
   },
 
   listWebhooks(): Promise<WebhookSubscriptionRecord[]> {
-    return request('/webhooks');
+    return request("/webhooks");
   },
 
   createWebhook(input: {
@@ -685,8 +691,8 @@ export const api = {
     url: string;
     eventTypes: string[];
   }): Promise<WebhookCreateResult> {
-    return request('/webhooks', {
-      method: 'POST',
+    return request("/webhooks", {
+      method: "POST",
       body: JSON.stringify(input),
     });
   },
@@ -694,23 +700,30 @@ export const api = {
   updateWebhook(
     id: string,
     version: number,
-    input: Partial<Pick<WebhookSubscriptionRecord, 'name' | 'url' | 'eventTypes' | 'active'>>,
+    input: Partial<
+      Pick<WebhookSubscriptionRecord, "name" | "url" | "eventTypes" | "active">
+    >,
   ): Promise<WebhookSubscriptionRecord> {
     return request(`/webhooks/${id}`, {
-      method: 'PATCH',
-      headers: { 'if-match': String(version) },
+      method: "PATCH",
+      headers: { "if-match": String(version) },
       body: JSON.stringify(input),
     });
   },
 
   deleteWebhook(id: string): Promise<{ id: string; deleted: true }> {
-    return request(`/webhooks/${id}`, { method: 'DELETE' });
+    return request(`/webhooks/${id}`, { method: "DELETE" });
   },
 
   rotateWebhookSecret(
     id: string,
-  ): Promise<{ id: string; version: number; secret: string; secretWarning: string }> {
-    return request(`/webhooks/${id}/rotate-secret`, { method: 'POST' });
+  ): Promise<{
+    id: string;
+    version: number;
+    secret: string;
+    secretWarning: string;
+  }> {
+    return request(`/webhooks/${id}/rotate-secret`, { method: "POST" });
   },
 
   listWebhookDeliveries(id: string): Promise<WebhookDeliveryRecord[]> {
@@ -718,7 +731,9 @@ export const api = {
   },
 
   replayWebhookDelivery(deliveryId: string): Promise<WebhookDeliveryRecord> {
-    return request(`/webhooks/deliveries/${deliveryId}/replay`, { method: 'POST' });
+    return request(`/webhooks/deliveries/${deliveryId}/replay`, {
+      method: "POST",
+    });
   },
 
   listRooms(): Promise<Room[]> {
