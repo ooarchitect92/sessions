@@ -58,6 +58,13 @@ const environmentSchema = z
     AI_MODEL: z.string().min(1).max(160).default('default'),
     AI_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1000).max(900000).default(120000),
     AI_WORKER_BATCH_SIZE: z.coerce.number().int().min(1).max(20).default(2),
+    EMAIL_ENABLED: optionalBoolean.default(false),
+    EMAIL_PROVIDER: z.enum(['http']).default('http'),
+    EMAIL_HTTP_ENDPOINT: z.string().url().default('http://localhost:8091/v1/send'),
+    EMAIL_API_KEY: z.string().optional(),
+    EMAIL_FROM_ADDRESS: z.string().email().default('noreply@sessions.local'),
+    EMAIL_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1000).max(300000).default(60000),
+    EMAIL_WORKER_BATCH_SIZE: z.coerce.number().int().min(1).max(50).default(5),
     S3_ENDPOINT: z.string().url(),
     S3_PUBLIC_ENDPOINT: z.string().url().default('http://localhost:9000'),
     S3_REGION: z.string().min(1).max(100),
@@ -153,6 +160,18 @@ const environmentSchema = z
       productionIssue(
         'AI_API_KEY',
         'Enabled production AI requires a provider API key',
+      );
+    }
+    if (value.EMAIL_ENABLED && !value.EMAIL_HTTP_ENDPOINT.startsWith('https://')) {
+      productionIssue(
+        'EMAIL_HTTP_ENDPOINT',
+        'Enabled production email endpoint must use HTTPS',
+      );
+    }
+    if (value.EMAIL_ENABLED && !value.EMAIL_API_KEY) {
+      productionIssue(
+        'EMAIL_API_KEY',
+        'Enabled production email delivery requires a provider API key',
       );
     }
     if (!value.S3_ENDPOINT.startsWith('https://')) {
