@@ -358,6 +358,52 @@
   font-size: 12px;
 }
 
+.transcript-edit-form {
+  display: grid;
+  gap: 12px;
+}
+
+.transcript-edit-form label {
+  display: grid;
+  gap: 6px;
+  color: #62716d;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.transcript-edit-form input,
+.transcript-edit-form textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px 12px;
+  color: #263631;
+  font: inherit;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.transcript-edit-form textarea {
+  resize: vertical;
+  min-height: 96px;
+}
+
+.transcript-edit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.compact-button {
+  margin-top: 10px;
+  min-height: 32px;
+  padding: 6px 10px;
+  font-size: 10px;
+}
+
 .collaboration-panel {
   min-width: 0;
   overflow: hidden;
