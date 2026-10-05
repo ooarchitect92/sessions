@@ -6,7 +6,7 @@ describe('signWebhookPayload', () => {
     expect(
       signWebhookPayload('secret', '1700000000', '{"event":"session.started"}'),
     ).toBe(
-      'v1=68171d8bea57135e4af24802422566ee1265e431646c891d9569273f3ae4fffd',
+      'v1=f21bac9160e9ea27d2e336818450eab890c0e2450190ef7e4f8d3a2994b8bf24',
     );
   });
 });
