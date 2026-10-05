@@ -70,7 +70,9 @@
 
 ## Phase 5 — platform and enterprise
 
-- [ ] API keys, webhook subscriptions, HMAC signatures, replay and reconciliation
+- [ ] API keys
+- [x] webhook subscriptions, HMAC-SHA256 signatures, bounded retries and manual replay
+- [ ] webhook delivery reconciliation/operational dashboards
 - [ ] provider integration framework, credential governance and SSRF-safe egress
 - [ ] branding, email templates, custom domains and automated TLS
 - [ ] analytics aggregation and governed exports
