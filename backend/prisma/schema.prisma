@@ -110,6 +110,7 @@ enum RecordingConsentDecision {
 enum ChatChannel {
   EVERYONE
   HOSTS
+  PRIVATE
 }
 
 enum PollType {
@@ -252,6 +253,7 @@ model User {
   createdEvents           Event[]                  @relation("EventCreator")
   createdBookingPages     BookingPage[]            @relation("BookingPageCreator")
   chatMessages            ChatMessage[]            @relation("ChatMessageAuthor")
+  receivedChatMessages    ChatMessage[]            @relation("ChatMessageRecipient")
   createdPolls            Poll[]                   @relation("PollCreator")
   submittedQuestions      Question[]               @relation("QuestionAuthor")
   authSessions            AuthSession[]
@@ -672,6 +674,7 @@ model ChatMessage {
   workspaceId    String      @map("workspace_id") @db.Uuid
   sessionId      String      @map("session_id") @db.Uuid
   authorUserId   String      @map("author_user_id") @db.Uuid
+  recipientUserId String?     @map("recipient_user_id") @db.Uuid
   channel        ChatChannel @default(EVERYONE)
   body           String      @db.Text
   editedAt       DateTime?   @map("edited_at") @db.Timestamptz(6)
@@ -681,8 +684,10 @@ model ChatMessage {
   workspace      Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   session        Session      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   author         User         @relation("ChatMessageAuthor", fields: [authorUserId], references: [id], onDelete: Restrict)
+  recipient      User?        @relation("ChatMessageRecipient", fields: [recipientUserId], references: [id], onDelete: SetNull)
 
   @@index([organizationId, workspaceId, sessionId, createdAt])
+  @@index([sessionId, recipientUserId, createdAt])
   @@map("chat_messages")
 }
 
