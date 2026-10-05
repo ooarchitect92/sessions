@@ -146,6 +146,13 @@ export function AnalyticsPage() {
               </small>
             </article>
             <article className="analytics-metric-card">
+              <span>Tracked engagement</span>
+              <strong>{analytics.data.engagement.unifiedEventCount}</strong>
+              <small>
+                Durable participant, chat, poll, Q&amp;A, and whiteboard events
+              </small>
+            </article>
+            <article className="analytics-metric-card">
               <span>Memory ready</span>
               <strong>
                 {analytics.data.memory.readyRecordings +
@@ -246,6 +253,25 @@ export function AnalyticsPage() {
               <p>
                 Attendance here reflects explicit registration status. Durable join/leave
                 intervals remain a separate implementation slice.
+              </p>
+            </section>
+
+            <section className="panel analytics-detail-card">
+              <span className="eyebrow">Unified engagement stream</span>
+              <h2>Interaction events</h2>
+              <dl>
+                {Object.entries(analytics.data.engagement.byType)
+                  .sort(([left], [right]) => left.localeCompare(right))
+                  .map(([eventType, count]) => (
+                    <div key={eventType}>
+                      <dt>{eventType.replaceAll('.', ' ')}</dt>
+                      <dd>{count}</dd>
+                    </div>
+                  ))}
+              </dl>
+              <p>
+                These are durable, tenant-scoped engagement events used for
+                long-term analytics rather than only transient realtime state.
               </p>
             </section>
 
