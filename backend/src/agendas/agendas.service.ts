@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, SessionStatus, type AgendaItem } from '@prisma/client';
+import { HttpAiProvider } from '../ai/http-ai.provider';
 import { AuditService } from '../audit/audit.service';
 import {
   HOST_ROLES,
@@ -14,7 +15,9 @@ import {
 import { TenantDatabaseService } from '../database/tenant-database.service';
 import { RealtimeEventsService } from '../infrastructure/realtime-events.service';
 import { OutboxService } from '../outbox/outbox.service';
+import { ApplyAgendaDraftDto } from './dto/apply-agenda-draft.dto';
 import { CreateAgendaItemDto } from './dto/create-agenda-item.dto';
+import { GenerateAgendaDraftDto } from './dto/generate-agenda-draft.dto';
 import { ReorderAgendaDto } from './dto/reorder-agenda.dto';
 
 const EDITABLE_SESSION_STATUSES = new Set<SessionStatus>([
@@ -31,6 +34,7 @@ const ACTIVATABLE_SESSION_STATUSES = new Set<SessionStatus>([
 export class AgendasService {
   constructor(
     private readonly database: TenantDatabaseService,
+    private readonly ai: HttpAiProvider,
     private readonly audit: AuditService,
     private readonly outbox: OutboxService,
     private readonly realtimeEvents: RealtimeEventsService,
@@ -44,6 +48,116 @@ export class AgendasService {
         orderBy: { position: 'asc' },
       });
     });
+  }
+
+  async generateDraft(
+    principal: Principal,
+    sessionId: string,
+    input: GenerateAgendaDraftDto,
+  ) {
+    this.assertHost(principal);
+    const session = await this.database.run(principal, async (transaction) => {
+      await this.assertSessionEditable(transaction, sessionId);
+      const found = await transaction.session.findUnique({
+        where: { id: sessionId },
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          durationMinutes: true,
+        },
+      });
+      if (!found) throw new NotFoundException('Session not found');
+      return found;
+    });
+
+    const draft = await this.ai.generateAgenda({
+      title: session.title,
+      ...(session.description ? { description: session.description } : {}),
+      ...(input.objective ? { objective: input.objective.trim() } : {}),
+      ...(input.audience ? { audience: input.audience.trim() } : {}),
+      durationMinutes: input.durationMinutes ?? session.durationMinutes,
+    });
+
+    return {
+      sessionId,
+      provider: draft.provider,
+      model: draft.model,
+      items: draft.items,
+      totalDurationSeconds: draft.items.reduce(
+        (total, item) => total + item.durationSeconds,
+        0,
+      ),
+      generatedAt: new Date().toISOString(),
+      persisted: false,
+    };
+  }
+
+  async applyDraft(
+    principal: Principal,
+    sessionId: string,
+    input: ApplyAgendaDraftDto,
+  ): Promise<AgendaItem[]> {
+    this.assertHost(principal);
+    const result = await this.database.run(principal, async (transaction) => {
+      await this.assertSessionEditable(transaction, sessionId);
+      await transaction.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${sessionId}, 0))`;
+      const last = await transaction.agendaItem.findFirst({
+        where: { sessionId },
+        orderBy: { position: 'desc' },
+        select: { position: true },
+      });
+      const startPosition = (last?.position ?? -1) + 1;
+
+      const created: AgendaItem[] = [];
+      for (const [offset, item] of input.items.entries()) {
+        created.push(
+          await transaction.agendaItem.create({
+            data: {
+              organizationId: principal.organizationId,
+              workspaceId: principal.workspaceId,
+              sessionId,
+              position: startPosition + offset,
+              title: item.title.trim(),
+              durationSeconds: item.durationSeconds,
+              type: item.type,
+              content: item.content as Prisma.InputJsonValue,
+            },
+          }),
+        );
+      }
+
+      await this.audit.record(transaction, principal, {
+        action: 'agenda.ai_draft_applied',
+        resourceType: 'session',
+        resourceId: sessionId,
+        metadata: {
+          itemIds: created.map((item) => item.id),
+          itemCount: created.length,
+        },
+      });
+      await this.outbox.enqueue(transaction, principal, {
+        aggregateType: 'session',
+        aggregateId: sessionId,
+        eventType: 'agenda.ai_draft.applied',
+        payload: {
+          sessionId,
+          itemIds: created.map((item) => item.id),
+          itemCount: created.length,
+        },
+      });
+      return transaction.agendaItem.findMany({
+        where: { sessionId },
+        orderBy: { position: 'asc' },
+      });
+    });
+
+    this.realtimeEvents.publishSessionEvent({
+      sessionId,
+      eventName: 'agenda.updated',
+      payload: { sessionId, reason: 'ai_draft_applied' },
+    });
+    return result;
   }
 
   async create(
