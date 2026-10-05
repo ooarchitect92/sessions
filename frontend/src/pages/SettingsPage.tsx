@@ -4,8 +4,9 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api, type WorkspaceMember } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import { NotificationSettings } from '../components/NotificationSettings';
 
-const TABS = ['workspace', 'members', 'workspaces', 'integrations', 'security'] as const;
+const TABS = ['workspace', 'members', 'workspaces', 'integrations', 'notifications', 'security'] as const;
 type SettingsTab = (typeof TABS)[number];
 
 const MEMBER_ROLES: WorkspaceRole[] = ['ADMIN', 'HOST', 'MEMBER', 'ANALYST', 'GUEST'];
@@ -65,7 +66,9 @@ export function SettingsPage() {
                       ? '▦'
                       : item === 'integrations'
                         ? '↗'
-                        : '⌾'}
+                        : item === 'notifications'
+                          ? '✉'
+                          : '⌾'}
               </span>
               {item === 'workspace'
                 ? 'Workspace profile'
@@ -75,7 +78,9 @@ export function SettingsPage() {
                     ? 'Your workspaces'
                     : item === 'integrations'
                       ? 'Integrations'
-                      : 'Security'}
+                      : item === 'notifications'
+                        ? 'Notifications'
+                        : 'Security'}
             </button>
           ))}
         </nav>
@@ -84,6 +89,7 @@ export function SettingsPage() {
           {tab === 'members' ? <MembersAndInvitations /> : null}
           {tab === 'workspaces' ? <WorkspaceDirectory /> : null}
           {tab === 'integrations' ? <CalendarIntegrations /> : null}
+          {tab === 'notifications' ? <NotificationSettings /> : null}
           {tab === 'security' ? <SecuritySettings /> : null}
         </section>
       </div>
