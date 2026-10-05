@@ -125,6 +125,23 @@ export interface WorkspaceMember {
   };
 }
 
+export interface CalendarConnectionRecord {
+  id: string;
+  userId: string;
+  provider: 'GOOGLE' | 'MICROSOFT';
+  status: 'ACTIVE' | 'REAUTH_REQUIRED' | 'ERROR' | 'REVOKED';
+  accountEmail: string | null;
+  scopes: string[];
+  calendarIds: string[];
+  lastSyncedAt: string | null;
+  lastError: string | null;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  busyBlockCount: number;
+  user: { id: string; displayName: string; email: string };
+}
+
 export interface WorkspaceInvitation {
   id: string;
   email: string;
@@ -845,6 +862,48 @@ export const api = {
       method: 'PATCH',
       headers: { 'if-match': String(version) },
       body: JSON.stringify(input),
+    });
+  },
+
+  listCalendarConnections(): Promise<CalendarConnectionRecord[]> {
+    return request<CalendarConnectionRecord[]>('/integrations/calendars');
+  },
+
+  startCalendarOauth(
+    provider: 'google' | 'microsoft',
+  ): Promise<{
+    provider: 'GOOGLE' | 'MICROSOFT';
+    authorizationUrl: string;
+    expiresIn: number;
+  }> {
+    return request(`/integrations/calendars/${provider}/oauth/start`, {
+      method: 'POST',
+    });
+  },
+
+  syncCalendarConnection(
+    id: string,
+  ): Promise<{
+    id: string;
+    provider: 'GOOGLE' | 'MICROSOFT';
+    status: 'ACTIVE';
+    busyBlockCount: number;
+    lastSyncedAt: string;
+  }> {
+    return request(`/integrations/calendars/${id}/sync`, {
+      method: 'POST',
+    });
+  },
+
+  disconnectCalendarConnection(
+    id: string,
+  ): Promise<{
+    id: string;
+    provider: 'GOOGLE' | 'MICROSOFT';
+    status: 'REVOKED';
+  }> {
+    return request(`/integrations/calendars/${id}`, {
+      method: 'DELETE',
     });
   },
 
