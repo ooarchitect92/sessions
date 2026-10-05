@@ -250,6 +250,31 @@ export interface WebhookDeliveryRecord {
   updatedAt: string;
 }
 
+export type CalendarProvider = 'GOOGLE' | 'MICROSOFT';
+
+export interface CalendarConnectionRecord {
+  id: string;
+  provider: CalendarProvider;
+  providerAccountId: string | null;
+  accountEmail: string | null;
+  calendarId: string | null;
+  scopes: string[];
+  syncEnabled: boolean;
+  status: 'CONNECTED' | 'EXPIRED' | 'REVOKED' | 'ERROR';
+  tokenExpiresAt: string | null;
+  lastSyncedAt: string | null;
+  lastError: string | null;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CalendarConnectResult {
+  provider: CalendarProvider;
+  authorizeUrl: string;
+  expiresAt: string;
+}
+
 export interface WebhookSubscriptionRecord {
   id: string;
   name: string;
@@ -959,6 +984,31 @@ export const api = {
 
   revokeApiKey(id: string): Promise<ApiKeyRecord & { revoked: true }> {
     return request(`/api-keys/${id}`, { method: "DELETE" });
+  },
+
+  listCalendarConnections(): Promise<CalendarConnectionRecord[]> {
+    return request<CalendarConnectionRecord[]>('/calendar-integrations');
+  },
+
+  beginCalendarConnection(
+    provider: CalendarProvider,
+    returnUrl: string,
+  ): Promise<CalendarConnectResult> {
+    const params = new URLSearchParams({ returnUrl });
+    return request<CalendarConnectResult>(
+      `/calendar-integrations/${provider.toLowerCase()}/connect?${params.toString()}`,
+      { method: 'POST' },
+    );
+  },
+
+  disconnectCalendar(provider: CalendarProvider): Promise<{
+    provider: CalendarProvider;
+    disconnected: true;
+  }> {
+    return request(
+      `/calendar-integrations/${provider.toLowerCase()}`,
+      { method: 'DELETE' },
+    );
   },
 
   listWebhooks(): Promise<WebhookSubscriptionRecord[]> {
