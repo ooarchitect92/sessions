@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { api } from '../api/client';
+import { api, type AiActionItemRecord } from '../api/client';
 
 function ArtifactState({
   label,
@@ -27,6 +27,8 @@ export function MemoryDetailPage() {
   const [segmentSpeaker, setSegmentSpeaker] = useState('');
   const [editingSummary, setEditingSummary] = useState(false);
   const [summaryDraft, setSummaryDraft] = useState('');
+  const [editingActions, setEditingActions] = useState(false);
+  const [actionDrafts, setActionDrafts] = useState<AiActionItemRecord[]>([]);
   const memory = useQuery({
     queryKey: ['memory-detail', sessionId],
     queryFn: () => api.getMemory(sessionId),
@@ -76,13 +78,20 @@ export function MemoryDetailPage() {
   });
 
   const updateSummary = useMutation({
-    mutationFn: (input: { version: number; summaryText: string }) =>
+    mutationFn: (input: {
+      version: number;
+      summaryText: string;
+      actionItems?: AiActionItemRecord[];
+    }) =>
       api.updateMemorySummary(sessionId, input.version, {
         summaryText: input.summaryText,
+        ...(input.actionItems ? { actionItems: input.actionItems } : {}),
       }),
     onSuccess: async () => {
       setEditingSummary(false);
       setSummaryDraft('');
+      setEditingActions(false);
+      setActionDrafts([]);
       await queryClient.invalidateQueries({
         queryKey: ['memory-detail', sessionId],
       });
@@ -334,8 +343,159 @@ export function MemoryDetailPage() {
 
             <h3>Decisions</h3>
             <pre>{JSON.stringify(item.memorySummary?.decisions ?? [], null, 2)}</pre>
-            <h3>Action items</h3>
-            <pre>{JSON.stringify(item.memorySummary?.actionItems ?? [], null, 2)}</pre>
+            <div className="summary-section-heading">
+              <h3>Action items</h3>
+              {item.memorySummary?.status === 'READY' ? (
+                <button
+                  className="button ghost compact-button"
+                  onClick={() => {
+                    setActionDrafts(
+                      (item.memorySummary?.actionItems ?? []).map((action) => ({
+                        ...action,
+                        citations: action.citations
+                          ? [...action.citations]
+                          : undefined,
+                      })),
+                    );
+                    setEditingActions(true);
+                  }}
+                >
+                  Edit actions
+                </button>
+              ) : null}
+            </div>
+
+            {editingActions && item.memorySummary ? (
+              <div className="action-review-list">
+                {actionDrafts.length ? (
+                  actionDrafts.map((action, index) => (
+                    <article className="action-review-card" key={`${index}-${action.text}`}>
+                      <label>
+                        Action
+                        <textarea
+                          rows={3}
+                          maxLength={4000}
+                          value={action.text}
+                          onChange={(event) => {
+                            const next = [...actionDrafts];
+                            next[index] = { ...action, text: event.target.value };
+                            setActionDrafts(next);
+                          }}
+                        />
+                      </label>
+                      <div className="action-review-grid">
+                        <label>
+                          Owner
+                          <input
+                            maxLength={320}
+                            value={action.owner ?? ''}
+                            onChange={(event) => {
+                              const next = [...actionDrafts];
+                              next[index] = {
+                                ...action,
+                                owner: event.target.value || undefined,
+                              };
+                              setActionDrafts(next);
+                            }}
+                          />
+                        </label>
+                        <label>
+                          Due date / note
+                          <input
+                            maxLength={100}
+                            value={action.dueDate ?? ''}
+                            onChange={(event) => {
+                              const next = [...actionDrafts];
+                              next[index] = {
+                                ...action,
+                                dueDate: event.target.value || undefined,
+                              };
+                              setActionDrafts(next);
+                            }}
+                          />
+                        </label>
+                      </div>
+                      <button
+                        className="button danger compact-button"
+                        type="button"
+                        onClick={() =>
+                          setActionDrafts((current) =>
+                            current.filter((_, itemIndex) => itemIndex !== index),
+                          )
+                        }
+                      >
+                        Remove
+                      </button>
+                    </article>
+                  ))
+                ) : (
+                  <div className="artifact-placeholder">No action items yet.</div>
+                )}
+                <button
+                  className="button secondary"
+                  type="button"
+                  onClick={() =>
+                    setActionDrafts((current) => [
+                      ...current,
+                      { text: '', citations: [] },
+                    ])
+                  }
+                >
+                  Add action item
+                </button>
+                <div className="summary-review-actions">
+                  <button
+                    className="button primary"
+                    disabled={
+                      updateSummary.isPending ||
+                      actionDrafts.some((action) => !action.text.trim())
+                    }
+                    onClick={() =>
+                      updateSummary.mutate({
+                        version: item.memorySummary?.version ?? 1,
+                        summaryText: item.memorySummary?.summaryText ?? '',
+                        actionItems: actionDrafts.map((action) => ({
+                          ...action,
+                          text: action.text.trim(),
+                          ...(action.owner?.trim()
+                            ? { owner: action.owner.trim() }
+                            : { owner: undefined }),
+                          ...(action.dueDate?.trim()
+                            ? { dueDate: action.dueDate.trim() }
+                            : { dueDate: undefined }),
+                        })),
+                      })
+                    }
+                  >
+                    {updateSummary.isPending ? 'Saving…' : 'Save action items'}
+                  </button>
+                  <button
+                    className="button secondary"
+                    disabled={updateSummary.isPending}
+                    onClick={() => {
+                      setEditingActions(false);
+                      setActionDrafts([]);
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : item.memorySummary?.actionItems?.length ? (
+              <div className="reviewed-action-list">
+                {item.memorySummary.actionItems.map((action, index) => (
+                  <article key={`${index}-${action.text}`}>
+                    <strong>{action.text}</strong>
+                    <span>
+                      {action.owner ? `Owner: ${action.owner}` : 'Owner unassigned'}
+                      {action.dueDate ? ` · Due: ${action.dueDate}` : ''}
+                    </span>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="artifact-placeholder">No action items extracted.</div>
+            )
           </section>
 
           <section className="panel transcript-panel">
