@@ -155,6 +155,7 @@ model Organization {
   emailDeliveries     EmailDelivery[]
   webhookSubscriptions WebhookSubscription[]
   webhookDeliveries   WebhookDelivery[]
+  apiKeys             ApiKey[]
   chatMessages        ChatMessage[]
   polls               Poll[]
   pollOptions         PollOption[]
@@ -194,6 +195,7 @@ model Workspace {
   emailDeliveries     EmailDelivery[]
   webhookSubscriptions WebhookSubscription[]
   webhookDeliveries   WebhookDelivery[]
+  apiKeys             ApiKey[]
   chatMessages        ChatMessage[]
   polls               Poll[]
   pollOptions         PollOption[]
@@ -239,6 +241,7 @@ model User {
   recordingConsents       RecordingConsent[]
   requestedEmailDeliveries EmailDelivery[]          @relation("EmailDeliveryRequester")
   createdWebhookSubscriptions WebhookSubscription[]  @relation("WebhookSubscriptionCreator")
+  createdApiKeys              ApiKey[]                 @relation("ApiKeyCreator")
 
   @@index([status])
   @@map("users")
@@ -770,6 +773,30 @@ model IdempotencyKey {
   @@unique([workspaceId, key])
   @@index([expiresAt])
   @@map("idempotency_keys")
+}
+
+model ApiKey {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String        @map("organization_id") @db.Uuid
+  workspaceId     String        @map("workspace_id") @db.Uuid
+  createdByUserId String        @map("created_by_user_id") @db.Uuid
+  name            String        @db.VarChar(160)
+  tokenPrefix     String        @map("token_prefix") @db.VarChar(32)
+  tokenHash       String        @map("token_hash") @db.VarChar(64)
+  role            WorkspaceRole @default(HOST)
+  scopes          Json          @default("[]")
+  lastUsedAt      DateTime?     @map("last_used_at") @db.Timestamptz(6)
+  expiresAt       DateTime?     @map("expires_at") @db.Timestamptz(6)
+  revokedAt       DateTime?     @map("revoked_at") @db.Timestamptz(6)
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace       Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy       User          @relation("ApiKeyCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, workspaceId, revokedAt])
+  @@index([tokenPrefix])
+  @@map("api_keys")
 }
 
 model WebhookSubscription {
