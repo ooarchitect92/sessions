@@ -17,8 +17,6 @@ import { ListMemoryQuery } from './dto/list-memory.query';
 import { UpdateMemorySummaryDto } from './dto/update-memory-summary.dto';
 import { MemoryService } from './memory.service';
 
-@ApiTags('memory')
-@ApiBearerAuth()
 function parseVersion(value: string | undefined): number {
   if (!value) throw new BadRequestException('If-Match is required');
   const parsed = Number(value.replace(/^W\//, '').replaceAll('"', '').trim());
@@ -28,6 +26,8 @@ function parseVersion(value: string | undefined): number {
   return parsed;
 }
 
+@ApiTags('memory')
+@ApiBearerAuth()
 @Controller('memory')
 export class MemoryController {
   constructor(private readonly memory: MemoryService) {}
