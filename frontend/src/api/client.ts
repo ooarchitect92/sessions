@@ -134,6 +134,24 @@ export interface LoginSession {
   current: boolean;
 }
 
+export interface ApiKeyRecord {
+  id: string;
+  name: string;
+  tokenPrefix: string;
+  role: WorkspaceRole;
+  scopes: string[];
+  lastUsedAt: string | null;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ApiKeyCreateResult extends ApiKeyRecord {
+  token: string;
+  tokenWarning: string;
+}
+
 export interface WebhookDeliveryRecord {
   id: string;
   subscriptionId: string;
@@ -680,6 +698,26 @@ export const api = {
 
   revokeWorkspaceInvitation(invitationId: string): Promise<{ id: string; revoked: true }> {
     return request(`/workspaces/current/invitations/${invitationId}`, { method: "DELETE" });
+  },
+
+  listApiKeys(): Promise<ApiKeyRecord[]> {
+    return request("/api-keys");
+  },
+
+  createApiKey(input: {
+    name: string;
+    role: "HOST" | "MEMBER" | "ANALYST";
+    scopes: string[];
+    expiresAt?: string;
+  }): Promise<ApiKeyCreateResult> {
+    return request("/api-keys", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+
+  revokeApiKey(id: string): Promise<ApiKeyRecord & { revoked: true }> {
+    return request(`/api-keys/${id}`, { method: "DELETE" });
   },
 
   listWebhooks(): Promise<WebhookSubscriptionRecord[]> {
