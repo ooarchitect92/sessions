@@ -5,6 +5,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { App } from './App';
 import { AuthProvider } from './auth/AuthContext';
 import './styles/base.css';
+import './styles/analytics.css';
 import './styles/dashboard.css';
 import './styles/meeting.css';
 import './styles/responsive.css';
