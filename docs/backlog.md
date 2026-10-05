@@ -25,7 +25,8 @@
 - [x] moderated Q&A with voting and answers
 - [ ] reactions and private direct-message channels
 - [ ] whiteboard integration, snapshots and operation compaction
-- [ ] breakout assignment, media-room transition and host broadcast
+- [x] breakout assignment, assignment-aware LiveKit media-room transition and host broadcast
+- [ ] durable breakout attendance intervals, forced client migration and webinar-scale qualification
 - [x] HTTPS agenda content blocks with backend validation and sandboxed meeting-stage embeds
 - [ ] provider-specific OAuth embed adapters, uploads/native viewers and remote co-browsing controls
 - [ ] upload quarantine, malware scan and signed downloads
