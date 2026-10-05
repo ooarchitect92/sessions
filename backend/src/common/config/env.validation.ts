@@ -75,6 +75,13 @@ const environmentSchema = z
     CALENDAR_SYNC_HORIZON_DAYS: z.coerce.number().int().min(7).max(365).default(60),
     CALENDAR_BUSY_MAX_AGE_SECONDS: z.coerce.number().int().min(30).max(3600).default(300),
     CALENDAR_OAUTH_SUCCESS_URL: z.string().url().default('http://localhost:3000/settings?tab=integrations'),
+    PUBLIC_WEBSITE_URL: z.string().url().default('http://localhost:3001'),
+    EMAIL_DELIVERY_ENABLED: optionalBoolean.default(false),
+    EMAIL_PROVIDER: z.enum(['console', 'resend']).default('console'),
+    EMAIL_FROM: z.string().min(3).max(320).default('Sessions <notifications@example.com>'),
+    EMAIL_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(10000),
+    EMAIL_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(6),
+    RESEND_API_KEY: z.string().min(1).optional(),
     GOOGLE_CALENDAR_CLIENT_ID: z.string().min(1).optional(),
     GOOGLE_CALENDAR_CLIENT_SECRET: z.string().min(1).optional(),
     GOOGLE_CALENDAR_REDIRECT_URI: z.string().url().optional(),
@@ -121,6 +128,18 @@ const environmentSchema = z
         code: 'custom',
         path: ['AI_API_KEY'],
         message: 'AI_API_KEY is required when AI_WORKER_ENABLED=true',
+      });
+    }
+
+    if (
+      value.EMAIL_DELIVERY_ENABLED &&
+      value.EMAIL_PROVIDER === 'resend' &&
+      !value.RESEND_API_KEY
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['RESEND_API_KEY'],
+        message: 'RESEND_API_KEY is required when Resend email delivery is enabled',
       });
     }
 
@@ -211,6 +230,21 @@ const environmentSchema = z
       productionIssue(
         'S3_PUBLIC_ENDPOINT',
         'S3_PUBLIC_ENDPOINT must use HTTPS in production',
+      );
+    }
+    if (!value.PUBLIC_WEBSITE_URL.startsWith('https://')) {
+      productionIssue(
+        'PUBLIC_WEBSITE_URL',
+        'PUBLIC_WEBSITE_URL must use HTTPS in production',
+      );
+    }
+    if (
+      value.EMAIL_DELIVERY_ENABLED &&
+      value.EMAIL_PROVIDER === 'console'
+    ) {
+      productionIssue(
+        'EMAIL_PROVIDER',
+        'Console email delivery cannot be enabled in production',
       );
     }
     if (
