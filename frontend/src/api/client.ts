@@ -437,6 +437,8 @@ export interface WorkspaceAnalyticsOverview {
     pollAnswers: number;
     questions: number;
     totalActions: number;
+    unifiedEventCount: number;
+    byType: Record<string, number>;
   };
   memory: {
     readyRecordings: number;
