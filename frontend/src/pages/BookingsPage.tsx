@@ -25,6 +25,9 @@ export function BookingsPage() {
   const [slugEdited, setSlugEdited] = useState(false);
   const [durationMinutes, setDurationMinutes] = useState(30);
   const [minimumNoticeMinutes, setMinimumNoticeMinutes] = useState(120);
+  const [selectedBookingId, setSelectedBookingId] = useState('');
+  const [rescheduleReservationId, setRescheduleReservationId] = useState('');
+  const [rescheduleStartsAt, setRescheduleStartsAt] = useState('');
 
   const bookings = useQuery({ queryKey: ['bookings'], queryFn: () => api.listBookings() });
   const create = useMutation({
@@ -36,10 +39,68 @@ export function BookingsPage() {
       await queryClient.invalidateQueries({ queryKey: ['bookings'] });
     },
   });
+  const reservations = useQuery({
+    queryKey: ['booking-reservations', selectedBookingId],
+    queryFn: () => api.listBookingReservations(selectedBookingId),
+    enabled: Boolean(selectedBookingId),
+  });
+
   const toggle = useMutation({
     mutationFn: (page: BookingPageRecord) =>
       api.updateBooking(page.id, page.version, { active: !page.active }),
     onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['bookings'] }),
+  });
+
+  const reschedule = useMutation({
+    mutationFn: (input: { reservationId: string; version: number; startsAt: string }) =>
+      api.rescheduleBookingReservation(
+        selectedBookingId,
+        input.reservationId,
+        input.version,
+        {
+          startsAt: new Date(input.startsAt).toISOString(),
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        },
+      ),
+    onSuccess: async () => {
+      setRescheduleReservationId('');
+      setRescheduleStartsAt('');
+      await queryClient.invalidateQueries({
+        queryKey: ['booking-reservations', selectedBookingId],
+      });
+      await queryClient.invalidateQueries({ queryKey: ['bookings'] });
+    },
+  });
+
+  const cancelReservation = useMutation({
+    mutationFn: (input: { reservationId: string; version: number }) =>
+      api.cancelBookingReservation(
+        selectedBookingId,
+        input.reservationId,
+        input.version,
+      ),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ['booking-reservations', selectedBookingId],
+      });
+      await queryClient.invalidateQueries({ queryKey: ['bookings'] });
+    },
+  });
+
+  const downloadCalendar = useMutation({
+    mutationFn: (reservationId: string) =>
+      api.getBookingReservationCalendar(selectedBookingId, reservationId),
+    onSuccess: (calendar) => {
+      const blob = new Blob([calendar.content], { type: calendar.mimeType });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = calendar.filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    },
   });
 
   const updateTitle = (value: string) => {
@@ -107,6 +168,12 @@ export function BookingsPage() {
                   </div>
                 </div>
                 <div className="workflow-actions">
+                  <button
+                    className="button secondary"
+                    onClick={() => setSelectedBookingId(page.id)}
+                  >
+                    Reservations
+                  </button>
                   <button className="button secondary" onClick={() => toggle.mutate(page)} disabled={toggle.isPending}>
                     {page.active ? 'Pause' : 'Activate'}
                   </button>
@@ -114,6 +181,134 @@ export function BookingsPage() {
               </article>
             ))}
           </div>
+          {selectedBookingId ? (
+            <section className="booking-reservation-panel">
+              <div className="panel-heading">
+                <div>
+                  <span className="eyebrow">Reservation operations</span>
+                  <h2>Manage confirmed bookings</h2>
+                </div>
+                <button
+                  className="button secondary"
+                  type="button"
+                  onClick={() => setSelectedBookingId('')}
+                >
+                  Close
+                </button>
+              </div>
+              {reservations.isLoading ? (
+                <div className="empty-panel">Loading reservations…</div>
+              ) : null}
+              {reservations.error ? (
+                <div className="error-banner">{reservations.error.message}</div>
+              ) : null}
+              {reservations.data?.length === 0 ? (
+                <div className="empty-panel">No reservations for this booking page yet.</div>
+              ) : null}
+              <div className="booking-reservation-list">
+                {reservations.data?.map((reservation) => (
+                  <article className="booking-reservation-card" key={reservation.id}>
+                    <div>
+                      <span
+                        className={
+                          reservation.status === 'CONFIRMED'
+                            ? 'state-chip enabled'
+                            : 'state-chip'
+                        }
+                      >
+                        {reservation.status}
+                      </span>
+                      <h3>{reservation.name}</h3>
+                      <p>{reservation.email}</p>
+                      <small>
+                        {new Intl.DateTimeFormat(undefined, {
+                          dateStyle: 'medium',
+                          timeStyle: 'short',
+                        }).format(new Date(reservation.startsAt))}
+                        {' · '}
+                        {reservation.timezone}
+                      </small>
+                    </div>
+                    <div className="booking-reservation-actions">
+                      <button
+                        className="button secondary"
+                        type="button"
+                        disabled={downloadCalendar.isPending}
+                        onClick={() => downloadCalendar.mutate(reservation.id)}
+                      >
+                        Download ICS
+                      </button>
+                      {reservation.status === 'CONFIRMED' ? (
+                        <>
+                          <button
+                            className="button secondary"
+                            type="button"
+                            onClick={() => {
+                              setRescheduleReservationId(reservation.id);
+                              setRescheduleStartsAt(
+                                new Date(reservation.startsAt)
+                                  .toISOString()
+                                  .slice(0, 16),
+                              );
+                            }}
+                          >
+                            Reschedule
+                          </button>
+                          <button
+                            className="button secondary"
+                            type="button"
+                            disabled={cancelReservation.isPending}
+                            onClick={() => {
+                              if (window.confirm('Cancel this reservation and its linked session?')) {
+                                cancelReservation.mutate({
+                                  reservationId: reservation.id,
+                                  version: reservation.version,
+                                });
+                              }
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : null}
+                    </div>
+                    {rescheduleReservationId === reservation.id ? (
+                      <div className="booking-reschedule-row">
+                        <input
+                          type="datetime-local"
+                          value={rescheduleStartsAt}
+                          onChange={(event) => setRescheduleStartsAt(event.target.value)}
+                        />
+                        <button
+                          className="button primary"
+                          type="button"
+                          disabled={reschedule.isPending || !rescheduleStartsAt}
+                          onClick={() =>
+                            reschedule.mutate({
+                              reservationId: reservation.id,
+                              version: reservation.version,
+                              startsAt: rescheduleStartsAt,
+                            })
+                          }
+                        >
+                          {reschedule.isPending ? 'Saving…' : 'Save new time'}
+                        </button>
+                      </div>
+                    ) : null}
+                  </article>
+                ))}
+              </div>
+              {reschedule.error ? (
+                <div className="error-banner">{reschedule.error.message}</div>
+              ) : null}
+              {cancelReservation.error ? (
+                <div className="error-banner">{cancelReservation.error.message}</div>
+              ) : null}
+              {downloadCalendar.error ? (
+                <div className="error-banner">{downloadCalendar.error.message}</div>
+              ) : null}
+            </section>
+          ) : null}
         </section>
 
         <aside className="panel workflow-create-panel">
