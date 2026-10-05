@@ -6,5 +6,6 @@ import { SummaryWorker } from './summary.worker';
 @Module({
   imports: [OutboxModule],
   providers: [HttpAiProvider, SummaryWorker],
+  exports: [HttpAiProvider],
 })
 export class AiModule {}
