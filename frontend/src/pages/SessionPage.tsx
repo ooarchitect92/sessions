@@ -113,7 +113,9 @@ export function SessionPage() {
       api.generateAgendaDraft(sessionId, {
         ...(aiObjective.trim() ? { objective: aiObjective.trim() } : {}),
         ...(aiAudience.trim() ? { audience: aiAudience.trim() } : {}),
-        durationMinutes: session.data?.durationMinutes,
+        ...(session.data?.durationMinutes
+          ? { durationMinutes: session.data.durationMinutes }
+          : {}),
       }),
     onSuccess: (draft) => {
       setAgendaDraft(draft);
