@@ -6,6 +6,7 @@ import { Link, useParams } from 'react-router-dom';
 import { api, type AgendaDraft, type MediaToken } from '../api/client';
 import { AgendaContentStage } from '../components/AgendaContentStage';
 import { SessionCollaborationPanel } from '../components/SessionCollaborationPanel';
+import { WhiteboardPanel } from '../components/WhiteboardPanel';
 import { useSessionRealtime } from '../hooks/use-session-realtime';
 
 function formatTime(value: string): string {
@@ -204,7 +205,7 @@ export function SessionPage() {
   const activeHasSharedContent =
     activeAgendaItem !== null &&
     (activeAgendaItem.type === 'TEXT' ||
-      ['WEBSITE', 'PRESENTATION', 'VIDEO'].includes(activeAgendaItem.type));
+      ['WEBSITE', 'PRESENTATION', 'VIDEO', 'WHITEBOARD'].includes(activeAgendaItem.type));
 
   return (
     <div className="session-workspace">
@@ -544,7 +545,25 @@ export function SessionPage() {
         </aside>
 
         <section className="meeting-stage">
-          {activeHasSharedContent && showSharedContent && activeAgendaItem ? (
+          {activeAgendaItem?.type === 'WHITEBOARD' && showSharedContent ? (
+            <div className="meeting-whiteboard-stage">
+              <div className="agenda-content-toolbar">
+                <div>
+                  <span className="eyebrow">Shared agenda content</span>
+                  <strong>{activeAgendaItem.title}</strong>
+                  <small>collaborative whiteboard</small>
+                </div>
+                <button
+                  className="button secondary"
+                  type="button"
+                  onClick={() => setShowSharedContent(false)}
+                >
+                  Show media
+                </button>
+              </div>
+              <WhiteboardPanel sessionId={sessionId} />
+            </div>
+          ) : activeHasSharedContent && showSharedContent && activeAgendaItem ? (
             <AgendaContentStage
               item={activeAgendaItem}
               onShowMedia={() => setShowSharedContent(false)}
