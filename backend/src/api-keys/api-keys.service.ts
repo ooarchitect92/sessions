@@ -214,7 +214,17 @@ export class ApiKeysService {
   }
 
   private normalizeScopes(values: string[]): string[] {
-    return [...new Set(values.map((value) => value.trim()).filter(Boolean))].sort();
+    const scopes = [
+      ...new Set(values.map((value) => value.trim().toLowerCase()).filter(Boolean)),
+    ].sort();
+    const supported = new Set(['read', 'write']);
+    const unsupported = scopes.filter((scope) => !supported.has(scope));
+    if (unsupported.length) {
+      throw new BadRequestException(
+        `Unsupported API key scopes: ${unsupported.join(', ')}`,
+      );
+    }
+    return scopes;
   }
 
   private assertAdmin(principal: Principal): void {
