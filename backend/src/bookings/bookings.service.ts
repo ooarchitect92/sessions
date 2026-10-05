@@ -23,6 +23,8 @@ import {
   CreateBookingPageDto,
 } from './dto/create-booking-page.dto';
 import { ReserveBookingDto } from './dto/reserve-booking.dto';
+import { RescheduleReservationDto } from './dto/reschedule-reservation.dto';
+import { CalendarInviteService } from './calendar-invite.service';
 import { UpdateBookingPageDto } from './dto/update-booking-page.dto';
 
 interface CalendarDate {
@@ -43,6 +45,7 @@ export class BookingsService {
     private readonly publicDatabase: WorkerPrismaService,
     private readonly audit: AuditService,
     private readonly outbox: OutboxService,
+    private readonly calendarInvite: CalendarInviteService,
   ) {}
 
   async create(
@@ -239,6 +242,232 @@ export class BookingsService {
         orderBy: { startsAt: 'asc' },
         include: { session: true },
       });
+    });
+  }
+
+  async getReservationCalendar(
+    principal: Principal,
+    bookingPageId: string,
+    reservationId: string,
+  ) {
+    this.assertHost(principal);
+    return this.database.run(principal, async (transaction) => {
+      const reservation = await transaction.bookingReservation.findFirst({
+        where: { id: reservationId, bookingPageId },
+        include: { bookingPage: true, session: true },
+      });
+      if (!reservation) throw new NotFoundException('Booking reservation not found');
+      return this.calendarInvite.create({
+        reservation,
+        bookingPage: reservation.bookingPage,
+        session: reservation.session,
+      });
+    });
+  }
+
+  async rescheduleReservation(
+    principal: Principal,
+    bookingPageId: string,
+    reservationId: string,
+    expectedVersion: number,
+    input: RescheduleReservationDto,
+  ) {
+    this.assertHost(principal);
+    this.assertTimeZone(input.timezone);
+    const requested = new Date(input.startsAt);
+    if (Number.isNaN(requested.getTime())) {
+      throw new BadRequestException('startsAt must be a valid ISO timestamp');
+    }
+
+    return this.database.run(principal, async (transaction) => {
+      const page = await transaction.bookingPage.findUnique({
+        where: { id: bookingPageId },
+      });
+      if (!page) throw new NotFoundException('Booking page not found');
+
+      const reservation = await transaction.bookingReservation.findFirst({
+        where: { id: reservationId, bookingPageId },
+        include: { session: true },
+      });
+      if (!reservation) throw new NotFoundException('Booking reservation not found');
+      if (reservation.status !== BookingStatus.CONFIRMED) {
+        throw new ConflictException('Only confirmed reservations can be rescheduled');
+      }
+      if (reservation.version !== expectedVersion) {
+        throw new ConflictException(
+          `Version conflict. Current version is ${reservation.version}`,
+        );
+      }
+
+      const requestedParts = this.getZonedParts(requested, page.timezone);
+      const localDate = this.formatCalendarDate(requestedParts);
+      const reservations = await transaction.bookingReservation.findMany({
+        where: {
+          bookingPageId,
+          id: { not: reservationId },
+          status: BookingStatus.CONFIRMED,
+          startsAt: { lt: new Date(requested.getTime() + 24 * 60 * 60 * 1000) },
+          endsAt: { gt: new Date(requested.getTime() - 24 * 60 * 60 * 1000) },
+        },
+        select: { startsAt: true, endsAt: true },
+      });
+      const available = this.generateSlots(page, localDate, localDate, reservations);
+      const selected = available.find(
+        (slot) => slot.startsAt === requested.toISOString(),
+      );
+      if (!selected) {
+        throw new ConflictException('The selected slot is no longer available');
+      }
+
+      const endsAt = new Date(selected.endsAt);
+      const updatedCount = await transaction.bookingReservation.updateMany({
+        where: {
+          id: reservationId,
+          bookingPageId,
+          version: expectedVersion,
+          status: BookingStatus.CONFIRMED,
+        },
+        data: {
+          startsAt: requested,
+          endsAt,
+          timezone: input.timezone,
+          rescheduledAt: new Date(),
+          version: { increment: 1 },
+        },
+      });
+      if (updatedCount.count === 0) {
+        throw new ConflictException('The reservation changed while rescheduling');
+      }
+
+      if (reservation.sessionId && reservation.session) {
+        if (
+          ![SessionStatus.DRAFT, SessionStatus.SCHEDULED].includes(
+            reservation.session.status,
+          )
+        ) {
+          throw new ConflictException(
+            'The linked session can no longer be rescheduled',
+          );
+        }
+        await transaction.session.update({
+          where: { id: reservation.sessionId },
+          data: {
+            startsAt: requested,
+            durationMinutes: page.durationMinutes,
+            timezone: page.timezone,
+            version: { increment: 1 },
+          },
+        });
+      }
+
+      const updated = await transaction.bookingReservation.findUniqueOrThrow({
+        where: { id: reservationId },
+        include: { bookingPage: true, session: true },
+      });
+      await this.audit.record(transaction, principal, {
+        action: 'booking.rescheduled',
+        resourceType: 'booking_reservation',
+        resourceId: reservationId,
+        metadata: {
+          bookingPageId,
+          previousStartsAt: reservation.startsAt.toISOString(),
+          startsAt: updated.startsAt.toISOString(),
+          previousVersion: expectedVersion,
+          version: updated.version,
+        },
+      });
+      await this.outbox.enqueue(transaction, principal, {
+        aggregateType: 'booking_reservation',
+        aggregateId: reservationId,
+        eventType: 'booking.rescheduled',
+        payload: this.toJson(updated),
+      });
+      return updated;
+    });
+  }
+
+  async cancelReservation(
+    principal: Principal,
+    bookingPageId: string,
+    reservationId: string,
+    expectedVersion: number,
+  ) {
+    this.assertHost(principal);
+    return this.database.run(principal, async (transaction) => {
+      const reservation = await transaction.bookingReservation.findFirst({
+        where: { id: reservationId, bookingPageId },
+        include: { session: true },
+      });
+      if (!reservation) throw new NotFoundException('Booking reservation not found');
+      if (reservation.status === BookingStatus.CANCELLED) {
+        return transaction.bookingReservation.findUniqueOrThrow({
+          where: { id: reservationId },
+          include: { session: true },
+        });
+      }
+      if (reservation.status !== BookingStatus.CONFIRMED) {
+        throw new ConflictException('Only confirmed reservations can be cancelled');
+      }
+      if (reservation.version !== expectedVersion) {
+        throw new ConflictException(
+          `Version conflict. Current version is ${reservation.version}`,
+        );
+      }
+
+      const result = await transaction.bookingReservation.updateMany({
+        where: {
+          id: reservationId,
+          bookingPageId,
+          version: expectedVersion,
+          status: BookingStatus.CONFIRMED,
+        },
+        data: {
+          status: BookingStatus.CANCELLED,
+          cancelledAt: new Date(),
+          version: { increment: 1 },
+        },
+      });
+      if (result.count === 0) {
+        throw new ConflictException('The reservation changed while cancelling');
+      }
+
+      if (
+        reservation.sessionId &&
+        reservation.session &&
+        [SessionStatus.DRAFT, SessionStatus.SCHEDULED].includes(
+          reservation.session.status,
+        )
+      ) {
+        await transaction.session.update({
+          where: { id: reservation.sessionId },
+          data: {
+            status: SessionStatus.CANCELLED,
+            version: { increment: 1 },
+          },
+        });
+      }
+
+      const updated = await transaction.bookingReservation.findUniqueOrThrow({
+        where: { id: reservationId },
+        include: { session: true },
+      });
+      await this.audit.record(transaction, principal, {
+        action: 'booking.cancelled',
+        resourceType: 'booking_reservation',
+        resourceId: reservationId,
+        metadata: {
+          bookingPageId,
+          previousVersion: expectedVersion,
+          version: updated.version,
+        },
+      });
+      await this.outbox.enqueue(transaction, principal, {
+        aggregateType: 'booking_reservation',
+        aggregateId: reservationId,
+        eventType: 'booking.cancelled',
+        payload: this.toJson(updated),
+      });
+      return updated;
     });
   }
 
