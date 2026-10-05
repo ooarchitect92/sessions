@@ -18,6 +18,7 @@ import { TenantDatabaseService } from '../database/tenant-database.service';
 import { RealtimeEventsService } from '../infrastructure/realtime-events.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { ListMemoryQuery } from './dto/list-memory.query';
+import { SendFollowUpDto } from './dto/send-follow-up.dto';
 import { UpdateFollowUpDraftDto } from './dto/update-follow-up-draft.dto';
 import { UpdateMemorySummaryDto } from './dto/update-memory-summary.dto';
 import { UpdateTranscriptSegmentDto } from './dto/update-transcript-segment.dto';
@@ -129,6 +130,10 @@ export class MemoryService {
             },
           },
           memorySummary: true,
+          emailDeliveries: {
+            orderBy: { createdAt: 'desc' },
+            take: 20,
+          },
           chatMessages: {
             where: { deletedAt: null },
             include: { author: { select: { displayName: true } } },
