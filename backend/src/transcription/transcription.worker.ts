@@ -107,7 +107,9 @@ export class TranscriptionWorker {
               position,
               startMs: segment.startMs,
               endMs: segment.endMs,
-              speakerLabel: segment.speakerLabel,
+              ...(segment.speakerLabel
+                ? { speakerLabel: segment.speakerLabel }
+                : {}),
               text: segment.text,
             })),
           });
