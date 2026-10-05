@@ -54,9 +54,11 @@
 - [x] transcript segment model with speaker/timestamp fields
 - [x] reviewed summary, decision, action-item and citation model
 - [ ] recording/STT workers, streaming captions and diarization qualification (post-session HTTP STT worker is implemented; streaming captions and diarization/provider qualification remain)
-- [ ] transcript correction, revision history and language policy
+- [x] transcript correction and audit-backed revision history
+- [ ] transcript language policy and diarization correction workflow
 - [x] object-storage access, signed playback and secure download paths
-- [ ] PostgreSQL full-text index and optional vector retrieval with workspace filters
+- [x] PostgreSQL full-text transcript index with workspace-scoped search
+- [ ] optional vector retrieval with workspace filters
 - [ ] agenda generator and provider-abstracted AI execution gateway
 - [ ] summary/action editor, follow-up approval and CRM write controls
 - [ ] groundedness, privacy, prompt-injection, cost and latency evaluation suite
