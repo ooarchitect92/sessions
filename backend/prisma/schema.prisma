@@ -185,6 +185,10 @@ model Organization {
   authSessions        AuthSession[]
   authChallenges      AuthChallenge[]
   workspaceInvitations WorkspaceInvitation[]
+  agendaTemplates     AgendaTemplate[]
+  agendaTemplateItems AgendaTemplateItem[]
+  agendaTemplates     AgendaTemplate[]
+  agendaTemplateItems AgendaTemplateItem[]
 
   @@map("organizations")
 }
@@ -269,6 +273,7 @@ model User {
   createdApiKeys              ApiKey[]                 @relation("ApiKeyCreator")
   breakoutAssignments          BreakoutAssignment[]      @relation("BreakoutAssignmentUser")
   whiteboardOperations          WhiteboardOperation[]     @relation("WhiteboardOperationAuthor")
+  createdAgendaTemplates         AgendaTemplate[]          @relation("AgendaTemplateCreator")
 
   @@index([status])
   @@map("users")
@@ -373,6 +378,47 @@ model AgendaItem {
   @@unique([sessionId, position])
   @@index([organizationId, workspaceId, sessionId])
   @@map("agenda_items")
+}
+
+model AgendaTemplate {
+  id              String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String               @map("organization_id") @db.Uuid
+  workspaceId     String               @map("workspace_id") @db.Uuid
+  createdById     String               @map("created_by_id") @db.Uuid
+  name            String               @db.VarChar(160)
+  description     String?              @db.Text
+  version         Int                  @default(1)
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization    Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace       Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy       User                 @relation("AgendaTemplateCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  items           AgendaTemplateItem[]
+
+  @@unique([workspaceId, name])
+  @@index([organizationId, workspaceId, createdAt])
+  @@map("agenda_templates")
+}
+
+model AgendaTemplateItem {
+  id              String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String         @map("organization_id") @db.Uuid
+  workspaceId     String         @map("workspace_id") @db.Uuid
+  templateId      String         @map("template_id") @db.Uuid
+  position        Int
+  title           String         @db.VarChar(160)
+  durationSeconds Int            @map("duration_seconds")
+  type            AgendaItemType
+  content         Json           @default("{}")
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization    Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace       Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  template        AgendaTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, position])
+  @@index([organizationId, workspaceId, templateId])
+  @@map("agenda_template_items")
 }
 
 model Event {
