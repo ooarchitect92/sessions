@@ -8,6 +8,12 @@ export interface AgendaActivatedEvent {
   activatedAt: string;
 }
 
+export interface UserRealtimeEvent {
+  userId: string;
+  eventName: 'chat.message.created';
+  payload: unknown;
+}
+
 export interface SessionRealtimeEvent {
   sessionId: string;
   eventName:
@@ -48,9 +54,11 @@ export interface SessionRealtimeEvent {
 export class RealtimeEventsService implements OnModuleDestroy {
   private readonly agendaActivatedSubject = new Subject<AgendaActivatedEvent>();
   private readonly sessionEventSubject = new Subject<SessionRealtimeEvent>();
+  private readonly userEventSubject = new Subject<UserRealtimeEvent>();
 
   readonly agendaActivated$ = this.agendaActivatedSubject.asObservable();
   readonly sessionEvents$ = this.sessionEventSubject.asObservable();
+  readonly userEvents$ = this.userEventSubject.asObservable();
 
   publishAgendaActivated(event: AgendaActivatedEvent): void {
     this.agendaActivatedSubject.next(event);
@@ -60,8 +68,13 @@ export class RealtimeEventsService implements OnModuleDestroy {
     this.sessionEventSubject.next(event);
   }
 
+  publishUserEvent(event: UserRealtimeEvent): void {
+    this.userEventSubject.next(event);
+  }
+
   onModuleDestroy(): void {
     this.agendaActivatedSubject.complete();
     this.sessionEventSubject.complete();
+    this.userEventSubject.complete();
   }
 }
