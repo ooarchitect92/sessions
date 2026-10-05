@@ -796,3 +796,51 @@
   flex-wrap: wrap;
   gap: 8px;
 }
+
+.api-key-scope-field {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.api-key-scope-field > span {
+  color: #52605c;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.api-key-scope-option {
+  display: flex !important;
+  align-items: flex-start;
+  gap: 9px !important;
+  padding: 10px;
+  border: 1px solid #deddd6;
+  border-radius: 10px;
+  background: #f8f8f4;
+}
+
+.api-key-scope-option input {
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  margin-top: 1px;
+  accent-color: #23584e;
+}
+
+.api-key-scope-option span,
+.api-key-scope-option strong,
+.api-key-scope-option small {
+  display: block;
+}
+
+.api-key-scope-option strong {
+  color: var(--ink);
+  font-size: 10px;
+}
+
+.api-key-scope-option small {
+  margin-top: 2px;
+  color: #7b8581;
+  font-size: 8px;
+  line-height: 1.45;
+}
