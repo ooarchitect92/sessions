@@ -298,10 +298,29 @@ export interface MemoryListItem extends Session {
   _count: { chatMessages: number; polls: number; questions: number };
 }
 
+export interface EmailDeliveryRecord {
+  id: string;
+  sessionId: string;
+  memorySummaryId: string | null;
+  requestedByUserId: string;
+  status: 'PENDING' | 'PROCESSING' | 'SENT' | 'FAILED';
+  provider: string | null;
+  providerMessageId: string | null;
+  recipients: string[];
+  subject: string;
+  body: string;
+  attempts: number;
+  failureCode: string | null;
+  sentAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface MemoryDetail extends SessionDetail {
   recording: RecordingRecord | null;
   transcript: TranscriptRecord | null;
   memorySummary: MemorySummaryRecord | null;
+  emailDeliveries: EmailDeliveryRecord[];
   chatMessages: ChatMessageRecord[];
   polls: PollRecord[];
   questions: QuestionRecord[];
@@ -914,6 +933,16 @@ export const api = {
         headers: { "if-match": String(version) },
       },
     );
+  },
+
+  sendFollowUpDraft(
+    sessionId: string,
+    recipients: string[],
+  ): Promise<EmailDeliveryRecord> {
+    return request<EmailDeliveryRecord>(`/memory/${sessionId}/follow-up/send`, {
+      method: "POST",
+      body: JSON.stringify({ recipients }),
+    });
   },
 
   retryMemory(
