@@ -471,6 +471,43 @@ export interface MemoryDetail extends SessionDetail {
   questions: QuestionRecord[];
 }
 
+export type WhiteboardOperationKind =
+  | 'STROKE'
+  | 'SHAPE'
+  | 'TEXT'
+  | 'STICKY'
+  | 'IMAGE'
+  | 'CLEAR';
+
+export interface WhiteboardOperationRecord {
+  id: string;
+  operationId: string;
+  sessionId: string;
+  documentId: string;
+  authorUserId: string;
+  sequence: number;
+  kind: WhiteboardOperationKind;
+  payload: Record<string, unknown>;
+  createdAt: string;
+  author: {
+    id: string;
+    displayName: string;
+    avatarUrl: string | null;
+  };
+}
+
+export interface WhiteboardState {
+  document: {
+    id: string;
+    sessionId: string;
+    version: number;
+    snapshotVersion: number;
+    snapshot: Record<string, unknown>;
+    updatedAt: string;
+  };
+  operations: WhiteboardOperationRecord[];
+}
+
 export interface BreakoutAssignmentRecord {
   id: string;
   userId: string;
@@ -1212,6 +1249,34 @@ export const api = {
         method: "POST",
       },
     );
+  },
+
+  getWhiteboard(sessionId: string): Promise<WhiteboardState> {
+    return request(`/sessions/${sessionId}/whiteboard`);
+  },
+
+  appendWhiteboardOperation(
+    sessionId: string,
+    input: {
+      operationId: string;
+      kind: WhiteboardOperationKind;
+      payload: Record<string, unknown>;
+    },
+  ): Promise<WhiteboardOperationRecord> {
+    return request(`/sessions/${sessionId}/whiteboard/operations`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+
+  saveWhiteboardSnapshot(
+    sessionId: string,
+    input: { baseVersion: number; snapshot: Record<string, unknown> },
+  ): Promise<WhiteboardState["document"]> {
+    return request(`/sessions/${sessionId}/whiteboard/snapshot`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
   },
 
   listBreakouts(sessionId: string): Promise<BreakoutRoomRecord[]> {
