@@ -1,7 +1,8 @@
-import { Controller, Get, Param, ParseUUIDPipe } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentPrincipal } from '../common/auth/current-principal.decorator';
 import type { Principal } from '../common/auth/principal';
+import { UpdateTranscriptDto } from './dto/update-transcript.dto';
 import { MemoryService } from './memory.service';
 
 @ApiTags('recordings')
@@ -31,5 +32,22 @@ export class TranscriptsController {
     @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
   ) {
     return this.memory.getTranscript(principal, sessionId);
+  }
+
+  @Get(':sessionId/revisions')
+  revisions(
+    @CurrentPrincipal() principal: Principal,
+    @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
+  ) {
+    return this.memory.listTranscriptRevisions(principal, sessionId);
+  }
+
+  @Patch(':sessionId')
+  update(
+    @CurrentPrincipal() principal: Principal,
+    @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
+    @Body() body: UpdateTranscriptDto,
+  ) {
+    return this.memory.updateTranscript(principal, sessionId, body);
   }
 }

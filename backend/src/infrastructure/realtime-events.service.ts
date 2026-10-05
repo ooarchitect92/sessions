@@ -19,8 +19,18 @@ export interface SessionRealtimeEvent {
     | 'question.created'
     | 'question.updated'
     | 'question.votes.updated'
+    | 'agenda.timer.updated'
+    | 'media.moderation.updated'
+    | 'breakout.updated'
+    | 'breakout.opened'
+    | 'breakout.closed'
+    | 'breakout.assignment.updated'
+    | 'breakout.broadcast'
+    | 'whiteboard.updated'
+    | 'file.asset.updated'
     | 'memory.updated';
   payload: unknown;
+  audienceUserIds?: string[];
 }
 
 /**

@@ -1,4 +1,6 @@
+import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   IsArray,
   IsInt,
   IsISO8601,
@@ -9,7 +11,9 @@ import {
   Matches,
   Max,
   Min,
+  ValidateNested,
 } from 'class-validator';
+import { EventRegistrationFieldDto } from './event-registration-field.dto';
 
 export class CreateEventDto {
   @IsString()
@@ -45,8 +49,10 @@ export class CreateEventDto {
   capacity?: number | null;
 
   @IsArray()
-  @IsObject({ each: true })
-  registrationFields: Record<string, unknown>[] = [];
+  @ArrayMaxSize(50)
+  @ValidateNested({ each: true })
+  @Type(() => EventRegistrationFieldDto)
+  registrationFields: EventRegistrationFieldDto[] = [];
 
   @IsObject()
   branding: Record<string, unknown> = {};

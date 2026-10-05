@@ -12,8 +12,10 @@ import {
   SessionStatus,
   type BookingPage,
 } from '@prisma/client';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { AuditService } from '../audit/audit.service';
+import { SecurityService } from '../auth/security.service';
+import { CalendarIntegrationsService } from '../calendar/calendar-integrations.service';
 import { HOST_ROLES, hasAnyRole, type Principal } from '../common/auth/principal';
 import { TenantDatabaseService } from '../database/tenant-database.service';
 import { WorkerPrismaService } from '../database/worker-prisma.service';
@@ -21,7 +23,11 @@ import { OutboxService } from '../outbox/outbox.service';
 import {
   AvailabilityRuleDto,
   CreateBookingPageDto,
+  IntakeFieldDto,
+  IntakeFieldType,
 } from './dto/create-booking-page.dto';
+import { ManageReservationDto } from './dto/manage-reservation.dto';
+import { RescheduleReservationDto } from './dto/reschedule-reservation.dto';
 import { ReserveBookingDto } from './dto/reserve-booking.dto';
 import { UpdateBookingPageDto } from './dto/update-booking-page.dto';
 
@@ -36,11 +42,24 @@ interface Slot {
   endsAt: string;
 }
 
+const RESCHEDULABLE_SESSION_STATUSES = new Set<SessionStatus>([
+  SessionStatus.DRAFT,
+  SessionStatus.SCHEDULED,
+]);
+
+const CANCELLABLE_SESSION_STATUSES = new Set<SessionStatus>([
+  SessionStatus.DRAFT,
+  SessionStatus.SCHEDULED,
+  SessionStatus.CANCELLED,
+]);
+
 @Injectable()
 export class BookingsService {
   constructor(
     private readonly database: TenantDatabaseService,
     private readonly publicDatabase: WorkerPrismaService,
+    private readonly calendars: CalendarIntegrationsService,
+    private readonly security: SecurityService,
     private readonly audit: AuditService,
     private readonly outbox: OutboxService,
   ) {}
@@ -53,6 +72,7 @@ export class BookingsService {
     this.assertHost(principal);
     this.assertTimeZone(input.timezone);
     this.assertAvailabilityRules(input.availabilityRules);
+    this.assertIntakeFields(input.intakeFields);
     const requestHash = createHash('sha256')
       .update(JSON.stringify({ operation: 'booking.create', input }))
       .digest('hex');
@@ -94,7 +114,7 @@ export class BookingsService {
           bufferBeforeMinutes: input.bufferBeforeMinutes,
           bufferAfterMinutes: input.bufferAfterMinutes,
           availabilityRules: input.availabilityRules as unknown as Prisma.InputJsonValue,
-          intakeFields: input.intakeFields as Prisma.InputJsonValue,
+          intakeFields: input.intakeFields as unknown as Prisma.InputJsonValue,
         },
       });
       const response = this.toJson(page);
@@ -159,6 +179,9 @@ export class BookingsService {
     if (input.availabilityRules !== undefined) {
       this.assertAvailabilityRules(input.availabilityRules);
     }
+    if (input.intakeFields !== undefined) {
+      this.assertIntakeFields(input.intakeFields);
+    }
 
     return this.database.run(principal, async (transaction) => {
       if (input.slug !== undefined) {
@@ -199,7 +222,10 @@ export class BookingsService {
               }
             : {}),
           ...(input.intakeFields !== undefined
-            ? { intakeFields: input.intakeFields as Prisma.InputJsonValue }
+            ? {
+                intakeFields:
+                  input.intakeFields as unknown as Prisma.InputJsonValue,
+              }
             : {}),
           ...(input.active !== undefined ? { active: input.active } : {}),
         },
@@ -237,7 +263,24 @@ export class BookingsService {
       return transaction.bookingReservation.findMany({
         where: { bookingPageId },
         orderBy: { startsAt: 'asc' },
-        include: { session: true },
+        select: {
+          id: true,
+          bookingPageId: true,
+          sessionId: true,
+          name: true,
+          email: true,
+          startsAt: true,
+          endsAt: true,
+          timezone: true,
+          answers: true,
+          status: true,
+          cancelledAt: true,
+          rescheduleCount: true,
+          version: true,
+          createdAt: true,
+          updatedAt: true,
+          session: true,
+        },
       });
     });
   }
@@ -260,16 +303,27 @@ export class BookingsService {
   ): Promise<Slot[]> {
     const page = await this.findPublicPage(organizationSlug, workspaceSlug, bookingSlug);
     const range = this.validateDateRange(dateFrom, dateTo);
-    const reservations = await this.publicDatabase.bookingReservation.findMany({
-      where: {
-        bookingPageId: page.id,
-        status: BookingStatus.CONFIRMED,
-        startsAt: { lt: range.endExclusive },
-        endsAt: { gt: range.start },
-      },
-      select: { startsAt: true, endsAt: true },
-    });
-    return this.generateSlots(page, dateFrom, dateTo, reservations);
+    const [reservations, calendarBusy] = await Promise.all([
+      this.publicDatabase.bookingReservation.findMany({
+        where: {
+          bookingPageId: page.id,
+          status: BookingStatus.CONFIRMED,
+          startsAt: { lt: range.endExclusive },
+          endsAt: { gt: range.start },
+        },
+        select: { startsAt: true, endsAt: true },
+      }),
+      this.calendars.ensureFreshUserBusy(
+        page.workspaceId,
+        page.createdById,
+        range.start,
+        range.endExclusive,
+      ),
+    ]);
+    return this.generateSlots(page, dateFrom, dateTo, [
+      ...reservations,
+      ...calendarBusy,
+    ]);
   }
 
   async reserve(
@@ -280,9 +334,17 @@ export class BookingsService {
   ) {
     this.assertTimeZone(input.timezone);
     const page = await this.findPublicPage(organizationSlug, workspaceSlug, bookingSlug);
+    const normalizedAnswers = this.validateIntakeAnswers(page, input.answers);
     const requested = new Date(input.startsAt);
     const requestedParts = this.getZonedParts(requested, page.timezone);
     const localDate = this.formatCalendarDate(requestedParts);
+    const requestedRange = this.validateDateRange(localDate, localDate);
+    const calendarBusy = await this.calendars.ensureFreshUserBusy(
+      page.workspaceId,
+      page.createdById,
+      requestedRange.start,
+      requestedRange.endExclusive,
+    );
 
     return this.publicDatabase.$transaction(async (transaction) => {
       await transaction.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${page.id}, 0))`;
@@ -295,11 +357,21 @@ export class BookingsService {
         },
         select: { startsAt: true, endsAt: true },
       });
-      const slots = this.generateSlots(page, localDate, localDate, reservations);
+      const slots = this.generateSlots(page, localDate, localDate, [
+        ...reservations,
+        ...calendarBusy,
+      ]);
       const selected = slots.find((slot) => slot.startsAt === requested.toISOString());
       if (!selected) throw new ConflictException('The selected slot is no longer available');
 
       const sessionId = randomUUID();
+      const reservationId = randomUUID();
+      const managementToken = randomBytes(32).toString('base64url');
+      const managementTokenHash = this.hashManagementToken(managementToken);
+      const managementTokenEncrypted = this.security.encryptSensitiveValue(
+        managementToken,
+        'booking-management:' + reservationId,
+      );
       const endsAt = new Date(selected.endsAt);
       await transaction.session.create({
         data: {
@@ -320,6 +392,7 @@ export class BookingsService {
       });
       const reservation = await transaction.bookingReservation.create({
         data: {
+          id: reservationId,
           organizationId: page.organizationId,
           workspaceId: page.workspaceId,
           bookingPageId: page.id,
@@ -329,10 +402,13 @@ export class BookingsService {
           startsAt: requested,
           endsAt,
           timezone: input.timezone,
-          answers: input.answers as Prisma.InputJsonValue,
+          answers: normalizedAnswers,
+          managementTokenHash,
+          managementTokenEncrypted,
         },
         include: { session: true },
       });
+      const publicReservation = this.publicReservationShape(reservation);
       await this.outbox.enqueue(
         transaction,
         { organizationId: page.organizationId, workspaceId: page.workspaceId },
@@ -340,10 +416,256 @@ export class BookingsService {
           aggregateType: 'booking_reservation',
           aggregateId: reservation.id,
           eventType: 'booking.created',
-          payload: this.toJson(reservation),
+          payload: this.toJson(publicReservation),
         },
       );
-      return reservation;
+      return { ...publicReservation, managementToken };
+    });
+  }
+
+  async reschedule(
+    organizationSlug: string,
+    workspaceSlug: string,
+    bookingSlug: string,
+    reservationId: string,
+    input: RescheduleReservationDto,
+  ) {
+    this.assertTimeZone(input.timezone);
+    const page = await this.findPublicPage(
+      organizationSlug,
+      workspaceSlug,
+      bookingSlug,
+      false,
+    );
+    const requested = new Date(input.startsAt);
+    const localDate = this.formatCalendarDate(
+      this.getZonedParts(requested, page.timezone),
+    );
+    const requestedRange = this.validateDateRange(localDate, localDate);
+    const calendarBusy = await this.calendars.ensureFreshUserBusy(
+      page.workspaceId,
+      page.createdById,
+      requestedRange.start,
+      requestedRange.endExclusive,
+    );
+    const managementTokenHash = this.hashManagementToken(input.managementToken);
+
+    return this.publicDatabase.$transaction(async (transaction) => {
+      await transaction.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${page.id}, 0))`;
+      const reservation = await transaction.bookingReservation.findFirst({
+        where: {
+          id: reservationId,
+          bookingPageId: page.id,
+          managementTokenHash,
+        },
+        include: { session: true },
+      });
+      if (!reservation) throw new NotFoundException('Booking reservation not found');
+      if (reservation.status !== BookingStatus.CONFIRMED) {
+        throw new ConflictException('Only confirmed bookings can be rescheduled');
+      }
+      if (
+        reservation.session &&
+        !RESCHEDULABLE_SESSION_STATUSES.has(reservation.session.status)
+      ) {
+        throw new ConflictException(
+          `The linked session cannot be rescheduled while ${reservation.session.status}`,
+        );
+      }
+
+      const reservations = await transaction.bookingReservation.findMany({
+        where: {
+          bookingPageId: page.id,
+          id: { not: reservation.id },
+          status: BookingStatus.CONFIRMED,
+          startsAt: { lt: new Date(requested.getTime() + 24 * 60 * 60 * 1000) },
+          endsAt: { gt: new Date(requested.getTime() - 24 * 60 * 60 * 1000) },
+        },
+        select: { startsAt: true, endsAt: true },
+      });
+      const slots = this.generateSlots(page, localDate, localDate, [
+        ...reservations,
+        ...calendarBusy,
+      ]);
+      const selected = slots.find((slot) => slot.startsAt === requested.toISOString());
+      if (!selected) throw new ConflictException('The selected slot is no longer available');
+
+      const endsAt = new Date(selected.endsAt);
+      const updated = await transaction.bookingReservation.update({
+        where: { id: reservation.id },
+        data: {
+          startsAt: requested,
+          endsAt,
+          timezone: input.timezone,
+          cancelledAt: null,
+          rescheduleCount: { increment: 1 },
+          version: { increment: 1 },
+        },
+        include: { session: true },
+      });
+
+      if (reservation.sessionId) {
+        await transaction.session.update({
+          where: { id: reservation.sessionId },
+          data: {
+            startsAt: requested,
+            durationMinutes: page.durationMinutes,
+            timezone: page.timezone,
+            version: { increment: 1 },
+          },
+        });
+      }
+
+      const publicReservation = this.publicReservationShape(updated);
+      await this.outbox.enqueue(
+        transaction,
+        { organizationId: page.organizationId, workspaceId: page.workspaceId },
+        {
+          aggregateType: 'booking_reservation',
+          aggregateId: reservation.id,
+          eventType: 'booking.rescheduled',
+          payload: this.toJson(publicReservation),
+        },
+      );
+      return publicReservation;
+    });
+  }
+
+  async cancel(
+    organizationSlug: string,
+    workspaceSlug: string,
+    bookingSlug: string,
+    reservationId: string,
+    input: ManageReservationDto,
+  ) {
+    const page = await this.findPublicPage(
+      organizationSlug,
+      workspaceSlug,
+      bookingSlug,
+      false,
+    );
+    const managementTokenHash = this.hashManagementToken(input.managementToken);
+
+    return this.publicDatabase.$transaction(async (transaction) => {
+      await transaction.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${reservationId}, 0))`;
+      const reservation = await transaction.bookingReservation.findFirst({
+        where: {
+          id: reservationId,
+          bookingPageId: page.id,
+          managementTokenHash,
+        },
+        include: { session: true },
+      });
+      if (!reservation) throw new NotFoundException('Booking reservation not found');
+      if (reservation.status === BookingStatus.CANCELLED) {
+        return this.publicReservationShape(reservation);
+      }
+      if (reservation.status !== BookingStatus.CONFIRMED) {
+        throw new ConflictException('Only confirmed bookings can be cancelled');
+      }
+      if (
+        reservation.session &&
+        !CANCELLABLE_SESSION_STATUSES.has(reservation.session.status)
+      ) {
+        throw new ConflictException(
+          `The linked session cannot be cancelled while ${reservation.session.status}`,
+        );
+      }
+
+      if (
+        reservation.sessionId &&
+        reservation.session &&
+        reservation.session.status !== SessionStatus.CANCELLED
+      ) {
+        await transaction.session.update({
+          where: { id: reservation.sessionId },
+          data: {
+            status: SessionStatus.CANCELLED,
+            version: { increment: 1 },
+          },
+        });
+      }
+
+      const updated = await transaction.bookingReservation.update({
+        where: { id: reservation.id },
+        data: {
+          status: BookingStatus.CANCELLED,
+          cancelledAt: new Date(),
+          version: { increment: 1 },
+        },
+        include: { session: true },
+      });
+
+      const publicReservation = this.publicReservationShape(updated);
+      await this.outbox.enqueue(
+        transaction,
+        { organizationId: page.organizationId, workspaceId: page.workspaceId },
+        {
+          aggregateType: 'booking_reservation',
+          aggregateId: reservation.id,
+          eventType: 'booking.cancelled',
+          payload: this.toJson(publicReservation),
+        },
+      );
+      return publicReservation;
+    });
+  }
+
+  async getManagedReservation(
+    organizationSlug: string,
+    workspaceSlug: string,
+    bookingSlug: string,
+    reservationId: string,
+    managementToken: string,
+  ) {
+    const page = await this.findPublicPage(
+      organizationSlug,
+      workspaceSlug,
+      bookingSlug,
+      false,
+    );
+    const reservation = await this.publicDatabase.bookingReservation.findFirst({
+      where: {
+        id: reservationId,
+        bookingPageId: page.id,
+        managementTokenHash: this.hashManagementToken(managementToken),
+      },
+      include: { session: true },
+    });
+    if (!reservation) throw new NotFoundException('Booking reservation not found');
+    return this.publicReservationShape(reservation);
+  }
+
+  async calendarFile(
+    organizationSlug: string,
+    workspaceSlug: string,
+    bookingSlug: string,
+    reservationId: string,
+    managementToken: string,
+  ) {
+    const page = await this.findPublicPage(
+      organizationSlug,
+      workspaceSlug,
+      bookingSlug,
+      false,
+    );
+    const reservation = await this.publicDatabase.bookingReservation.findFirst({
+      where: {
+        id: reservationId,
+        bookingPageId: page.id,
+        managementTokenHash: this.hashManagementToken(managementToken),
+      },
+      include: { session: true },
+    });
+    if (!reservation) throw new NotFoundException('Booking reservation not found');
+
+    return this.buildCalendarFile({
+      id: reservation.id,
+      title: reservation.session?.title ?? page.title,
+      description: page.description,
+      startsAt: reservation.startsAt,
+      endsAt: reservation.endsAt,
+      status: reservation.status,
     });
   }
 
@@ -351,6 +673,7 @@ export class BookingsService {
     organizationSlug: string,
     workspaceSlug: string,
     bookingSlug: string,
+    requireActive = true,
   ) {
     const organization = await this.publicDatabase.organization.findUnique({
       where: { slug: organizationSlug },
@@ -365,7 +688,11 @@ export class BookingsService {
     });
     if (!workspace) throw new NotFoundException('Booking page not found');
     const page = await this.publicDatabase.bookingPage.findFirst({
-      where: { workspaceId: workspace.id, slug: bookingSlug, active: true },
+      where: {
+        workspaceId: workspace.id,
+        slug: bookingSlug,
+        ...(requireActive ? { active: true } : {}),
+      },
     });
     if (!page) throw new NotFoundException('Booking page not found');
     return page;
@@ -525,6 +852,221 @@ export class BookingsService {
       hour: Number(values.hour),
       minute: Number(values.minute),
     };
+  }
+
+  private publicReservationShape(reservation: {
+    id: string;
+    bookingPageId: string;
+    sessionId: string | null;
+    name: string;
+    email: string;
+    startsAt: Date;
+    endsAt: Date;
+    timezone: string;
+    answers: Prisma.JsonValue;
+    status: BookingStatus;
+    cancelledAt: Date | null;
+    rescheduleCount: number;
+    version: number;
+    createdAt: Date;
+    updatedAt: Date;
+    session?: {
+      id: string;
+      title: string;
+      status: SessionStatus;
+    } | null;
+  }) {
+    return {
+      id: reservation.id,
+      bookingPageId: reservation.bookingPageId,
+      sessionId: reservation.sessionId,
+      name: reservation.name,
+      email: reservation.email,
+      startsAt: reservation.startsAt,
+      endsAt: reservation.endsAt,
+      timezone: reservation.timezone,
+      answers: reservation.answers,
+      status: reservation.status,
+      cancelledAt: reservation.cancelledAt,
+      rescheduleCount: reservation.rescheduleCount,
+      version: reservation.version,
+      createdAt: reservation.createdAt,
+      updatedAt: reservation.updatedAt,
+      session: reservation.session
+        ? {
+            id: reservation.session.id,
+            title: reservation.session.title,
+            status: reservation.session.status,
+          }
+        : null,
+    };
+  }
+
+  private hashManagementToken(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
+  }
+
+  private buildCalendarFile(input: {
+    id: string;
+    title: string;
+    description: string | null;
+    startsAt: Date;
+    endsAt: Date;
+    status: BookingStatus;
+  }) {
+    const status =
+      input.status === BookingStatus.CANCELLED ? 'CANCELLED' : 'CONFIRMED';
+    const lines = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Sessions//Booking//EN',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      'BEGIN:VEVENT',
+      `UID:${input.id}@sessions`,
+      `DTSTAMP:${this.formatIcsDate(new Date())}`,
+      `DTSTART:${this.formatIcsDate(input.startsAt)}`,
+      `DTEND:${this.formatIcsDate(input.endsAt)}`,
+      `SUMMARY:${this.escapeIcs(input.title)}`,
+      `DESCRIPTION:${this.escapeIcs(input.description ?? 'Scheduled through Sessions')}`,
+      `STATUS:${status}`,
+      'END:VEVENT',
+      'END:VCALENDAR',
+      '',
+    ];
+    return {
+      filename: `session-${input.id}.ics`,
+      contentType: 'text/calendar; charset=utf-8',
+      content: lines.join('\r\n'),
+    };
+  }
+
+  private formatIcsDate(value: Date): string {
+    return value
+      .toISOString()
+      .replace(/[-:]/g, '')
+      .replace(/\.\d{3}Z$/, 'Z');
+  }
+
+  private escapeIcs(value: string): string {
+    return value
+      .replaceAll('\\', '\\\\')
+      .replaceAll(';', '\\;')
+      .replaceAll(',', '\\,')
+      .replace(/\r?\n/g, '\\n');
+  }
+
+  private assertIntakeFields(fields: IntakeFieldDto[]): void {
+    const keys = new Set<string>();
+    for (const field of fields) {
+      if (keys.has(field.key)) {
+        throw new BadRequestException(`Duplicate intake field key: ${field.key}`);
+      }
+      keys.add(field.key);
+
+      const options = (field.options ?? []).map((option) => option.trim());
+      if (field.type === IntakeFieldType.SELECT) {
+        if (options.length === 0) {
+          throw new BadRequestException(
+            `Select intake field "${field.label}" requires at least one option`,
+          );
+        }
+        if (
+          options.some((option) => option.length === 0 || option.length > 160) ||
+          new Set(options).size !== options.length
+        ) {
+          throw new BadRequestException(
+            `Select intake field "${field.label}" has invalid or duplicate options`,
+          );
+        }
+      } else if (options.length > 0) {
+        throw new BadRequestException(
+          `Only select intake fields may define options`,
+        );
+      }
+    }
+  }
+
+  private validateIntakeAnswers(
+    page: BookingPage,
+    answers: Record<string, unknown>,
+  ): Prisma.InputJsonObject {
+    const fields = page.intakeFields as unknown as IntakeFieldDto[];
+    this.assertIntakeFields(fields);
+    const fieldByKey = new Map(fields.map((field) => [field.key, field]));
+    for (const key of Object.keys(answers)) {
+      if (!fieldByKey.has(key)) {
+        throw new BadRequestException(`Unknown intake field: ${key}`);
+      }
+    }
+
+    const normalized: Record<string, Prisma.InputJsonValue> = {};
+    for (const field of fields) {
+      const value = answers[field.key];
+      if (value === undefined || value === null || value === '') {
+        if (field.required) {
+          throw new BadRequestException(
+            `Intake field "${field.label}" is required`,
+          );
+        }
+        continue;
+      }
+
+      if (
+        field.type === IntakeFieldType.CHECKBOX ||
+        field.type === IntakeFieldType.CONSENT
+      ) {
+        if (typeof value !== 'boolean') {
+          throw new BadRequestException(
+            `Intake field "${field.label}" must be true or false`,
+          );
+        }
+        if (field.required && value !== true) {
+          throw new BadRequestException(
+            `Intake field "${field.label}" must be accepted`,
+          );
+        }
+        normalized[field.key] = value;
+        continue;
+      }
+
+      if (typeof value !== 'string') {
+        throw new BadRequestException(
+          `Intake field "${field.label}" must be text`,
+        );
+      }
+      const text = value.trim();
+      const maxLength =
+        field.type === IntakeFieldType.TEXTAREA ? 5000 : 1000;
+      if (!text && field.required) {
+        throw new BadRequestException(
+          `Intake field "${field.label}" is required`,
+        );
+      }
+      if (text.length > maxLength) {
+        throw new BadRequestException(
+          `Intake field "${field.label}" is too long`,
+        );
+      }
+      if (
+        field.type === IntakeFieldType.EMAIL &&
+        !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text)
+      ) {
+        throw new BadRequestException(
+          `Intake field "${field.label}" must be a valid email address`,
+        );
+      }
+      if (
+        field.type === IntakeFieldType.SELECT &&
+        !(field.options ?? []).map((option) => option.trim()).includes(text)
+      ) {
+        throw new BadRequestException(
+          `Intake field "${field.label}" contains an invalid option`,
+        );
+      }
+      normalized[field.key] = text;
+    }
+    return normalized as Prisma.InputJsonObject;
   }
 
   private assertAvailabilityRules(rules: AvailabilityRuleDto[]): void {

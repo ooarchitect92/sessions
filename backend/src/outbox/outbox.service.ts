@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import type { Principal } from '../common/auth/principal';
 import { WorkerPrismaService } from '../database/worker-prisma.service';
 import { RedisService } from '../infrastructure/redis.service';
+import { WebhooksService } from '../webhooks/webhooks.service';
 
 interface ClaimedOutboxEvent {
   id: string;
@@ -26,6 +27,7 @@ export class OutboxService {
   constructor(
     private readonly prisma: WorkerPrismaService,
     private readonly redis: RedisService,
+    private readonly webhooks: WebhooksService,
   ) {}
 
   async enqueue(
@@ -95,6 +97,13 @@ export class OutboxService {
 
   private async publish(event: ClaimedOutboxEvent): Promise<void> {
     try {
+      await this.webhooks.fanout({
+        id: event.id,
+        organizationId: event.organization_id,
+        workspaceId: event.workspace_id,
+        eventType: event.event_type,
+        payload: event.payload,
+      });
       await this.redis.xadd(
         'sessions.events',
         'MAXLEN',

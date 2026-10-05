@@ -25,6 +25,21 @@ export class S3ObjectStoreService {
     );
   }
 
+  createUploadUrl(
+    objectKey: string,
+    expiresInSeconds: number,
+    now = new Date(),
+  ): string {
+    return this.createPresignedUrl(
+      'PUT',
+      objectKey,
+      expiresInSeconds,
+      {},
+      now,
+      true,
+    );
+  }
+
   createAttachmentUrl(
     objectKey: string,
     filename: string,
@@ -42,6 +57,71 @@ export class S3ObjectStoreService {
     );
   }
 
+  async headObject(
+    objectKey: string,
+  ): Promise<{ sizeBytes: number; contentType: string | null }> {
+    const url = this.createPresignedUrl('HEAD', objectKey, 60, {}, new Date(), false);
+    const response = await fetch(url, { method: 'HEAD' });
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      throw new Error(
+        `Object metadata lookup failed with ${response.status}${body ? `: ${body.slice(0, 500)}` : ''}`,
+      );
+    }
+    return {
+      sizeBytes: Number(response.headers.get('content-length') ?? '0'),
+      contentType: response.headers.get('content-type'),
+    };
+  }
+
+  async uploadObject(
+    objectKey: string,
+    bytes: Uint8Array,
+    contentType: string,
+  ): Promise<void> {
+    const url = this.createPresignedUrl('PUT', objectKey, 60, {}, new Date(), false);
+    const response = await fetch(url, {
+      method: 'PUT',
+      headers: { 'content-type': contentType },
+      body: Buffer.from(bytes),
+    });
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      throw new Error(
+        `Object upload failed with ${response.status}${body ? `: ${body.slice(0, 500)}` : ''}`,
+      );
+    }
+  }
+
+  async downloadObject(
+    objectKey: string,
+    maxBytes = 250_000_000,
+  ): Promise<Uint8Array> {
+    const url = this.createPresignedUrl('GET', objectKey, 60, {}, new Date(), false);
+    const response = await fetch(url);
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      throw new Error(
+        `Object download failed with ${response.status}${body ? `: ${body.slice(0, 500)}` : ''}`,
+      );
+    }
+
+    const declaredLength = Number(response.headers.get('content-length') ?? '0');
+    if (declaredLength > maxBytes) {
+      throw new Error(
+        `Object exceeds transcription source limit (${declaredLength} > ${maxBytes})`,
+      );
+    }
+
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (bytes.byteLength > maxBytes) {
+      throw new Error(
+        `Object exceeds transcription source limit (${bytes.byteLength} > ${maxBytes})`,
+      );
+    }
+    return bytes;
+  }
+
   async deleteObject(objectKey: string): Promise<void> {
     const url = this.createPresignedUrl('DELETE', objectKey, 60);
     const response = await fetch(url, { method: 'DELETE' });
@@ -54,15 +134,16 @@ export class S3ObjectStoreService {
   }
 
   createPresignedUrl(
-    method: 'GET' | 'DELETE',
+    method: 'GET' | 'DELETE' | 'PUT' | 'HEAD',
     objectKey: string,
     expiresInSeconds: number,
     extraQuery: Record<string, QueryValue> = {},
     now = new Date(),
+    usePublicEndpoint = true,
   ): string {
     const internalEndpoint = this.config.getOrThrow<string>('S3_ENDPOINT');
     const endpoint = new URL(
-      method === 'GET'
+      (method === 'GET' || method === 'PUT') && usePublicEndpoint
         ? this.config.get<string>('S3_PUBLIC_ENDPOINT', internalEndpoint)
         : internalEndpoint,
     );

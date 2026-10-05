@@ -1,19 +1,77 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { bootstrapAuthentication } from '../auth/dev-auth';
+
+export type SessionReaction = '👍' | '❤️' | '😂' | '👏' | '🎉' | '🙌';
+
+export interface SessionReactionEvent {
+  reactionId: string;
+  sessionId: string;
+  userId: string;
+  displayName: string;
+  reaction: SessionReaction;
+  occurredAt: string;
+}
+
+export interface WhiteboardCursorEvent {
+  sessionId: string;
+  userId: string;
+  displayName: string;
+  x: number;
+  y: number;
+  active: boolean;
+  occurredAt: string;
+}
+
+export interface SessionRealtimeController {
+  connected: boolean;
+  reactions: SessionReactionEvent[];
+  breakoutNotice: string | null;
+  whiteboardCursors: WhiteboardCursorEvent[];
+  sendReaction: (reaction: SessionReaction) => void;
+  sendWhiteboardCursor: (x: number, y: number, active?: boolean) => void;
+}
 
 function realtimeUrl(): string {
   const api = new URL(import.meta.env.VITE_API_URL);
   return `${api.origin}/realtime`;
 }
 
-export function useSessionRealtime(sessionId: string): void {
+export function useSessionRealtime(sessionId: string): SessionRealtimeController {
   const queryClient = useQueryClient();
+  const socketRef = useRef<Socket | null>(null);
+  const [connected, setConnected] = useState(false);
+  const [reactions, setReactions] = useState<SessionReactionEvent[]>([]);
+  const [breakoutNotice, setBreakoutNotice] = useState<string | null>(null);
+  const [whiteboardCursors, setWhiteboardCursors] = useState<
+    WhiteboardCursorEvent[]
+  >([]);
+
+  const sendReaction = useCallback(
+    (reaction: SessionReaction) => {
+      socketRef.current?.emit('reaction.send', { sessionId, reaction });
+    },
+    [sessionId],
+  );
+
+  const sendWhiteboardCursor = useCallback(
+    (x: number, y: number, active = true) => {
+      socketRef.current?.emit('whiteboard.cursor', {
+        sessionId,
+        x,
+        y,
+        active,
+      });
+    },
+    [sessionId],
+  );
 
   useEffect(() => {
     let disposed = false;
     let socket: Socket | undefined;
+    let heartbeatTimer: number | undefined;
+    const reactionTimers = new Set<number>();
 
     const connect = async () => {
       const token = await bootstrapAuthentication();
@@ -23,11 +81,38 @@ export function useSessionRealtime(sessionId: string): void {
         transports: ['websocket'],
         auth: { token },
       });
+      socketRef.current = socket;
+
       socket.on('connect', () => {
-        socket?.emit('session.join', { sessionId });
+        setConnected(true);
+        socket?.emit('session.join', { sessionId }, () => {
+          void queryClient.invalidateQueries({
+            queryKey: ['session-presence', sessionId],
+          });
+        });
+        heartbeatTimer = window.setInterval(() => {
+          socket?.emit('session.heartbeat', { sessionId });
+        }, 30_000);
+      });
+      socket.on('disconnect', () => {
+        setConnected(false);
       });
       socket.on('agenda.activated', () => {
         void queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+      });
+      socket.on('agenda.timer.updated', () => {
+        void queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+      });
+      socket.on('file.asset.updated', () => {
+        void queryClient.invalidateQueries({
+          queryKey: ['session-files', sessionId],
+        });
+      });
+      socket.on('presence.updated', (event: { sessionId: string }) => {
+        if (event.sessionId !== sessionId) return;
+        void queryClient.invalidateQueries({
+          queryKey: ['session-presence', sessionId],
+        });
       });
       socket.on('participant.joined', () => {
         void queryClient.invalidateQueries({ queryKey: ['session-presence', sessionId] });
@@ -57,6 +142,61 @@ export function useSessionRealtime(sessionId: string): void {
           void queryClient.invalidateQueries({ queryKey: ['questions', sessionId] });
         });
       }
+      socket.on('reaction.received', (event: SessionReactionEvent) => {
+        if (event.sessionId !== sessionId) return;
+        setReactions((current) => [...current.slice(-7), event]);
+        const timer = window.setTimeout(() => {
+          setReactions((current) =>
+            current.filter((reaction) => reaction.reactionId !== event.reactionId),
+          );
+          reactionTimers.delete(timer);
+        }, 2600);
+        reactionTimers.add(timer);
+      });
+      for (const eventName of [
+        'breakout.updated',
+        'breakout.opened',
+        'breakout.closed',
+        'breakout.assignment.updated',
+      ]) {
+        socket.on(eventName, () => {
+          void queryClient.invalidateQueries({ queryKey: ['breakouts', sessionId] });
+        });
+      }
+      socket.on(
+        'breakout.broadcast',
+        (event: { sessionId: string; message: string; sentByDisplayName: string }) => {
+          if (event.sessionId !== sessionId) return;
+          setBreakoutNotice(`${event.sentByDisplayName}: ${event.message}`);
+          window.setTimeout(() => setBreakoutNotice(null), 8000);
+        },
+      );
+      socket.on('whiteboard.updated', () => {
+        void queryClient.invalidateQueries({
+          queryKey: ['whiteboard', sessionId],
+        });
+      });
+      socket.on('whiteboard.cursor', (event: WhiteboardCursorEvent) => {
+        if (event.sessionId !== sessionId) return;
+        setWhiteboardCursors((current) => {
+          const next = current.filter((cursor) => cursor.userId !== event.userId);
+          return event.active ? [...next, event] : next;
+        });
+        window.setTimeout(() => {
+          setWhiteboardCursors((current) =>
+            current.filter(
+              (cursor) =>
+                cursor.userId !== event.userId ||
+                cursor.occurredAt !== event.occurredAt,
+            ),
+          );
+        }, 3000);
+      });
+      socket.on('media.moderation.updated', () => {
+        void queryClient.invalidateQueries({
+          queryKey: ['media-participants', sessionId],
+        });
+      });
       socket.on('memory.updated', () => {
         void queryClient.invalidateQueries({ queryKey: ['memory'] });
         void queryClient.invalidateQueries({
@@ -68,7 +208,21 @@ export function useSessionRealtime(sessionId: string): void {
     void connect();
     return () => {
       disposed = true;
+      setConnected(false);
+      socketRef.current = null;
+      if (heartbeatTimer !== undefined) window.clearInterval(heartbeatTimer);
       socket?.disconnect();
+      for (const timer of reactionTimers) window.clearTimeout(timer);
+      reactionTimers.clear();
     };
   }, [queryClient, sessionId]);
+
+  return {
+    connected,
+    reactions,
+    breakoutNotice,
+    whiteboardCursors,
+    sendReaction,
+    sendWhiteboardCursor,
+  };
 }

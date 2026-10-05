@@ -27,6 +27,8 @@ function createService(): CollaborationService {
     undefined as never,
     undefined as never,
     undefined as never,
+    undefined as never,
+    undefined as never,
   );
 }
 

@@ -13,6 +13,7 @@ import {
   QuestionStatus,
   SessionKind,
   SessionStatus,
+  UserStatus,
 } from "@prisma/client";
 import { AuditService } from "../audit/audit.service";
 import {
@@ -21,6 +22,8 @@ import {
   type Principal,
 } from "../common/auth/principal";
 import { TenantDatabaseService } from "../database/tenant-database.service";
+import { ENGAGEMENT_EVENT, EngagementService } from "../engagement/engagement.service";
+import { PresenceService } from "../infrastructure/presence.service";
 import { RealtimeEventsService } from "../infrastructure/realtime-events.service";
 import { OutboxService } from "../outbox/outbox.service";
 import { CreateChatMessageDto } from "./dto/create-chat-message.dto";
@@ -57,22 +60,50 @@ const VOTABLE_QUESTION_STATUSES: QuestionStatus[] = [
 export class CollaborationService {
   constructor(
     private readonly database: TenantDatabaseService,
+    private readonly engagement: EngagementService,
     private readonly audit: AuditService,
     private readonly outbox: OutboxService,
     private readonly realtime: RealtimeEventsService,
+    private readonly presence: PresenceService,
   ) {}
+
+  async listPresence(principal: Principal, sessionId: string) {
+    await this.database.run(principal, async (transaction) => {
+      await this.assertSessionExists(transaction, sessionId);
+    });
+    const participants = await this.presence.list(sessionId);
+    return participants.map((participant) => ({
+      ...participant,
+      isSelf: participant.userId === principal.userId,
+    }));
+  }
 
   async listChat(principal: Principal, sessionId: string) {
     return this.database.run(principal, async (transaction) => {
       await this.assertSessionExists(transaction, sessionId);
       const host = hasAnyRole(principal, HOST_ROLES);
+      const visibleChannels: Prisma.ChatMessageWhereInput[] = [
+        { channel: ChatChannel.EVERYONE },
+        {
+          channel: ChatChannel.PRIVATE,
+          OR: [
+            { authorUserId: principal.userId },
+            { recipientUserId: principal.userId },
+          ],
+        },
+      ];
+      if (host) visibleChannels.push({ channel: ChatChannel.HOSTS });
+
       return transaction.chatMessage.findMany({
         where: {
           sessionId,
           deletedAt: null,
-          ...(!host ? { channel: ChatChannel.EVERYONE } : {}),
+          OR: visibleChannels,
         },
-        include: { author: { select: { displayName: true, avatarUrl: true } } },
+        include: {
+          author: { select: { displayName: true, avatarUrl: true } },
+          recipient: { select: { id: true, displayName: true, avatarUrl: true } },
+        },
         orderBy: { createdAt: "asc" },
         take: 500,
       });
@@ -92,31 +123,96 @@ export class CollaborationService {
         "Only hosts can send messages to the host channel",
       );
     }
+
+    const privateMessage = input.channel === ChatChannel.PRIVATE;
+    if (privateMessage && !input.recipientUserId) {
+      throw new BadRequestException(
+        "A recipient is required for a private message",
+      );
+    }
+    if (!privateMessage && input.recipientUserId) {
+      throw new BadRequestException(
+        "Recipients can only be set for private messages",
+      );
+    }
+    if (input.recipientUserId === principal.userId) {
+      throw new BadRequestException("You cannot send a private message to yourself");
+    }
+
     const message = await this.database.run(principal, async (transaction) => {
       await this.assertSessionActive(transaction, sessionId);
+
+      if (privateMessage && input.recipientUserId) {
+        const membership = await transaction.workspaceMembership.findUnique({
+          where: {
+            workspaceId_userId: {
+              workspaceId: principal.workspaceId,
+              userId: input.recipientUserId,
+            },
+          },
+          include: { user: { select: { status: true } } },
+        });
+        if (!membership || membership.user.status !== UserStatus.ACTIVE) {
+          throw new NotFoundException(
+            "The private-message recipient is not an active workspace member",
+          );
+        }
+      }
+
       const created = await transaction.chatMessage.create({
         data: {
           organizationId: principal.organizationId,
           workspaceId: principal.workspaceId,
           sessionId,
           authorUserId: principal.userId,
+          recipientUserId:
+            privateMessage && input.recipientUserId
+              ? input.recipientUserId
+              : null,
           channel: input.channel,
           body: input.body.trim(),
         },
-        include: { author: { select: { displayName: true, avatarUrl: true } } },
+        include: {
+          author: { select: { displayName: true, avatarUrl: true } },
+          recipient: { select: { id: true, displayName: true, avatarUrl: true } },
+        },
+      });
+
+      await this.engagement.record(transaction, principal, {
+        sessionId,
+        eventType: ENGAGEMENT_EVENT.CHAT_MESSAGE_SENT,
+        sourceType: "chat_message",
+        sourceId: created.id,
+        properties: {
+          channel: created.channel,
+          private: privateMessage,
+        },
       });
       await this.outbox.enqueue(transaction, principal, {
         aggregateType: "chat_message",
         aggregateId: created.id,
         eventType: "chat.message.created",
-        payload: this.toJson(created),
+        payload: privateMessage
+          ? {
+              id: created.id,
+              sessionId,
+              channel: created.channel,
+              authorUserId: created.authorUserId,
+              recipientUserId: created.recipientUserId,
+              createdAt: created.createdAt.toISOString(),
+            }
+          : this.toJson(created),
       });
       return created;
     });
+
     this.realtime.publishSessionEvent({
       sessionId,
       eventName: "chat.message.created",
       payload: message,
+      ...(privateMessage && input.recipientUserId
+        ? { audienceUserIds: [principal.userId, input.recipientUserId] }
+        : {}),
     });
     return message;
   }
@@ -339,6 +435,17 @@ export class CollaborationService {
           textAnswer: input.textAnswer?.trim() || null,
         },
       });
+      await this.engagement.record(transaction, principal, {
+        sessionId,
+        eventType: ENGAGEMENT_EVENT.POLL_ANSWERED,
+        sourceType: "poll",
+        sourceId: pollId,
+        properties: {
+          pollType: poll.type,
+          selectedOptionCount: input.selectedOptionIds.length,
+          hasTextAnswer: Boolean(input.textAnswer?.trim()),
+        },
+      });
       await this.outbox.enqueue(transaction, principal, {
         aggregateType: "poll",
         aggregateId: pollId,
@@ -454,6 +561,16 @@ export class CollaborationService {
         },
         include: { _count: { select: { votes: true } } },
       });
+      await this.engagement.record(transaction, principal, {
+        sessionId,
+        eventType: ENGAGEMENT_EVENT.QUESTION_SUBMITTED,
+        sourceType: "question",
+        sourceId: created.id,
+        properties: {
+          anonymous: created.isAnonymous,
+          status: created.status,
+        },
+      });
       await this.outbox.enqueue(transaction, principal, {
         aggregateType: "question",
         aggregateId: created.id,
@@ -502,6 +619,16 @@ export class CollaborationService {
       }
       const voteCount = await transaction.questionVote.count({
         where: { questionId },
+      });
+      await this.engagement.record(transaction, principal, {
+        sessionId,
+        eventType: ENGAGEMENT_EVENT.QUESTION_VOTED,
+        sourceType: "question",
+        sourceId: questionId,
+        properties: {
+          voted: !existing,
+          voteCount,
+        },
       });
       return { questionId, voted: !existing, voteCount };
     });

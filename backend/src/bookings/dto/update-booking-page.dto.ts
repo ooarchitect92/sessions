@@ -5,7 +5,6 @@ import {
   IsArray,
   IsBoolean,
   IsInt,
-  IsObject,
   IsOptional,
   IsString,
   Length,
@@ -14,7 +13,10 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
-import { AvailabilityRuleDto } from './create-booking-page.dto';
+import {
+  AvailabilityRuleDto,
+  IntakeFieldDto,
+} from './create-booking-page.dto';
 
 export class UpdateBookingPageDto {
   @IsOptional()
@@ -73,8 +75,9 @@ export class UpdateBookingPageDto {
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(50)
-  @IsObject({ each: true })
-  intakeFields?: Record<string, unknown>[];
+  @ValidateNested({ each: true })
+  @Type(() => IntakeFieldDto)
+  intakeFields?: IntakeFieldDto[];
 
   @IsOptional()
   @IsBoolean()

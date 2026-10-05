@@ -32,6 +32,22 @@ import {
 } from "../auth/session";
 
 
+export interface ApiKeyRecord {
+  id: string;
+  name: string;
+  tokenPrefix: string;
+  scopes: Array<'read' | 'write'>;
+  lastUsedAt: string | null;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreatedApiKey extends ApiKeyRecord {
+  token: string;
+}
+
 export interface AuthPrincipal {
   userId: string;
   organizationId: string;
@@ -109,6 +125,62 @@ export interface WorkspaceMember {
   };
 }
 
+export interface CalendarConnectionRecord {
+  id: string;
+  userId: string;
+  provider: 'GOOGLE' | 'MICROSOFT';
+  status: 'ACTIVE' | 'REAUTH_REQUIRED' | 'ERROR' | 'REVOKED';
+  accountEmail: string | null;
+  scopes: string[];
+  calendarIds: string[];
+  lastSyncedAt: string | null;
+  lastError: string | null;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  busyBlockCount: number;
+  user: { id: string; displayName: string; email: string };
+}
+
+export type NotificationKind =
+  | 'BOOKING_CONFIRMATION'
+  | 'BOOKING_REMINDER_24H'
+  | 'BOOKING_REMINDER_1H'
+  | 'EVENT_REGISTRATION_CONFIRMATION'
+  | 'EVENT_REMINDER_24H'
+  | 'EVENT_REMINDER_1H';
+
+export interface NotificationTemplateRecord {
+  kind: NotificationKind;
+  custom: boolean;
+  id: string | null;
+  active: boolean;
+  version: number;
+  subjectTemplate: string;
+  textTemplate: string;
+  htmlTemplate: string | null;
+  updatedAt: string | null;
+}
+
+export interface NotificationDeliveryRecord {
+  id: string;
+  kind: NotificationKind;
+  sourceId: string;
+  recipientEmail: string;
+  recipientName: string | null;
+  subject: string;
+  status: 'PENDING' | 'DELIVERING' | 'RETRYING' | 'SENT' | 'FAILED' | 'CANCELLED';
+  provider: string | null;
+  providerMessageId: string | null;
+  attemptCount: number;
+  scheduledFor: string;
+  nextAttemptAt: string;
+  sentAt: string | null;
+  lastError: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface WorkspaceInvitation {
   id: string;
   email: string;
@@ -148,9 +220,163 @@ export interface AgendaItem {
   updatedAt: string;
 }
 
+export interface AgendaTemplateItem {
+  id: string;
+  position: number;
+  title: string;
+  durationSeconds: number;
+  type: AgendaItemType;
+  content: Record<string, unknown>;
+}
+
+export interface FileAssetRecord {
+  id: string;
+  sessionId: string | null;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  checksumSha256: string | null;
+  status:
+    | 'PENDING_UPLOAD'
+    | 'QUARANTINED'
+    | 'SCANNING'
+    | 'READY'
+    | 'REJECTED'
+    | 'FAILED'
+    | 'DELETED';
+  scanProvider: string | null;
+  scanResult: string | null;
+  scanAttempts: number;
+  lastScanError: string | null;
+  uploadedAt: string | null;
+  scannedAt: string | null;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FileUploadGrant {
+  file: FileAssetRecord;
+  upload: {
+    method: 'PUT';
+    url: string;
+    expiresAt: string;
+    contentType: string;
+  };
+}
+
+export interface FileDownloadGrant {
+  fileId: string;
+  filename: string;
+  mimeType: string;
+  expiresAt: string;
+  url: string;
+}
+
+export interface AgendaTemplateRecord {
+  id: string;
+  name: string;
+  description: string | null;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: { id: string; displayName: string };
+  items: AgendaTemplateItem[];
+}
+
 export interface SessionDetail extends Session {
   livekitRoomName: string;
   agendaItems: AgendaItem[];
+}
+
+export interface AgendaTimerState {
+  sessionId: string;
+  agendaItemId: string | null;
+  durationSeconds: number;
+  status: 'IDLE' | 'RUNNING' | 'PAUSED' | 'EXPIRED';
+  remainingSeconds: number;
+  endsAt: string | null;
+  startedAt: string | null;
+  serverTime: string;
+}
+
+export interface MediaParticipantTrack {
+  sid: string;
+  name: string;
+  muted: boolean;
+  type: number;
+  source: number;
+  kind: 'audio' | 'video';
+}
+
+export interface MediaParticipant {
+  identity: string;
+  name: string;
+  permission: {
+    canPublish: boolean;
+    canSubscribe: boolean;
+    canPublishData: boolean;
+  };
+  tracks: MediaParticipantTrack[];
+}
+
+export interface BreakoutAssignmentRecord {
+  id: string;
+  sessionId: string;
+  breakoutRoomId: string;
+  userId: string;
+  assignedAt: string;
+  joinedAt: string | null;
+  leftAt: string | null;
+  user?: {
+    id: string;
+    displayName: string;
+    email: string;
+    avatarUrl: string | null;
+  };
+  breakoutRoom?: BreakoutRoomRecord;
+}
+
+export interface BreakoutRoomRecord {
+  id: string;
+  sessionId: string;
+  name: string;
+  position: number;
+  status: 'DRAFT' | 'ACTIVE' | 'CLOSED';
+  openedAt: string | null;
+  closedAt: string | null;
+  assignments?: BreakoutAssignmentRecord[];
+}
+
+export interface BreakoutState {
+  sessionId: string;
+  canManage: boolean;
+  rooms: BreakoutRoomRecord[];
+  ownAssignment: (BreakoutAssignmentRecord & {
+    breakoutRoom: BreakoutRoomRecord;
+  }) | null;
+}
+
+export interface WhiteboardElementRecord {
+  id: string;
+  type: 'PEN' | 'RECT' | 'TEXT' | 'STICKY';
+  x: number;
+  y: number;
+  width?: number;
+  height?: number;
+  text?: string;
+  points?: Array<{ x: number; y: number }>;
+}
+
+export interface WhiteboardState {
+  sessionId: string;
+  whiteboardId: string;
+  snapshotVersion: number;
+  compactedThrough: number;
+  latestSequence: number;
+  snapshot: {
+    elements: WhiteboardElementRecord[];
+  };
 }
 
 export interface MediaToken {
@@ -160,8 +386,93 @@ export interface MediaToken {
   expiresAt: string;
 }
 
+export interface AgendaSuggestion {
+  title: string;
+  durationSeconds: number;
+  type: AgendaItemType;
+  notes: string;
+}
+
+export interface GeneratedAgenda {
+  sessionId: string;
+  provider: string;
+  model: string;
+  items: AgendaSuggestion[];
+}
+
+export interface AnalyticsDailyPoint {
+  date: string;
+  sessions: number;
+  registrations: number;
+  bookings: number;
+}
+
+export interface WorkspaceAnalyticsOverview {
+  range: { days: number; since: string; until: string };
+  sessions: {
+    total: number;
+    completed: number;
+    webinars: number;
+    scheduledMinutes: number;
+  };
+  events: {
+    registrations: number;
+    attended: number;
+    noShows: number;
+    waitlisted: number;
+  };
+  bookings: {
+    total: number;
+    confirmed: number;
+    cancelled: number;
+    completed: number;
+  };
+  attendance: {
+    participantSessions: number;
+    intervalCount: number;
+    totalSeconds: number;
+  };
+  engagement: {
+    chatMessages: number;
+    pollAnswers: number;
+    questions: number;
+    totalActions: number;
+    unifiedEventCount: number;
+    byType: Record<string, number>;
+  };
+  memory: {
+    readyRecordings: number;
+    readySummaries: number;
+  };
+  daily: AnalyticsDailyPoint[];
+}
+
+export interface AnalyticsCsvExport {
+  filename: string;
+  contentType: string;
+  content: string;
+}
+
+export type EventStageRole = 'ORGANIZER' | 'HOST' | 'COHOST' | 'SPEAKER';
+
+export interface EventSpeakerRecord {
+  id: string;
+  eventId: string;
+  userId: string | null;
+  role: EventStageRole;
+  position: number;
+  displayName: string;
+  email: string | null;
+  title: string | null;
+  bio: string | null;
+  avatarUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface EventRecord extends PlatformEvent {
-  _count?: { registrations: number };
+  speakers?: EventSpeakerRecord[];
+  _count?: { registrations: number; speakers?: number };
 }
 
 export interface BookingPageRecord extends BookingPage {
@@ -209,6 +520,7 @@ export interface TranscriptRecord {
   id: string;
   sessionId: string;
   status: ArtifactStatus;
+  version: number;
   language: string | null;
   fullText?: string | null;
   completedAt: string | null;
@@ -222,6 +534,20 @@ export interface TranscriptRecord {
   }>;
 }
 
+export interface TranscriptRevisionRecord {
+  id: string;
+  transcriptVersion: number;
+  editedByUserId: string;
+  reason: string | null;
+  createdAt: string;
+}
+
+export interface MemoryActionItemRecord {
+  title: string;
+  owner: string | null;
+  dueDate: string | null;
+}
+
 export interface MemorySummaryRecord {
   id: string;
   sessionId: string;
@@ -229,10 +555,22 @@ export interface MemorySummaryRecord {
   provider: string | null;
   model: string | null;
   summaryText: string | null;
-  decisions: unknown[];
-  actionItems: unknown[];
+  decisions: string[];
+  actionItems: MemoryActionItemRecord[];
   citations: unknown[];
+  reviewedAt: string | null;
+  reviewedByUserId: string | null;
+  reviewNote: string | null;
+  version: number;
   failureCode: string | null;
+}
+
+export interface MemorySummaryRevisionRecord {
+  id: string;
+  summaryVersion: number;
+  editedByUserId: string;
+  reviewNote: string | null;
+  createdAt: string;
 }
 
 export interface MemoryListItem extends Session {
@@ -251,16 +589,31 @@ export interface MemoryDetail extends SessionDetail {
   questions: QuestionRecord[];
 }
 
+export interface SessionPresenceParticipant {
+  userId: string;
+  displayName: string;
+  roles: string[];
+  joinedAt: string;
+  lastSeenAt: string;
+  isSelf: boolean;
+}
+
 export interface ChatMessageRecord {
   id: string;
   sessionId: string;
   authorUserId: string;
+  recipientUserId: string | null;
   channel: ChatChannel;
   body: string;
   editedAt: string | null;
   deletedAt: string | null;
   createdAt: string;
   author: { displayName: string; avatarUrl: string | null };
+  recipient: {
+    id: string;
+    displayName: string;
+    avatarUrl: string | null;
+  } | null;
 }
 
 export interface PollOptionRecord {
@@ -374,6 +727,27 @@ function publicRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
+  listApiKeys(): Promise<ApiKeyRecord[]> {
+    return request<ApiKeyRecord[]>('/api-keys');
+  },
+
+  createApiKey(input: {
+    name: string;
+    scopes: Array<'read' | 'write'>;
+    expiresInDays?: number;
+  }): Promise<CreatedApiKey> {
+    return request<CreatedApiKey>('/api-keys', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  revokeApiKey(id: string): Promise<{ id: string; revoked: true }> {
+    return request<{ id: string; revoked: true }>(`/api-keys/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
   signUp(input: {
     email: string;
     displayName: string;
@@ -532,6 +906,86 @@ export const api = {
     });
   },
 
+  listCalendarConnections(): Promise<CalendarConnectionRecord[]> {
+    return request<CalendarConnectionRecord[]>('/integrations/calendars');
+  },
+
+  startCalendarOauth(
+    provider: 'google' | 'microsoft',
+  ): Promise<{
+    provider: 'GOOGLE' | 'MICROSOFT';
+    authorizationUrl: string;
+    expiresIn: number;
+  }> {
+    return request(`/integrations/calendars/${provider}/oauth/start`, {
+      method: 'POST',
+    });
+  },
+
+  syncCalendarConnection(
+    id: string,
+  ): Promise<{
+    id: string;
+    provider: 'GOOGLE' | 'MICROSOFT';
+    status: 'ACTIVE';
+    busyBlockCount: number;
+    lastSyncedAt: string;
+  }> {
+    return request(`/integrations/calendars/${id}/sync`, {
+      method: 'POST',
+    });
+  },
+
+  disconnectCalendarConnection(
+    id: string,
+  ): Promise<{
+    id: string;
+    provider: 'GOOGLE' | 'MICROSOFT';
+    status: 'REVOKED';
+  }> {
+    return request(`/integrations/calendars/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  listNotificationTemplates(): Promise<NotificationTemplateRecord[]> {
+    return request<NotificationTemplateRecord[]>('/notifications/templates');
+  },
+
+  saveNotificationTemplate(input: {
+    kind: NotificationKind;
+    subjectTemplate: string;
+    textTemplate: string;
+    htmlTemplate?: string | null;
+    active?: boolean;
+  }): Promise<NotificationTemplateRecord> {
+    return request<NotificationTemplateRecord>('/notifications/templates', {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    });
+  },
+
+  resetNotificationTemplate(
+    kind: NotificationKind,
+  ): Promise<{ kind: NotificationKind; reset: true }> {
+    return request(`/notifications/templates/${encodeURIComponent(kind)}`, {
+      method: 'DELETE',
+    });
+  },
+
+  listNotificationDeliveries(limit = 100): Promise<NotificationDeliveryRecord[]> {
+    return request<NotificationDeliveryRecord[]>(
+      `/notifications/deliveries?limit=${encodeURIComponent(String(limit))}`,
+    );
+  },
+
+  retryNotificationDelivery(id: string): Promise<NotificationDeliveryRecord> {
+    return request<NotificationDeliveryRecord>(
+      `/notifications/deliveries/${id}/retry`,
+      { method: 'PATCH' },
+    );
+  },
+
   listWorkspaceMembers(): Promise<WorkspaceMember[]> {
     return request('/workspaces/current/members');
   },
@@ -635,6 +1089,126 @@ export const api = {
     });
   },
 
+  generateAgenda(
+    sessionId: string,
+    input: { objective: string; desiredItems: number },
+  ): Promise<GeneratedAgenda> {
+    return request<GeneratedAgenda>(`/sessions/${sessionId}/agenda-items/generate`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+
+  async uploadSessionFile(
+    sessionId: string,
+    file: File,
+  ): Promise<FileAssetRecord> {
+    const grant = await request<FileUploadGrant>(
+      `/sessions/${sessionId}/files/uploads`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          filename: file.name,
+          mimeType: file.type || 'application/octet-stream',
+          sizeBytes: file.size,
+        }),
+      },
+    );
+
+    const uploadResponse = await fetch(grant.upload.url, {
+      method: grant.upload.method,
+      headers: { 'content-type': grant.upload.contentType },
+      body: file,
+    });
+    if (!uploadResponse.ok) {
+      throw new Error(
+        `File upload failed with status ${uploadResponse.status}`,
+      );
+    }
+
+    return request<FileAssetRecord>(`/files/${grant.file.id}/complete`, {
+      method: 'POST',
+    });
+  },
+
+  listSessionFiles(sessionId: string): Promise<FileAssetRecord[]> {
+    return request<FileAssetRecord[]>(`/sessions/${sessionId}/files`);
+  },
+
+  createFileDownloadGrant(fileId: string): Promise<FileDownloadGrant> {
+    return request<FileDownloadGrant>(`/files/${fileId}/download`);
+  },
+
+  deleteFileAsset(fileId: string): Promise<{ id: string; deleted: true }> {
+    return request<{ id: string; deleted: true }>(`/files/${fileId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  listAgendaTemplates(): Promise<AgendaTemplateRecord[]> {
+    return request<AgendaTemplateRecord[]>('/agenda-templates');
+  },
+
+  saveAgendaTemplate(
+    sessionId: string,
+    input: { name: string; description?: string },
+  ): Promise<AgendaTemplateRecord> {
+    return request<AgendaTemplateRecord>(`/sessions/${sessionId}/agenda-templates`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  updateAgendaTemplate(
+    templateId: string,
+    version: number,
+    input: { name?: string; description?: string },
+  ): Promise<AgendaTemplateRecord> {
+    return request<AgendaTemplateRecord>(`/agenda-templates/${templateId}`, {
+      method: 'PATCH',
+      headers: { 'if-match': String(version) },
+      body: JSON.stringify(input),
+    });
+  },
+
+  deleteAgendaTemplate(
+    templateId: string,
+    version: number,
+  ): Promise<{ id: string }> {
+    return request<{ id: string }>(`/agenda-templates/${templateId}`, {
+      method: 'DELETE',
+      headers: { 'if-match': String(version) },
+    });
+  },
+
+  applyAgendaTemplate(
+    sessionId: string,
+    templateId: string,
+  ): Promise<{
+    sessionId: string;
+    agendaTemplateId: string;
+    appendedItemCount: number;
+    agendaItems: AgendaItem[];
+  }> {
+    return request(`/sessions/${sessionId}/agenda-templates/${templateId}/apply`, {
+      method: 'POST',
+    });
+  },
+
+  getAgendaTimer(sessionId: string): Promise<AgendaTimerState> {
+    return request<AgendaTimerState>(`/sessions/${sessionId}/agenda-items/timer`);
+  },
+
+  controlAgendaTimer(
+    sessionId: string,
+    action: 'START' | 'PAUSE' | 'RESET',
+  ): Promise<AgendaTimerState> {
+    return request<AgendaTimerState>(`/sessions/${sessionId}/agenda-items/timer`, {
+      method: 'POST',
+      body: JSON.stringify({ action }),
+    });
+  },
+
   activateAgendaItem(sessionId: string, agendaItemId: string) {
     return request<{
       sessionId: string;
@@ -675,6 +1249,168 @@ export const api = {
     });
   },
 
+  getWhiteboardState(sessionId: string): Promise<WhiteboardState> {
+    return request<WhiteboardState>(`/sessions/${sessionId}/whiteboard`);
+  },
+
+  applyWhiteboardOperation(
+    sessionId: string,
+    input: {
+      operationId: string;
+      type: 'UPSERT_ELEMENT' | 'DELETE_ELEMENT' | 'CLEAR';
+      payload: Record<string, unknown>;
+    },
+  ): Promise<{
+    sessionId: string;
+    whiteboardId: string;
+    operationId: string;
+    sequence: number;
+    compacted: boolean;
+    duplicate: boolean;
+  }> {
+    return request(`/sessions/${sessionId}/whiteboard/operations`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  getBreakoutState(sessionId: string): Promise<BreakoutState> {
+    return request<BreakoutState>(`/sessions/${sessionId}/breakouts`);
+  },
+
+  createBreakoutRooms(
+    sessionId: string,
+    names: string[],
+  ): Promise<BreakoutRoomRecord[]> {
+    return request<BreakoutRoomRecord[]>(`/sessions/${sessionId}/breakouts`, {
+      method: 'POST',
+      body: JSON.stringify({ rooms: names.map((name) => ({ name })) }),
+    });
+  },
+
+  randomizeBreakoutAssignments(
+    sessionId: string,
+    includeHosts = false,
+  ): Promise<BreakoutAssignmentRecord[]> {
+    return request<BreakoutAssignmentRecord[]>(
+      `/sessions/${sessionId}/breakouts/assignments/randomize`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ includeHosts }),
+      },
+    );
+  },
+
+  assignBreakoutParticipant(
+    sessionId: string,
+    userId: string,
+    breakoutRoomId: string,
+  ): Promise<BreakoutAssignmentRecord> {
+    return request<BreakoutAssignmentRecord>(
+      `/sessions/${sessionId}/breakouts/assignments`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ userId, breakoutRoomId }),
+      },
+    );
+  },
+
+  openBreakouts(sessionId: string): Promise<BreakoutState> {
+    return request<BreakoutState>(`/sessions/${sessionId}/breakouts/open`, {
+      method: 'POST',
+    });
+  },
+
+  closeBreakouts(
+    sessionId: string,
+  ): Promise<{ sessionId: string; closedAt: string; roomCount: number }> {
+    return request(`/sessions/${sessionId}/breakouts/close`, {
+      method: 'POST',
+    });
+  },
+
+  broadcastBreakoutMessage(
+    sessionId: string,
+    message: string,
+  ): Promise<{
+    sessionId: string;
+    message: string;
+    sentByUserId: string;
+    sentByDisplayName: string;
+    sentAt: string;
+  }> {
+    return request(`/sessions/${sessionId}/breakouts/broadcast`, {
+      method: 'POST',
+      body: JSON.stringify({ message }),
+    });
+  },
+
+  createBreakoutMediaToken(
+    sessionId: string,
+    breakoutRoomId: string,
+  ): Promise<MediaToken> {
+    return request<MediaToken>(
+      `/sessions/${sessionId}/breakouts/${breakoutRoomId}/media-token`,
+      { method: 'POST' },
+    );
+  },
+
+  listMediaParticipants(sessionId: string): Promise<MediaParticipant[]> {
+    return request<MediaParticipant[]>(`/sessions/${sessionId}/media/participants`);
+  },
+
+  muteMediaTrack(
+    sessionId: string,
+    participantId: string,
+    trackSid: string,
+    muted: boolean,
+  ) {
+    return request(
+      `/sessions/${sessionId}/media/participants/${participantId}/tracks/${trackSid}/mute`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ muted }),
+      },
+    );
+  },
+
+  setMediaPublishPermission(
+    sessionId: string,
+    participantId: string,
+    canPublish: boolean,
+  ): Promise<MediaParticipant> {
+    return request<MediaParticipant>(
+      `/sessions/${sessionId}/media/participants/${participantId}/permissions`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ canPublish }),
+      },
+    );
+  },
+
+  removeMediaParticipant(
+    sessionId: string,
+    participantId: string,
+  ): Promise<{
+    sessionId: string;
+    participantId: string;
+    rejoinBlockedUntil: string;
+  }> {
+    return request(`/sessions/${sessionId}/media/participants/${participantId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  allowMediaRejoin(
+    sessionId: string,
+    participantId: string,
+  ): Promise<{ sessionId: string; participantId: string; rejoinAllowed: true }> {
+    return request(
+      `/sessions/${sessionId}/media/participants/${participantId}/allow-rejoin`,
+      { method: 'POST' },
+    );
+  },
+
   createRecordingPlaybackGrant(
     sessionId: string,
     disposition: "inline" | "attachment" = "inline",
@@ -700,6 +1436,18 @@ export const api = {
     return request(`/recordings/${sessionId}`, { method: "DELETE" });
   },
 
+  getAnalyticsOverview(days = 30): Promise<WorkspaceAnalyticsOverview> {
+    return request<WorkspaceAnalyticsOverview>(
+      `/analytics/overview?days=${encodeURIComponent(String(days))}`,
+    );
+  },
+
+  exportAnalytics(days = 30): Promise<AnalyticsCsvExport> {
+    return request<AnalyticsCsvExport>(
+      `/analytics/export?days=${encodeURIComponent(String(days))}`,
+    );
+  },
+
   listEvents(): Promise<EventRecord[]> {
     return request<EventRecord[]>("/events");
   },
@@ -709,6 +1457,59 @@ export const api = {
       method: "POST",
       headers: { "idempotency-key": crypto.randomUUID() },
       body: JSON.stringify(input),
+    });
+  },
+
+  listEventSpeakers(eventId: string): Promise<EventSpeakerRecord[]> {
+    return request<EventSpeakerRecord[]>(`/events/${eventId}/speakers`);
+  },
+
+  createEventSpeaker(
+    eventId: string,
+    input: {
+      userId?: string;
+      role: EventStageRole;
+      displayName: string;
+      email?: string;
+      title?: string;
+      bio?: string;
+      avatarUrl?: string;
+    },
+  ): Promise<EventSpeakerRecord> {
+    return request<EventSpeakerRecord>(`/events/${eventId}/speakers`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  updateEventSpeaker(
+    eventId: string,
+    speakerId: string,
+    input: Partial<{
+      userId: string | null;
+      role: EventStageRole;
+      displayName: string;
+      email: string | null;
+      title: string | null;
+      bio: string | null;
+      avatarUrl: string | null;
+    }>,
+  ): Promise<EventSpeakerRecord> {
+    return request<EventSpeakerRecord>(
+      `/events/${eventId}/speakers/${speakerId}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(input),
+      },
+    );
+  },
+
+  deleteEventSpeaker(
+    eventId: string,
+    speakerId: string,
+  ): Promise<{ id: string; deleted: true }> {
+    return request(`/events/${eventId}/speakers/${speakerId}`, {
+      method: 'DELETE',
     });
   },
 
@@ -759,6 +1560,54 @@ export const api = {
     return request<MemoryDetail>(`/memory/${sessionId}`);
   },
 
+  listMemorySummaryRevisions(
+    sessionId: string,
+  ): Promise<MemorySummaryRevisionRecord[]> {
+    return request<MemorySummaryRevisionRecord[]>(
+      `/memory/${sessionId}/summary/revisions`,
+    );
+  },
+
+  updateMemorySummary(
+    sessionId: string,
+    input: {
+      summaryText: string;
+      decisions: string[];
+      actionItems: MemoryActionItemRecord[];
+      reviewNote?: string;
+    },
+  ): Promise<MemorySummaryRecord> {
+    return request<MemorySummaryRecord>(`/memory/${sessionId}/summary`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
+  },
+
+  listTranscriptRevisions(sessionId: string): Promise<TranscriptRevisionRecord[]> {
+    return request<TranscriptRevisionRecord[]>(
+      `/transcripts/${sessionId}/revisions`,
+    );
+  },
+
+  updateTranscript(
+    sessionId: string,
+    input: {
+      reason?: string;
+      segments: Array<{
+        position: number;
+        startMs: number;
+        endMs: number;
+        speakerLabel?: string | null;
+        text: string;
+      }>;
+    },
+  ): Promise<TranscriptRecord> {
+    return request<TranscriptRecord>(`/transcripts/${sessionId}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
+  },
+
   retryMemory(
     sessionId: string,
   ): Promise<{ sessionId: string; retried: string[] }> {
@@ -770,13 +1619,17 @@ export const api = {
     );
   },
 
+  listSessionPresence(sessionId: string): Promise<SessionPresenceParticipant[]> {
+    return request<SessionPresenceParticipant[]>(`/sessions/${sessionId}/presence`);
+  },
+
   listChat(sessionId: string): Promise<ChatMessageRecord[]> {
     return request<ChatMessageRecord[]>(`/sessions/${sessionId}/chat-messages`);
   },
 
   createChat(
     sessionId: string,
-    input: { channel: ChatChannel; body: string },
+    input: { channel: ChatChannel; body: string; recipientUserId?: string },
   ): Promise<ChatMessageRecord> {
     return request<ChatMessageRecord>(`/sessions/${sessionId}/chat-messages`, {
       method: "POST",

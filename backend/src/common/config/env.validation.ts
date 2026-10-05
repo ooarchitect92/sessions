@@ -17,6 +17,18 @@ const environmentSchema = z
     DATABASE_URL: z.string().min(1),
     WORKER_DATABASE_URL: z.string().min(1).optional(),
     REDIS_URL: z.string().min(1),
+    RATE_LIMIT_ENABLED: optionalBoolean.default(true),
+    RATE_LIMIT_FAIL_OPEN: optionalBoolean.default(true),
+    RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().min(1).max(3600).default(60),
+    RATE_LIMIT_PUBLIC_MAX: z.coerce.number().int().min(1).max(100000).default(120),
+    RATE_LIMIT_AUTH_WRITE_MAX: z.coerce.number().int().min(1).max(100000).default(20),
+    RATE_LIMIT_AUTHENTICATED_MAX: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(100000)
+      .default(240),
+    RATE_LIMIT_API_KEY_MAX: z.coerce.number().int().min(1).max(100000).default(600),
     AUTH_MODE: z.enum(['development', 'local', 'oidc']).default('development'),
     AUTH_REQUIRE_EMAIL_VERIFICATION: optionalBoolean.default(false),
     ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().min(300).max(3600).default(900),
@@ -51,9 +63,103 @@ const environmentSchema = z
     S3_ACCESS_KEY: z.string().min(1),
     S3_SECRET_KEY: z.string().min(1),
     S3_FORCE_PATH_STYLE: optionalBoolean.default(true),
+    FILE_UPLOAD_MAX_BYTES: z.coerce.number().int().min(1_000_000).max(250_000_000).default(52_428_800),
+    FILE_UPLOAD_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(900),
+    FILE_DOWNLOAD_TTL_SECONDS: z.coerce.number().int().min(30).max(3600).default(300),
+    FILE_SCAN_ENABLED: optionalBoolean.default(false),
+    FILE_SCAN_HOST: z.string().min(1).max(255).default('127.0.0.1'),
+    FILE_SCAN_PORT: z.coerce.number().int().min(1).max(65535).default(3310),
+    FILE_SCAN_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120000).default(15000),
+    FILE_SCAN_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(3),
+    CALENDAR_INTEGRATIONS_ENABLED: optionalBoolean.default(false),
+    CALENDAR_SYNC_HORIZON_DAYS: z.coerce.number().int().min(7).max(365).default(60),
+    CALENDAR_BUSY_MAX_AGE_SECONDS: z.coerce.number().int().min(30).max(3600).default(300),
+    CALENDAR_OAUTH_SUCCESS_URL: z.string().url().default('http://localhost:3000/settings?tab=integrations'),
+    PUBLIC_WEBSITE_URL: z.string().url().default('http://localhost:3001'),
+    EMAIL_DELIVERY_ENABLED: optionalBoolean.default(false),
+    EMAIL_PROVIDER: z.enum(['console', 'resend']).default('console'),
+    EMAIL_FROM: z.string().min(3).max(320).default('Sessions <notifications@example.com>'),
+    EMAIL_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(10000),
+    EMAIL_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(6),
+    RESEND_API_KEY: z.string().min(1).optional(),
+    GOOGLE_CALENDAR_CLIENT_ID: z.string().min(1).optional(),
+    GOOGLE_CALENDAR_CLIENT_SECRET: z.string().min(1).optional(),
+    GOOGLE_CALENDAR_REDIRECT_URI: z.string().url().optional(),
+    MICROSOFT_CALENDAR_CLIENT_ID: z.string().min(1).optional(),
+    MICROSOFT_CALENDAR_CLIENT_SECRET: z.string().min(1).optional(),
+    MICROSOFT_CALENDAR_REDIRECT_URI: z.string().url().optional(),
+    MICROSOFT_CALENDAR_TENANT: z.string().min(1).max(200).default('common'),
+    TRANSCRIPTION_WORKER_ENABLED: optionalBoolean.default(false),
+    TRANSCRIPTION_MAX_SOURCE_BYTES: z.coerce
+      .number()
+      .int()
+      .min(1_000_000)
+      .max(2_000_000_000)
+      .default(250_000_000),
+    STT_PROVIDER: z.enum(['openai-compatible']).default('openai-compatible'),
+    STT_BASE_URL: z.string().url().default('https://api.openai.com/v1'),
+    STT_MODEL: z.string().min(1).max(160).default('whisper-1'),
+    STT_API_KEY: z.string().min(1).optional(),
+    AI_WORKER_ENABLED: optionalBoolean.default(false),
+    AI_PROVIDER: z.enum(['openai-compatible']).default('openai-compatible'),
+    AI_BASE_URL: z.string().url().default('https://api.openai.com/v1'),
+    AI_MODEL: z.string().min(1).max(160).default('gpt-4.1-mini'),
+    AI_API_KEY: z.string().min(1).optional(),
+    AI_MAX_TRANSCRIPT_CHARS: z.coerce
+      .number()
+      .int()
+      .min(1_000)
+      .max(2_000_000)
+      .default(120_000),
+    WEBHOOK_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(8),
+    WEBHOOK_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(10000),
     OUTBOX_POLL_MS: z.coerce.number().int().min(250).max(60000).default(1000),
   })
   .superRefine((value, context) => {
+    if (value.TRANSCRIPTION_WORKER_ENABLED && !value.STT_API_KEY) {
+      context.addIssue({
+        code: 'custom',
+        path: ['STT_API_KEY'],
+        message: 'STT_API_KEY is required when TRANSCRIPTION_WORKER_ENABLED=true',
+      });
+    }
+    if (value.AI_WORKER_ENABLED && !value.AI_API_KEY) {
+      context.addIssue({
+        code: 'custom',
+        path: ['AI_API_KEY'],
+        message: 'AI_API_KEY is required when AI_WORKER_ENABLED=true',
+      });
+    }
+
+    if (
+      value.EMAIL_DELIVERY_ENABLED &&
+      value.EMAIL_PROVIDER === 'resend' &&
+      !value.RESEND_API_KEY
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['RESEND_API_KEY'],
+        message: 'RESEND_API_KEY is required when Resend email delivery is enabled',
+      });
+    }
+
+    if (value.CALENDAR_INTEGRATIONS_ENABLED) {
+      const googleConfigured =
+        Boolean(value.GOOGLE_CALENDAR_CLIENT_ID) &&
+        Boolean(value.GOOGLE_CALENDAR_CLIENT_SECRET);
+      const microsoftConfigured =
+        Boolean(value.MICROSOFT_CALENDAR_CLIENT_ID) &&
+        Boolean(value.MICROSOFT_CALENDAR_CLIENT_SECRET);
+      if (!googleConfigured && !microsoftConfigured) {
+        context.addIssue({
+          code: 'custom',
+          path: ['CALENDAR_INTEGRATIONS_ENABLED'],
+          message:
+            'At least one Google or Microsoft calendar OAuth client must be configured',
+        });
+      }
+    }
+
     if (value.NODE_ENV !== 'production') return;
 
     const productionIssue = (path: keyof typeof value, message: string) => {
@@ -124,6 +230,57 @@ const environmentSchema = z
       productionIssue(
         'S3_PUBLIC_ENDPOINT',
         'S3_PUBLIC_ENDPOINT must use HTTPS in production',
+      );
+    }
+    if (!value.PUBLIC_WEBSITE_URL.startsWith('https://')) {
+      productionIssue(
+        'PUBLIC_WEBSITE_URL',
+        'PUBLIC_WEBSITE_URL must use HTTPS in production',
+      );
+    }
+    if (
+      value.EMAIL_DELIVERY_ENABLED &&
+      value.EMAIL_PROVIDER === 'console'
+    ) {
+      productionIssue(
+        'EMAIL_PROVIDER',
+        'Console email delivery cannot be enabled in production',
+      );
+    }
+    if (
+      value.CALENDAR_INTEGRATIONS_ENABLED &&
+      !value.CALENDAR_OAUTH_SUCCESS_URL.startsWith('https://')
+    ) {
+      productionIssue(
+        'CALENDAR_OAUTH_SUCCESS_URL',
+        'CALENDAR_OAUTH_SUCCESS_URL must use HTTPS in production',
+      );
+    }
+    for (const [path, redirectUri] of [
+      ['GOOGLE_CALENDAR_REDIRECT_URI', value.GOOGLE_CALENDAR_REDIRECT_URI],
+      ['MICROSOFT_CALENDAR_REDIRECT_URI', value.MICROSOFT_CALENDAR_REDIRECT_URI],
+    ] as const) {
+      if (
+        value.CALENDAR_INTEGRATIONS_ENABLED &&
+        redirectUri &&
+        !redirectUri.startsWith('https://')
+      ) {
+        productionIssue(path, `${path} must use HTTPS in production`);
+      }
+    }
+    if (
+      value.TRANSCRIPTION_WORKER_ENABLED &&
+      !value.STT_BASE_URL.startsWith('https://')
+    ) {
+      productionIssue(
+        'STT_BASE_URL',
+        'STT_BASE_URL must use HTTPS in production when transcription is enabled',
+      );
+    }
+    if (value.AI_WORKER_ENABLED && !value.AI_BASE_URL.startsWith('https://')) {
+      productionIssue(
+        'AI_BASE_URL',
+        'AI_BASE_URL must use HTTPS in production when AI generation is enabled',
       );
     }
   });

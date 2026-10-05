@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import {
+  EventStageRole,
   EventStatus,
   Prisma,
   RegistrationStatus,
@@ -25,8 +26,16 @@ import { TenantDatabaseService } from "../database/tenant-database.service";
 import { WorkerPrismaService } from "../database/worker-prisma.service";
 import { OutboxService } from "../outbox/outbox.service";
 import { CreateEventDto } from "./dto/create-event.dto";
+import { CreateEventSpeakerDto } from "./dto/create-event-speaker.dto";
+import type { EventRegistrationFieldDto } from "./dto/event-registration-field.dto";
 import { RegisterEventDto } from "./dto/register-event.dto";
 import { UpdateEventDto } from "./dto/update-event.dto";
+import { UpdateEventSpeakerDto } from "./dto/update-event-speaker.dto";
+import {
+  normalizeRegistrationAnswers,
+  normalizeRegistrationFields,
+  type NormalizedEventRegistrationField,
+} from "./event-registration-form";
 
 const PUBLIC_EVENT_STATUSES: EventStatus[] = [
   EventStatus.PUBLISHED,
@@ -54,8 +63,14 @@ export class EventsService {
   ): Promise<Event | Prisma.JsonObject> {
     this.assertHost(principal);
     this.assertTimeZone(input.timezone);
+    const registrationFields = normalizeRegistrationFields(input.registrationFields);
     const requestHash = createHash("sha256")
-      .update(JSON.stringify({ operation: "event.create", input }))
+      .update(
+        JSON.stringify({
+          operation: "event.create",
+          input: { ...input, registrationFields },
+        }),
+      )
       .digest("hex");
 
     return this.database.run(principal, async (transaction) => {
@@ -102,7 +117,8 @@ export class EventsService {
           durationMinutes: input.durationMinutes,
           timezone: input.timezone,
           capacity: input.capacity ?? null,
-          registrationFields: input.registrationFields as Prisma.InputJsonValue,
+          registrationFields:
+            registrationFields as unknown as Prisma.InputJsonValue,
           branding: input.branding as Prisma.InputJsonValue,
         },
       });
@@ -138,7 +154,10 @@ export class EventsService {
     return this.database.run(principal, (transaction) =>
       transaction.event.findMany({
         orderBy: [{ startsAt: "asc" }, { createdAt: "desc" }],
-        include: { _count: { select: { registrations: true } } },
+        include: {
+          speakers: { orderBy: { position: "asc" } },
+          _count: { select: { registrations: true, speakers: true } },
+        },
       }),
     );
   }
@@ -149,7 +168,8 @@ export class EventsService {
         where: { id },
         include: {
           session: true,
-          _count: { select: { registrations: true } },
+          speakers: { orderBy: { position: "asc" } },
+          _count: { select: { registrations: true, speakers: true } },
         },
       });
       if (!event) throw new NotFoundException("Event not found");
@@ -170,6 +190,10 @@ export class EventsService {
       );
     }
     if (input.timezone !== undefined) this.assertTimeZone(input.timezone);
+    const registrationFields =
+      input.registrationFields !== undefined
+        ? normalizeRegistrationFields(input.registrationFields)
+        : undefined;
 
     return this.database.run(principal, async (transaction) => {
       if (input.slug !== undefined) {
@@ -202,10 +226,10 @@ export class EventsService {
             : {}),
           ...(input.timezone !== undefined ? { timezone: input.timezone } : {}),
           ...(input.capacity !== undefined ? { capacity: input.capacity } : {}),
-          ...(input.registrationFields !== undefined
+          ...(registrationFields !== undefined
             ? {
                 registrationFields:
-                  input.registrationFields as Prisma.InputJsonValue,
+                  registrationFields as unknown as Prisma.InputJsonValue,
               }
             : {}),
           ...(input.branding !== undefined
@@ -253,6 +277,51 @@ export class EventsService {
         throw new ConflictException(
           `A ${event.status} event cannot be published`,
         );
+      }
+
+      const organizer = await transaction.eventSpeaker.findFirst({
+        where: { eventId: id, role: EventStageRole.ORGANIZER },
+        select: { id: true },
+      });
+      if (!organizer) {
+        const organizerEmail = principal.email.toLowerCase();
+        const existingProfile = await transaction.eventSpeaker.findFirst({
+          where: {
+            eventId: id,
+            OR: [
+              { userId: principal.userId },
+              { email: organizerEmail },
+            ],
+          },
+        });
+        if (existingProfile) {
+          await transaction.eventSpeaker.update({
+            where: { id: existingProfile.id },
+            data: {
+              userId: principal.userId,
+              role: EventStageRole.ORGANIZER,
+              displayName: principal.displayName,
+              email: organizerEmail,
+            },
+          });
+        } else {
+          const maxPosition = await transaction.eventSpeaker.aggregate({
+            where: { eventId: id },
+            _max: { position: true },
+          });
+          await transaction.eventSpeaker.create({
+            data: {
+              organizationId: principal.organizationId,
+              workspaceId: principal.workspaceId,
+              eventId: id,
+              userId: principal.userId,
+              role: EventStageRole.ORGANIZER,
+              position: (maxPosition._max.position ?? -1) + 1,
+              displayName: principal.displayName,
+              email: organizerEmail,
+            },
+          });
+        }
       }
 
       const sessionId = randomUUID();
@@ -352,6 +421,205 @@ export class EventsService {
     });
   }
 
+  async listSpeakers(principal: Principal, eventId: string) {
+    return this.database.run(principal, async (transaction) => {
+      const event = await transaction.event.findUnique({
+        where: { id: eventId },
+        select: { id: true },
+      });
+      if (!event) throw new NotFoundException("Event not found");
+      return transaction.eventSpeaker.findMany({
+        where: { eventId },
+        orderBy: { position: "asc" },
+      });
+    });
+  }
+
+  async createSpeaker(
+    principal: Principal,
+    eventId: string,
+    input: CreateEventSpeakerDto,
+  ) {
+    this.assertHost(principal);
+    return this.database.run(principal, async (transaction) => {
+      const event = await transaction.event.findUnique({
+        where: { id: eventId },
+        select: { id: true, status: true },
+      });
+      if (!event) throw new NotFoundException("Event not found");
+      if (TERMINAL_EVENT_STATUSES.includes(event.status)) {
+        throw new ConflictException(
+          `A ${event.status} event cannot change stage profiles`,
+        );
+      }
+
+      if (input.userId) {
+        const membership = await transaction.workspaceMembership.findUnique({
+          where: {
+            workspaceId_userId: {
+              workspaceId: principal.workspaceId,
+              userId: input.userId,
+            },
+          },
+          select: { id: true },
+        });
+        if (!membership) {
+          throw new BadRequestException(
+            "Linked speaker user must belong to the current workspace",
+          );
+        }
+      }
+
+      const maxPosition = await transaction.eventSpeaker.aggregate({
+        where: { eventId },
+        _max: { position: true },
+      });
+      const speaker = await transaction.eventSpeaker.create({
+        data: {
+          organizationId: principal.organizationId,
+          workspaceId: principal.workspaceId,
+          eventId,
+          ...(input.userId ? { userId: input.userId } : {}),
+          role: input.role,
+          position: (maxPosition._max.position ?? -1) + 1,
+          displayName: input.displayName.trim(),
+          email: input.email?.toLowerCase() ?? null,
+          title: input.title?.trim() || null,
+          bio: input.bio?.trim() || null,
+          avatarUrl: input.avatarUrl ?? null,
+        },
+      });
+
+      await this.audit.record(transaction, principal, {
+        action: "event.speaker.created",
+        resourceType: "event_speaker",
+        resourceId: speaker.id,
+        metadata: { eventId, role: speaker.role },
+      });
+      await this.outbox.enqueue(transaction, principal, {
+        aggregateType: "event_speaker",
+        aggregateId: speaker.id,
+        eventType: "event.speaker.created",
+        payload: this.toJson(speaker),
+      });
+      return speaker;
+    });
+  }
+
+  async updateSpeaker(
+    principal: Principal,
+    eventId: string,
+    speakerId: string,
+    input: UpdateEventSpeakerDto,
+  ) {
+    this.assertHost(principal);
+    if (Object.keys(input).length === 0) {
+      throw new BadRequestException("At least one speaker field is required");
+    }
+
+    return this.database.run(principal, async (transaction) => {
+      const existing = await transaction.eventSpeaker.findFirst({
+        where: { id: speakerId, eventId },
+        include: { event: { select: { status: true } } },
+      });
+      if (!existing) throw new NotFoundException("Speaker profile not found");
+      if (TERMINAL_EVENT_STATUSES.includes(existing.event.status)) {
+        throw new ConflictException(
+          `A ${existing.event.status} event cannot change stage profiles`,
+        );
+      }
+
+      if (input.userId) {
+        const membership = await transaction.workspaceMembership.findUnique({
+          where: {
+            workspaceId_userId: {
+              workspaceId: principal.workspaceId,
+              userId: input.userId,
+            },
+          },
+          select: { id: true },
+        });
+        if (!membership) {
+          throw new BadRequestException(
+            "Linked speaker user must belong to the current workspace",
+          );
+        }
+      }
+
+      const speaker = await transaction.eventSpeaker.update({
+        where: { id: speakerId },
+        data: {
+          ...(input.userId !== undefined ? { userId: input.userId } : {}),
+          ...(input.role !== undefined ? { role: input.role } : {}),
+          ...(input.displayName !== undefined
+            ? { displayName: input.displayName.trim() }
+            : {}),
+          ...(input.email !== undefined
+            ? { email: input.email?.toLowerCase() ?? null }
+            : {}),
+          ...(input.title !== undefined
+            ? { title: input.title?.trim() || null }
+            : {}),
+          ...(input.bio !== undefined
+            ? { bio: input.bio?.trim() || null }
+            : {}),
+          ...(input.avatarUrl !== undefined
+            ? { avatarUrl: input.avatarUrl }
+            : {}),
+        },
+      });
+
+      await this.audit.record(transaction, principal, {
+        action: "event.speaker.updated",
+        resourceType: "event_speaker",
+        resourceId: speaker.id,
+        metadata: { eventId, role: speaker.role },
+      });
+      await this.outbox.enqueue(transaction, principal, {
+        aggregateType: "event_speaker",
+        aggregateId: speaker.id,
+        eventType: "event.speaker.updated",
+        payload: this.toJson(speaker),
+      });
+      return speaker;
+    });
+  }
+
+  async deleteSpeaker(
+    principal: Principal,
+    eventId: string,
+    speakerId: string,
+  ) {
+    this.assertHost(principal);
+    return this.database.run(principal, async (transaction) => {
+      const existing = await transaction.eventSpeaker.findFirst({
+        where: { id: speakerId, eventId },
+        include: { event: { select: { status: true } } },
+      });
+      if (!existing) throw new NotFoundException("Speaker profile not found");
+      if (TERMINAL_EVENT_STATUSES.includes(existing.event.status)) {
+        throw new ConflictException(
+          `A ${existing.event.status} event cannot change stage profiles`,
+        );
+      }
+
+      await transaction.eventSpeaker.delete({ where: { id: speakerId } });
+      await this.audit.record(transaction, principal, {
+        action: "event.speaker.deleted",
+        resourceType: "event_speaker",
+        resourceId: speakerId,
+        metadata: { eventId, role: existing.role },
+      });
+      await this.outbox.enqueue(transaction, principal, {
+        aggregateType: "event_speaker",
+        aggregateId: speakerId,
+        eventType: "event.speaker.deleted",
+        payload: { eventId, speakerId, role: existing.role },
+      });
+      return { id: speakerId, deleted: true as const };
+    });
+  }
+
   async listRegistrations(principal: Principal, eventId: string) {
     this.assertHost(principal);
     return this.database.run(principal, async (transaction) => {
@@ -427,6 +695,14 @@ export class EventsService {
       branding: event.branding,
       status: event.status,
       registrationCount: event._count.registrations,
+      speakers: event.speakers.map((speaker) => ({
+        id: speaker.id,
+        role: speaker.role,
+        displayName: speaker.displayName,
+        title: speaker.title,
+        bio: speaker.bio,
+        avatarUrl: speaker.avatarUrl,
+      })),
     };
   }
 
@@ -460,6 +736,11 @@ export class EventsService {
         event.capacity !== null && confirmedCount >= event.capacity
           ? RegistrationStatus.WAITLISTED
           : RegistrationStatus.REGISTERED;
+      const registrationFields = this.registrationFields(event.registrationFields);
+      const answers = normalizeRegistrationAnswers(
+        registrationFields,
+        input.answers,
+      );
       const registration = await transaction.eventRegistration.create({
         data: {
           organizationId: event.organizationId,
@@ -467,7 +748,7 @@ export class EventsService {
           eventId: event.id,
           name: input.name.trim(),
           email: input.email.toLowerCase(),
-          answers: input.answers as Prisma.InputJsonValue,
+          answers: answers as Prisma.InputJsonValue,
           status,
         },
       });
@@ -486,6 +767,15 @@ export class EventsService {
       );
       return registration;
     });
+  }
+
+  private registrationFields(
+    value: Prisma.JsonValue,
+  ): NormalizedEventRegistrationField[] {
+    if (!Array.isArray(value)) return [];
+    return normalizeRegistrationFields(
+      value as unknown as EventRegistrationFieldDto[],
+    );
   }
 
   private async findPublicEvent(
@@ -514,7 +804,10 @@ export class EventsService {
         slug: eventSlug,
         status: { in: PUBLIC_EVENT_STATUSES },
       },
-      include: { _count: { select: { registrations: true } } },
+      include: {
+        speakers: { orderBy: { position: "asc" } },
+        _count: { select: { registrations: true } },
+      },
     });
     if (!event) throw new NotFoundException("Event not found");
     return event;

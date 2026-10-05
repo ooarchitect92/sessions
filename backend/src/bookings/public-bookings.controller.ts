@@ -1,8 +1,21 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Public } from '../common/auth/public.decorator';
 import { BookingsService } from './bookings.service';
 import { ListSlotsQuery } from './dto/list-slots.query';
+import {
+  ManageReservationDto,
+  ManageReservationQueryDto,
+} from './dto/manage-reservation.dto';
+import { RescheduleReservationDto } from './dto/reschedule-reservation.dto';
 import { ReserveBookingDto } from './dto/reserve-booking.dto';
 
 @ApiTags('public-bookings')
@@ -48,6 +61,78 @@ export class PublicBookingsController {
       workspaceSlug,
       bookingSlug,
       body,
+    );
+  }
+
+  @Get(':bookingSlug/reservations/:reservationId')
+  managedReservation(
+    @Param('organizationSlug') organizationSlug: string,
+    @Param('workspaceSlug') workspaceSlug: string,
+    @Param('bookingSlug') bookingSlug: string,
+    @Param('reservationId', new ParseUUIDPipe({ version: '4' }))
+    reservationId: string,
+    @Query() query: ManageReservationQueryDto,
+  ) {
+    return this.bookings.getManagedReservation(
+      organizationSlug,
+      workspaceSlug,
+      bookingSlug,
+      reservationId,
+      query.token,
+    );
+  }
+
+  @Post(':bookingSlug/reservations/:reservationId/reschedule')
+  reschedule(
+    @Param('organizationSlug') organizationSlug: string,
+    @Param('workspaceSlug') workspaceSlug: string,
+    @Param('bookingSlug') bookingSlug: string,
+    @Param('reservationId', new ParseUUIDPipe({ version: '4' }))
+    reservationId: string,
+    @Body() body: RescheduleReservationDto,
+  ) {
+    return this.bookings.reschedule(
+      organizationSlug,
+      workspaceSlug,
+      bookingSlug,
+      reservationId,
+      body,
+    );
+  }
+
+  @Post(':bookingSlug/reservations/:reservationId/cancel')
+  cancel(
+    @Param('organizationSlug') organizationSlug: string,
+    @Param('workspaceSlug') workspaceSlug: string,
+    @Param('bookingSlug') bookingSlug: string,
+    @Param('reservationId', new ParseUUIDPipe({ version: '4' }))
+    reservationId: string,
+    @Body() body: ManageReservationDto,
+  ) {
+    return this.bookings.cancel(
+      organizationSlug,
+      workspaceSlug,
+      bookingSlug,
+      reservationId,
+      body,
+    );
+  }
+
+  @Get(':bookingSlug/reservations/:reservationId/calendar')
+  calendar(
+    @Param('organizationSlug') organizationSlug: string,
+    @Param('workspaceSlug') workspaceSlug: string,
+    @Param('bookingSlug') bookingSlug: string,
+    @Param('reservationId', new ParseUUIDPipe({ version: '4' }))
+    reservationId: string,
+    @Query() query: ManageReservationQueryDto,
+  ) {
+    return this.bookings.calendarFile(
+      organizationSlug,
+      workspaceSlug,
+      bookingSlug,
+      reservationId,
+      query.token,
     );
   }
 }

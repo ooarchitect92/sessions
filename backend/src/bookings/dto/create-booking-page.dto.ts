@@ -3,8 +3,9 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsBoolean,
+  IsEnum,
   IsInt,
-  IsObject,
   IsOptional,
   IsString,
   Length,
@@ -13,6 +14,42 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
+
+export enum IntakeFieldType {
+  TEXT = 'TEXT',
+  TEXTAREA = 'TEXTAREA',
+  EMAIL = 'EMAIL',
+  SELECT = 'SELECT',
+  CHECKBOX = 'CHECKBOX',
+  CONSENT = 'CONSENT',
+}
+
+export class IntakeFieldDto {
+  @IsString()
+  @Matches(/^[a-z][a-z0-9_]{0,63}$/)
+  key!: string;
+
+  @IsString()
+  @Length(1, 160)
+  label!: string;
+
+  @IsEnum(IntakeFieldType)
+  type!: IntakeFieldType;
+
+  @IsBoolean()
+  required = false;
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 200)
+  placeholder?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @IsString({ each: true })
+  options?: string[];
+}
 
 export class AvailabilityRuleDto {
   @IsInt()
@@ -77,6 +114,7 @@ export class CreateBookingPageDto {
 
   @IsArray()
   @ArrayMaxSize(50)
-  @IsObject({ each: true })
-  intakeFields: Record<string, unknown>[] = [];
+  @ValidateNested({ each: true })
+  @Type(() => IntakeFieldDto)
+  intakeFields: IntakeFieldDto[] = [];
 }
