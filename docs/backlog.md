@@ -59,7 +59,7 @@
 - [x] object-storage access, signed playback and secure download paths
 - [x] PostgreSQL full-text transcript index with workspace-scoped search
 - [ ] optional vector retrieval with workspace filters
-- [ ] agenda generator
+- [x] review-first agenda generator with provider abstraction and explicit apply step
 - [x] provider-abstracted post-session AI summary execution gateway
 - [ ] summary/action editor, follow-up approval and CRM write controls
 - [ ] groundedness, privacy, prompt-injection, cost and latency evaluation suite
