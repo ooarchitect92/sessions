@@ -22,6 +22,9 @@ export function MemoryDetailPage() {
   const { sessionId = '' } = useParams();
   const queryClient = useQueryClient();
   const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
+  const [editingSegmentId, setEditingSegmentId] = useState<string | null>(null);
+  const [segmentText, setSegmentText] = useState('');
+  const [segmentSpeaker, setSegmentSpeaker] = useState('');
   const memory = useQuery({
     queryKey: ['memory-detail', sessionId],
     queryFn: () => api.getMemory(sessionId),
@@ -43,6 +46,33 @@ export function MemoryDetailPage() {
       }
     },
   });
+  const updateTranscriptSegment = useMutation({
+    mutationFn: (input: {
+      segmentId: string;
+      version: number;
+      text: string;
+      speakerLabel?: string | null;
+    }) =>
+      api.updateTranscriptSegment(
+        sessionId,
+        input.segmentId,
+        input.version,
+        {
+          text: input.text,
+          speakerLabel: input.speakerLabel,
+        },
+      ),
+    onSuccess: async () => {
+      setEditingSegmentId(null);
+      setSegmentText('');
+      setSegmentSpeaker('');
+      await queryClient.invalidateQueries({
+        queryKey: ['memory-detail', sessionId],
+      });
+      await queryClient.invalidateQueries({ queryKey: ['memory'] });
+    },
+  });
+
   const removeRecording = useMutation({
     mutationFn: () => api.deleteRecording(sessionId),
     onSuccess: async () => {
@@ -194,15 +224,94 @@ export function MemoryDetailPage() {
             <h2>Transcript</h2>
             {item.transcript?.segments?.length ? (
               <div className="transcript-segments">
-                {item.transcript.segments.map((segment) => (
-                  <article key={segment.id}>
-                    <span>
-                      {segment.speakerLabel ?? 'Speaker'} ·{' '}
-                      {Math.floor(segment.startMs / 1000)}s
-                    </span>
-                    <p>{segment.text}</p>
-                  </article>
-                ))}
+                {item.transcript.segments.map((segment) => {
+                  const editing = editingSegmentId === segment.id;
+                  return (
+                    <article key={segment.id}>
+                      {editing ? (
+                        <div className="transcript-edit-form">
+                          <label>
+                            Speaker
+                            <input
+                              value={segmentSpeaker}
+                              maxLength={160}
+                              onChange={(event) =>
+                                setSegmentSpeaker(event.target.value)
+                              }
+                            />
+                          </label>
+                          <label>
+                            Transcript text
+                            <textarea
+                              value={segmentText}
+                              maxLength={5000}
+                              rows={4}
+                              onChange={(event) =>
+                                setSegmentText(event.target.value)
+                              }
+                            />
+                          </label>
+                          <div className="transcript-edit-actions">
+                            <button
+                              className="button primary"
+                              disabled={
+                                updateTranscriptSegment.isPending ||
+                                !segmentText.trim()
+                              }
+                              onClick={() =>
+                                updateTranscriptSegment.mutate({
+                                  segmentId: segment.id,
+                                  version: item.transcript?.version ?? 1,
+                                  text: segmentText.trim(),
+                                  speakerLabel:
+                                    segmentSpeaker.trim() || null,
+                                })
+                              }
+                            >
+                              {updateTranscriptSegment.isPending
+                                ? 'Saving…'
+                                : 'Save correction'}
+                            </button>
+                            <button
+                              className="button secondary"
+                              disabled={updateTranscriptSegment.isPending}
+                              onClick={() => {
+                                setEditingSegmentId(null);
+                                setSegmentText('');
+                                setSegmentSpeaker('');
+                              }}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <span>
+                            {segment.speakerLabel ?? 'Speaker'} ·{' '}
+                            {Math.floor(segment.startMs / 1000)}s
+                          </span>
+                          <p>{segment.text}</p>
+                          <button
+                            className="button ghost compact-button"
+                            onClick={() => {
+                              setEditingSegmentId(segment.id);
+                              setSegmentText(segment.text);
+                              setSegmentSpeaker(segment.speakerLabel ?? '');
+                            }}
+                          >
+                            Correct
+                          </button>
+                        </>
+                      )}
+                    </article>
+                  );
+                })}
+                {updateTranscriptSegment.error ? (
+                  <div className="error-banner compact-error">
+                    {updateTranscriptSegment.error.message}
+                  </div>
+                ) : null}
               </div>
             ) : (
               <div className="artifact-placeholder">
