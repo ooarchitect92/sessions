@@ -178,7 +178,7 @@ export class AgendasService {
               title: item.title,
               durationSeconds: item.durationSeconds,
               type: item.type,
-              content: item.content,
+              content: this.toJson(item.content),
             })),
           },
         },
@@ -359,7 +359,7 @@ export class AgendasService {
             title: item.title,
             durationSeconds: item.durationSeconds,
             type: item.type,
-            content: item.content,
+            content: this.toJson(item.content),
           },
         });
       }
