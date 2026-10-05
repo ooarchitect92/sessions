@@ -62,7 +62,8 @@
 - [x] review-first agenda generator with provider abstraction and explicit apply step
 - [x] provider-abstracted post-session AI summary execution gateway
 - [x] versioned summary editor and explicit human approval
-- [ ] action-item editor, follow-up approval and CRM write controls
+- [x] structured action-item editor with approval invalidation
+- [ ] follow-up approval and CRM write controls
 - [ ] groundedness, privacy, prompt-injection, cost and latency evaluation suite
 
 ## Phase 5 — platform and enterprise
