@@ -171,6 +171,24 @@ enum FileAssetStatus {
   DELETED
 }
 
+enum NotificationKind {
+  BOOKING_CONFIRMATION
+  BOOKING_REMINDER_24H
+  BOOKING_REMINDER_1H
+  EVENT_REGISTRATION_CONFIRMATION
+  EVENT_REMINDER_24H
+  EVENT_REMINDER_1H
+}
+
+enum NotificationDeliveryStatus {
+  PENDING
+  DELIVERING
+  RETRYING
+  SENT
+  FAILED
+  CANCELLED
+}
+
 model Organization {
   id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name                String                @db.VarChar(160)
@@ -207,6 +225,8 @@ model Organization {
   fileAssets           FileAsset[]
   calendarConnections  CalendarConnection[]
   calendarBusyBlocks   CalendarBusyBlock[]
+  notificationTemplates NotificationTemplate[]
+  notificationDeliveries NotificationDelivery[]
   webhookSubscriptions WebhookSubscription[]
   webhookDeliveries   WebhookDelivery[]
   authSessions        AuthSession[]
@@ -256,6 +276,8 @@ model Workspace {
   fileAssets           FileAsset[]
   calendarConnections  CalendarConnection[]
   calendarBusyBlocks   CalendarBusyBlock[]
+  notificationTemplates NotificationTemplate[]
+  notificationDeliveries NotificationDelivery[]
   webhookSubscriptions WebhookSubscription[]
   webhookDeliveries   WebhookDelivery[]
   authSessions        AuthSession[]
@@ -774,6 +796,7 @@ model BookingReservation {
   answers             Json          @default("{}")
   status              BookingStatus @default(CONFIRMED)
   managementTokenHash String?       @unique @map("management_token_hash") @db.VarChar(64)
+  managementTokenEncrypted String?   @map("management_token_encrypted") @db.Text
   cancelledAt         DateTime?     @map("cancelled_at") @db.Timestamptz(6)
   rescheduleCount     Int           @default(0) @map("reschedule_count")
   version             Int           @default(1)
@@ -1082,6 +1105,58 @@ model QuestionVote {
   @@unique([questionId, voterKey])
   @@index([organizationId, workspaceId, questionId])
   @@map("question_votes")
+}
+
+model NotificationTemplate {
+  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String           @map("organization_id") @db.Uuid
+  workspaceId    String           @map("workspace_id") @db.Uuid
+  kind           NotificationKind
+  subjectTemplate String          @map("subject_template") @db.VarChar(300)
+  textTemplate   String           @map("text_template") @db.Text
+  htmlTemplate   String?          @map("html_template") @db.Text
+  active         Boolean          @default(true)
+  version        Int              @default(1)
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, kind])
+  @@index([organizationId, workspaceId, active])
+  @@map("notification_templates")
+}
+
+model NotificationDelivery {
+  id                String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId    String                     @map("organization_id") @db.Uuid
+  workspaceId       String                     @map("workspace_id") @db.Uuid
+  kind              NotificationKind
+  dedupeKey         String                     @unique @map("dedupe_key") @db.VarChar(255)
+  sourceId          String                     @map("source_id") @db.Uuid
+  sourceStartsAt    DateTime?                  @map("source_starts_at") @db.Timestamptz(6)
+  recipientEmail    String                     @map("recipient_email") @db.Citext
+  recipientName     String?                    @map("recipient_name") @db.VarChar(160)
+  subject           String                     @db.VarChar(300)
+  textBody          String                     @map("text_body") @db.Text
+  htmlBody          String?                    @map("html_body") @db.Text
+  status            NotificationDeliveryStatus @default(PENDING)
+  provider          String?                    @db.VarChar(80)
+  providerMessageId String?                    @map("provider_message_id") @db.VarChar(255)
+  attemptCount      Int                        @default(0) @map("attempt_count")
+  scheduledFor      DateTime                   @map("scheduled_for") @db.Timestamptz(6)
+  nextAttemptAt     DateTime                   @map("next_attempt_at") @db.Timestamptz(6)
+  sentAt            DateTime?                  @map("sent_at") @db.Timestamptz(6)
+  lastError         String?                    @map("last_error") @db.Text
+  metadata          Json                       @default("{}")
+  createdAt         DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization      Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace         Workspace                  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, workspaceId, status, nextAttemptAt])
+  @@index([sourceId, kind, scheduledFor])
+  @@map("notification_deliveries")
 }
 
 model ApiKey {
