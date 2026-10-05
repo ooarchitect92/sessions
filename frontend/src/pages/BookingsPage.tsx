@@ -3,6 +3,12 @@ import type { CreateBookingPageInput } from '@sessions/contracts';
 import { FormEvent, useState } from 'react';
 import { api, type BookingPageRecord } from '../api/client';
 
+function toLocalDateTimeInput(value: string): string {
+  const date = new Date(value);
+  const offset = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+}
+
 function toSlug(value: string): string {
   return value
     .toLowerCase()
@@ -246,9 +252,7 @@ export function BookingsPage() {
                             onClick={() => {
                               setRescheduleReservationId(reservation.id);
                               setRescheduleStartsAt(
-                                new Date(reservation.startsAt)
-                                  .toISOString()
-                                  .slice(0, 16),
+                                toLocalDateTimeInput(reservation.startsAt),
                               );
                             }}
                           >
