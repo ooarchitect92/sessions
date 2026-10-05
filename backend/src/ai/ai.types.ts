@@ -45,3 +45,39 @@ export interface MeetingAiProvider {
   readonly name: string;
   summarize(request: MeetingSummaryRequest): Promise<MeetingSummaryResult>;
 }
+
+export interface AgendaDraftItem {
+  title: string;
+  durationSeconds: number;
+  type:
+    | 'TEXT'
+    | 'PRESENTATION'
+    | 'WEBSITE'
+    | 'VIDEO'
+    | 'POLL'
+    | 'WHITEBOARD'
+    | 'BREAKOUT'
+    | 'QA'
+    | 'SCREEN_SHARE';
+  content: Record<string, unknown>;
+  rationale?: string;
+}
+
+export interface AgendaDraftRequest {
+  title: string;
+  description?: string;
+  objective?: string;
+  audience?: string;
+  durationMinutes: number;
+}
+
+export interface AgendaDraftResult {
+  provider: string;
+  model: string;
+  items: AgendaDraftItem[];
+}
+
+export interface AgendaAiProvider {
+  readonly name: string;
+  generateAgenda(request: AgendaDraftRequest): Promise<AgendaDraftResult>;
+}
