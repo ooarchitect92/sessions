@@ -249,6 +249,23 @@ export interface TranscriptRecord {
   }>;
 }
 
+export interface AiCitationRecord {
+  segmentPosition: number;
+  quote?: string;
+}
+
+export interface AiDecisionRecord {
+  text: string;
+  citations?: AiCitationRecord[];
+}
+
+export interface AiActionItemRecord {
+  text: string;
+  owner?: string;
+  dueDate?: string;
+  citations?: AiCitationRecord[];
+}
+
 export interface MemorySummaryRecord {
   id: string;
   sessionId: string;
@@ -256,9 +273,9 @@ export interface MemorySummaryRecord {
   provider: string | null;
   model: string | null;
   summaryText: string | null;
-  decisions: unknown[];
-  actionItems: unknown[];
-  citations: unknown[];
+  decisions: AiDecisionRecord[];
+  actionItems: AiActionItemRecord[];
+  citations: AiCitationRecord[];
   failureCode: string | null;
   reviewedAt: string | null;
   reviewedByUserId: string | null;
