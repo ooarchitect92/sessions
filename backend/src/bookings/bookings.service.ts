@@ -341,9 +341,8 @@ export class BookingsService {
 
       if (reservation.sessionId && reservation.session) {
         if (
-          ![SessionStatus.DRAFT, SessionStatus.SCHEDULED].includes(
-            reservation.session.status,
-          )
+          reservation.session.status !== SessionStatus.DRAFT &&
+          reservation.session.status !== SessionStatus.SCHEDULED
         ) {
           throw new ConflictException(
             'The linked session can no longer be rescheduled',
@@ -434,9 +433,8 @@ export class BookingsService {
       if (
         reservation.sessionId &&
         reservation.session &&
-        [SessionStatus.DRAFT, SessionStatus.SCHEDULED].includes(
-          reservation.session.status,
-        )
+        (reservation.session.status === SessionStatus.DRAFT ||
+          reservation.session.status === SessionStatus.SCHEDULED)
       ) {
         await transaction.session.update({
           where: { id: reservation.sessionId },
