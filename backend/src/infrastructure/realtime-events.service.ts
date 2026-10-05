@@ -33,7 +33,9 @@ export interface SessionRealtimeEvent {
     | 'breakout.updated'
     | 'breakout.started'
     | 'breakout.closed'
-    | 'breakout.broadcast';
+    | 'breakout.broadcast'
+    | 'whiteboard.operation'
+    | 'whiteboard.snapshot.updated';
   payload: unknown;
 }
 
