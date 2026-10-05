@@ -7,6 +7,8 @@ import { CreateChatMessageDto } from './dto/create-chat-message.dto';
 import { CreatePollDto } from './dto/create-poll.dto';
 import { CreateQuestionDto } from './dto/create-question.dto';
 import { ModerateQuestionDto } from './dto/moderate-question.dto';
+import { SendReactionDto } from './dto/send-reaction.dto';
+import { SetHandRaiseDto } from './dto/set-hand-raise.dto';
 import { SubmitPollAnswerDto } from './dto/submit-poll-answer.dto';
 
 @ApiTags('collaboration')
@@ -30,6 +32,24 @@ export class CollaborationController {
     @Body() body: CreateChatMessageDto,
   ) {
     return this.collaboration.createChat(principal, sessionId, body);
+  }
+
+  @Post('reactions')
+  sendReaction(
+    @CurrentPrincipal() principal: Principal,
+    @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
+    @Body() body: SendReactionDto,
+  ) {
+    return this.collaboration.sendReaction(principal, sessionId, body);
+  }
+
+  @Post('hand-raise')
+  setHandRaise(
+    @CurrentPrincipal() principal: Principal,
+    @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
+    @Body() body: SetHandRaiseDto,
+  ) {
+    return this.collaboration.setHandRaise(principal, sessionId, body);
   }
 
   @Get('polls')
