@@ -41,7 +41,9 @@ export interface SessionRealtimeEvent {
     | 'breakout.closed'
     | 'breakout.broadcast'
     | 'whiteboard.operation'
-    | 'whiteboard.snapshot.updated';
+    | 'whiteboard.snapshot.updated'
+    | 'session.reaction'
+    | 'session.hand_raise';
   payload: unknown;
 }
 
