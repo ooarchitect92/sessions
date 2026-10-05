@@ -390,6 +390,37 @@ export interface RecordingPlaybackGrant {
   mimeType: string;
 }
 
+export interface LiveTranscriptSegment {
+  transcriptId: string;
+  sessionId: string;
+  segmentId: string;
+  position: number;
+  startMs: number;
+  endMs: number;
+  speakerLabel: string | null;
+  text: string;
+  userId?: string;
+  displayName?: string;
+  language?: string | null;
+  isFinal: true;
+}
+
+export interface LiveTranscriptionChunkResult {
+  sessionId: string;
+  transcriptId: string;
+  provider: string;
+  language: string | null;
+  segmentCount: number;
+  segments: Array<{
+    id: string;
+    position: number;
+    startMs: number;
+    endMs: number;
+    speakerLabel: string | null;
+    text: string;
+  }>;
+}
+
 export interface TranscriptRecord {
   id: string;
   sessionId: string;
@@ -1127,6 +1158,25 @@ export const api = {
     }>(`/sessions/${sessionId}/agenda-items/${agendaItemId}/activate`, {
       method: "POST",
     });
+  },
+
+  submitLiveTranscriptionChunk(
+    sessionId: string,
+    input: {
+      sequence: number;
+      startMs: number;
+      mimeType: string;
+      language?: string;
+      audioBase64: string;
+    },
+  ): Promise<LiveTranscriptionChunkResult> {
+    return request<LiveTranscriptionChunkResult>(
+      `/sessions/${sessionId}/transcription/chunks`,
+      {
+        method: 'POST',
+        body: JSON.stringify(input),
+      },
+    );
   },
 
   getRecordingConsent(sessionId: string): Promise<RecordingConsentStatus> {
