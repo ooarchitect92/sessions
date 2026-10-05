@@ -28,6 +28,7 @@ export interface SessionRealtimeEvent {
     | 'memory.updated'
     | 'agenda.updated'
     | 'transcript.corrected'
+    | 'transcript.live.segment'
     | 'memory.summary.updated'
     | 'memory.summary.approved'
     | 'memory.follow_up.generated'
