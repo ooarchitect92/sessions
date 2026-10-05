@@ -9,6 +9,7 @@ import { AttendanceModule } from "./attendance/attendance.module";
 import { AuthModule } from "./auth/auth.module";
 import { BookingsModule } from "./bookings/bookings.module";
 import { BreakoutsModule } from "./breakouts/breakouts.module";
+import { CalendarModule } from "./calendar/calendar.module";
 import { CollaborationModule } from "./collaboration/collaboration.module";
 import { PrincipalGuard } from "./common/auth/principal.guard";
 import { validateEnvironment } from "./common/config/env.validation";
@@ -59,6 +60,7 @@ import { WhiteboardsModule } from "./whiteboards/whiteboards.module";
     FilesModule,
     BookingsModule,
     BreakoutsModule,
+    CalendarModule,
     CollaborationModule,
     MediaModule,
     RealtimeModule,
