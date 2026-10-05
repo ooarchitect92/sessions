@@ -152,6 +152,88 @@ export interface ApiKeyCreateResult extends ApiKeyRecord {
   tokenWarning: string;
 }
 
+export interface WorkspaceAnalytics {
+  range: { from: string; to: string };
+  metrics: {
+    sessions: number;
+    completedSessions: number;
+    meetingMinutes: number;
+    meetingHours: number;
+    eventRegistrations: number;
+    attendedRegistrations: number;
+    registrationNoShowRate: number;
+    bookingReservations: number;
+    confirmedBookings: number;
+    bookingNoShowRate: number;
+    chatMessages: number;
+    polls: number;
+    pollAnswers: number;
+    questions: number;
+    questionVotes: number;
+    engagementActions: number;
+    readyRecordings: number;
+    recordingMinutes: number;
+    readyTranscripts: number;
+    readySummaries: number;
+    reviewedSummaries: number;
+  };
+  trend: Array<{
+    date: string;
+    sessions: number;
+    registrations: number;
+    bookings: number;
+    engagement: number;
+  }>;
+  recentSessions: Array<{
+    id: string;
+    title: string;
+    startsAt: string;
+    durationMinutes: number;
+    kind: "MEETING" | "WEBINAR";
+    status: SessionStatus;
+  }>;
+}
+
+export interface SessionAnalytics {
+  session: {
+    id: string;
+    title: string;
+    kind: "MEETING" | "WEBINAR";
+    status: SessionStatus;
+    startsAt: string;
+    durationMinutes: number;
+  };
+  attendance: {
+    registrations: number;
+    attended: number;
+    noShows: number;
+  };
+  engagement: {
+    chatMessages: number;
+    polls: number;
+    pollAnswers: number;
+    questions: number;
+    questionVotes: number;
+    total: number;
+  };
+  artifacts: {
+    recording: {
+      status: ArtifactStatus;
+      durationSeconds: number | null;
+      completedAt: string | null;
+    } | null;
+    transcript: {
+      status: ArtifactStatus;
+      completedAt: string | null;
+    } | null;
+    summary: {
+      status: ArtifactStatus;
+      reviewedAt: string | null;
+      completedAt: string | null;
+    } | null;
+  };
+}
+
 export interface WebhookDeliveryRecord {
   id: string;
   subscriptionId: string;
@@ -698,6 +780,21 @@ export const api = {
 
   revokeWorkspaceInvitation(invitationId: string): Promise<{ id: string; revoked: true }> {
     return request(`/workspaces/current/invitations/${invitationId}`, { method: "DELETE" });
+  },
+
+  getWorkspaceAnalytics(input?: {
+    from?: string;
+    to?: string;
+  }): Promise<WorkspaceAnalytics> {
+    const params = new URLSearchParams();
+    if (input?.from) params.set("from", input.from);
+    if (input?.to) params.set("to", input.to);
+    const suffix = params.size ? `?${params.toString()}` : "";
+    return request(`/analytics/workspace${suffix}`);
+  },
+
+  getSessionAnalytics(id: string): Promise<SessionAnalytics> {
+    return request(`/analytics/sessions/${id}`);
   },
 
   listApiKeys(): Promise<ApiKeyRecord[]> {
