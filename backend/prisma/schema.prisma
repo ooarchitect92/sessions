@@ -78,6 +78,18 @@ enum BookingStatus {
   NO_SHOW
 }
 
+enum CalendarProvider {
+  GOOGLE
+  MICROSOFT
+}
+
+enum CalendarConnectionStatus {
+  CONNECTED
+  EXPIRED
+  REVOKED
+  ERROR
+}
+
 enum ArtifactStatus {
   PENDING
   PROCESSING
@@ -187,6 +199,8 @@ model Organization {
   workspaceInvitations WorkspaceInvitation[]
   agendaTemplates     AgendaTemplate[]
   agendaTemplateItems AgendaTemplateItem[]
+  calendarConnections CalendarConnection[]
+  calendarOAuthStates CalendarOAuthState[]
 
   @@map("organizations")
 }
@@ -274,6 +288,8 @@ model User {
   breakoutAssignments          BreakoutAssignment[]      @relation("BreakoutAssignmentUser")
   whiteboardOperations          WhiteboardOperation[]     @relation("WhiteboardOperationAuthor")
   createdAgendaTemplates         AgendaTemplate[]          @relation("AgendaTemplateCreator")
+  calendarConnections            CalendarConnection[]
+  calendarOAuthStates            CalendarOAuthState[]
 
   @@index([status])
   @@map("users")
@@ -473,6 +489,56 @@ model EventRegistration {
   @@index([organizationId, workspaceId, eventId])
   @@index([eventId, status, registeredAt])
   @@map("event_registrations")
+}
+
+model CalendarConnection {
+  id                    String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId        String                   @map("organization_id") @db.Uuid
+  workspaceId           String                   @map("workspace_id") @db.Uuid
+  userId                String                   @map("user_id") @db.Uuid
+  provider              CalendarProvider
+  providerAccountId     String?                  @map("provider_account_id") @db.VarChar(255)
+  accountEmail          String?                  @map("account_email") @db.Citext
+  encryptedAccessToken  String                   @map("encrypted_access_token") @db.Text
+  encryptedRefreshToken String?                  @map("encrypted_refresh_token") @db.Text
+  tokenExpiresAt        DateTime?                @map("token_expires_at") @db.Timestamptz(6)
+  scopes                String[]                 @default([])
+  calendarId            String?                  @map("calendar_id") @db.VarChar(255)
+  syncEnabled           Boolean                  @default(true) @map("sync_enabled")
+  status                CalendarConnectionStatus @default(CONNECTED)
+  lastSyncedAt          DateTime?                @map("last_synced_at") @db.Timestamptz(6)
+  lastError             String?                  @map("last_error") @db.Text
+  version               Int                      @default(1)
+  createdAt             DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization          Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace             Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user                  User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId, provider])
+  @@index([organizationId, workspaceId, status])
+  @@index([userId, provider])
+  @@map("calendar_connections")
+}
+
+model CalendarOAuthState {
+  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String           @map("organization_id") @db.Uuid
+  workspaceId    String           @map("workspace_id") @db.Uuid
+  userId         String           @map("user_id") @db.Uuid
+  provider       CalendarProvider
+  stateHash      String           @map("state_hash") @db.VarChar(64)
+  returnUrl      String?          @map("return_url") @db.Text
+  expiresAt      DateTime         @map("expires_at") @db.Timestamptz(6)
+  usedAt         DateTime?        @map("used_at") @db.Timestamptz(6)
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, workspaceId, expiresAt])
+  @@index([userId, provider, expiresAt])
+  @@map("calendar_oauth_states")
 }
 
 model BookingPage {
