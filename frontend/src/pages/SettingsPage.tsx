@@ -2,7 +2,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { WorkspaceRole } from '@sessions/contracts';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { api, type WorkspaceMember } from '../api/client';
+import {
+  api,
+  type CalendarProvider,
+  type WorkspaceMember,
+} from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 
 const TABS = ['workspace', 'members', 'workspaces', 'integrations', 'security'] as const;
@@ -83,7 +87,7 @@ export function SettingsPage() {
           {tab === 'workspace' ? <WorkspaceProfile /> : null}
           {tab === 'members' ? <MembersAndInvitations /> : null}
           {tab === 'workspaces' ? <WorkspaceDirectory /> : null}
-          {tab === 'integrations' ? <WebhookSettings /> : null}
+          {tab === 'integrations' ? <IntegrationSettings /> : null}
           {tab === 'security' ? <SecuritySettings /> : null}
         </section>
       </div>
@@ -784,6 +788,140 @@ function SecuritySettings() {
           ))}
         </div>
         {revoke.error ? <div className="error-banner">{revoke.error.message}</div> : null}
+      </section>
+    </div>
+  );
+}
+
+function IntegrationSettings() {
+  return (
+    <>
+      <CalendarIntegrationsSettings />
+      <WebhookSettings />
+    </>
+  );
+}
+
+function CalendarIntegrationsSettings() {
+  const queryClient = useQueryClient();
+  const connections = useQuery({
+    queryKey: ['calendar-integrations'],
+    queryFn: () => api.listCalendarConnections(),
+  });
+
+  const connect = useMutation({
+    mutationFn: (provider: CalendarProvider) =>
+      api.beginCalendarConnection(
+        provider,
+        `${window.location.origin}/settings?tab=integrations`,
+      ),
+    onSuccess: (result) => {
+      window.location.assign(result.authorizeUrl);
+    },
+  });
+
+  const disconnect = useMutation({
+    mutationFn: (provider: CalendarProvider) => api.disconnectCalendar(provider),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['calendar-integrations'] });
+    },
+  });
+
+  const providers: Array<{
+    provider: CalendarProvider;
+    name: string;
+    description: string;
+  }> = [
+    {
+      provider: 'GOOGLE',
+      name: 'Google Calendar',
+      description: 'Use Google busy time and calendar events for scheduling.',
+    },
+    {
+      provider: 'MICROSOFT',
+      name: 'Microsoft Calendar',
+      description: 'Connect Microsoft 365 / Outlook calendars through OAuth.',
+    },
+  ];
+
+  return (
+    <div className="settings-stack">
+      <section className="panel settings-panel">
+        <div className="settings-panel-heading">
+          <div>
+            <span className="eyebrow">Scheduling providers</span>
+            <h2>Calendar connections</h2>
+            <p>
+              Calendar credentials use OAuth. Access and refresh tokens are encrypted
+              before persistence and never returned to the browser.
+            </p>
+          </div>
+        </div>
+        {connections.isLoading ? <SettingsLoading /> : null}
+        {connections.error ? (
+          <SettingsError message={connections.error.message} />
+        ) : null}
+        <div className="calendar-integration-grid">
+          {providers.map((item) => {
+            const connection = connections.data?.find(
+              (candidate) => candidate.provider === item.provider,
+            );
+            return (
+              <article className="calendar-integration-card" key={item.provider}>
+                <div>
+                  <span
+                    className={
+                      connection?.status === 'CONNECTED'
+                        ? 'state-chip enabled'
+                        : 'state-chip'
+                    }
+                  >
+                    {connection?.status === 'CONNECTED' ? 'Connected' : 'Not connected'}
+                  </span>
+                  <h3>{item.name}</h3>
+                  <p>{item.description}</p>
+                  {connection ? (
+                    <small>
+                      {connection.accountEmail || 'Connected account'}
+                      {connection.tokenExpiresAt
+                        ? ` · token expires ${formatDate(connection.tokenExpiresAt)}`
+                        : ''}
+                    </small>
+                  ) : null}
+                </div>
+                <div className="settings-actions">
+                  {connection ? (
+                    <button
+                      className="button secondary"
+                      type="button"
+                      disabled={disconnect.isPending}
+                      onClick={() => {
+                        if (window.confirm(`Disconnect ${item.name}?`)) {
+                          disconnect.mutate(item.provider);
+                        }
+                      }}
+                    >
+                      Disconnect
+                    </button>
+                  ) : (
+                    <button
+                      className="button primary"
+                      type="button"
+                      disabled={connect.isPending}
+                      onClick={() => connect.mutate(item.provider)}
+                    >
+                      Connect
+                    </button>
+                  )}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+        {connect.error ? <div className="error-banner">{connect.error.message}</div> : null}
+        {disconnect.error ? (
+          <div className="error-banner">{disconnect.error.message}</div>
+        ) : null}
       </section>
     </div>
   );
