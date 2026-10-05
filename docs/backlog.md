@@ -20,10 +20,11 @@
 
 ## Phase 2 — collaboration and reliable capture
 
-- [x] persistent public and host chat
+- [x] persistent public, host-only and private direct-message chat with privacy-scoped realtime delivery
 - [x] poll creation, launch, answer, results and close lifecycle
 - [x] moderated Q&A with voting and answers
-- [ ] reactions and private direct-message channels
+- [x] live emoji reactions and raise/lower-hand signals
+- [ ] durable attendance intervals, richer presence state and moderation policy controls
 - [x] persistent collaborative whiteboard with realtime operations, host snapshots and operation compaction
 - [ ] live collaborator cursors, image upload pipeline, undo/redo history and large-board performance qualification
 - [x] breakout assignment, assignment-aware LiveKit media-room transition and host broadcast
