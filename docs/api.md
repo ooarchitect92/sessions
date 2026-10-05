@@ -211,3 +211,15 @@ Validation details must never leak secrets or cross-tenant resource existence. P
 - `DELETE /v1/recordings/:sessionId` schedules permanent object deletion and is restricted to host roles.
 
 LiveKit egress lifecycle changes are performed by the bounded recording worker. Provider job IDs and object keys remain server-side; the browser receives only expiring access grants.
+
+
+### Calendar integrations
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/v1/calendar-integrations` | list the current user's workspace calendar connections without exposing tokens |
+| `POST` | `/v1/calendar-integrations/{provider}/connect` | create a short-lived OAuth state and return the provider authorization URL |
+| `GET` | `/v1/calendar-integrations/oauth/{provider}/callback` | public OAuth callback that verifies one-time state, exchanges the code and stores encrypted credentials |
+| `DELETE` | `/v1/calendar-integrations/{provider}` | disconnect the current user's calendar provider |
+
+Connected Google and Microsoft calendars are queried for external busy intervals during public slot discovery and again before a booking reservation is committed. Access tokens are refreshed from encrypted refresh tokens when near expiry.
