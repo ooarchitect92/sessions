@@ -227,6 +227,7 @@ model Organization {
   calendarBusyBlocks   CalendarBusyBlock[]
   notificationTemplates NotificationTemplate[]
   notificationDeliveries NotificationDelivery[]
+  engagementEvents      EngagementEvent[]
   webhookSubscriptions WebhookSubscription[]
   webhookDeliveries   WebhookDelivery[]
   authSessions        AuthSession[]
@@ -278,6 +279,7 @@ model Workspace {
   calendarBusyBlocks   CalendarBusyBlock[]
   notificationTemplates NotificationTemplate[]
   notificationDeliveries NotificationDelivery[]
+  engagementEvents      EngagementEvent[]
   webhookSubscriptions WebhookSubscription[]
   webhookDeliveries   WebhookDelivery[]
   authSessions        AuthSession[]
@@ -325,6 +327,7 @@ model User {
   whiteboardOperations    WhiteboardOperation[]
   fileAssets               FileAsset[]
   calendarConnections      CalendarConnection[]
+  engagementEvents         EngagementEvent[]
   createdWebhookSubscriptions WebhookSubscription[] @relation("WebhookSubscriptionCreator")
 
   @@index([status])
@@ -412,6 +415,7 @@ model Session {
   whiteboard             WhiteboardDocument?
   whiteboardOperations   WhiteboardOperation[]
   fileAssets             FileAsset[]
+  engagementEvents       EngagementEvent[]
 
   @@index([organizationId, workspaceId, startsAt])
   @@index([workspaceId, status, startsAt])
@@ -1105,6 +1109,31 @@ model QuestionVote {
   @@unique([questionId, voterKey])
   @@index([organizationId, workspaceId, questionId])
   @@map("question_votes")
+}
+
+model EngagementEvent {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  workspaceId    String       @map("workspace_id") @db.Uuid
+  sessionId      String       @map("session_id") @db.Uuid
+  actorUserId    String?      @map("actor_user_id") @db.Uuid
+  eventType      String       @map("event_type") @db.VarChar(100)
+  sourceType     String?      @map("source_type") @db.VarChar(80)
+  sourceId       String?      @map("source_id") @db.Uuid
+  properties     Json         @default("{}")
+  occurredAt     DateTime     @default(now()) @map("occurred_at") @db.Timestamptz(6)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  session        Session      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  actor          User?        @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, workspaceId, occurredAt])
+  @@index([workspaceId, eventType, occurredAt])
+  @@index([sessionId, occurredAt])
+  @@index([sessionId, eventType, occurredAt])
+  @@index([actorUserId, occurredAt])
+  @@map("engagement_events")
 }
 
 model NotificationTemplate {
