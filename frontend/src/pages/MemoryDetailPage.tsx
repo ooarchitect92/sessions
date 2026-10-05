@@ -25,6 +25,8 @@ export function MemoryDetailPage() {
   const [editingSegmentId, setEditingSegmentId] = useState<string | null>(null);
   const [segmentText, setSegmentText] = useState('');
   const [segmentSpeaker, setSegmentSpeaker] = useState('');
+  const [editingSummary, setEditingSummary] = useState(false);
+  const [summaryDraft, setSummaryDraft] = useState('');
   const memory = useQuery({
     queryKey: ['memory-detail', sessionId],
     queryFn: () => api.getMemory(sessionId),
@@ -66,6 +68,32 @@ export function MemoryDetailPage() {
       setEditingSegmentId(null);
       setSegmentText('');
       setSegmentSpeaker('');
+      await queryClient.invalidateQueries({
+        queryKey: ['memory-detail', sessionId],
+      });
+      await queryClient.invalidateQueries({ queryKey: ['memory'] });
+    },
+  });
+
+  const updateSummary = useMutation({
+    mutationFn: (input: { version: number; summaryText: string }) =>
+      api.updateMemorySummary(sessionId, input.version, {
+        summaryText: input.summaryText,
+      }),
+    onSuccess: async () => {
+      setEditingSummary(false);
+      setSummaryDraft('');
+      await queryClient.invalidateQueries({
+        queryKey: ['memory-detail', sessionId],
+      });
+      await queryClient.invalidateQueries({ queryKey: ['memory'] });
+    },
+  });
+
+  const approveSummary = useMutation({
+    mutationFn: (version: number) =>
+      api.approveMemorySummary(sessionId, version),
+    onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: ['memory-detail', sessionId],
       });
@@ -203,9 +231,63 @@ export function MemoryDetailPage() {
 
         <div className="memory-detail-grid">
           <section className="panel memory-summary-panel">
-            <span className="eyebrow">Reviewed output</span>
-            <h2>Summary</h2>
-            {item.memorySummary?.summaryText ? (
+            <div className="memory-summary-heading">
+              <div>
+                <span className="eyebrow">Reviewed output</span>
+                <h2>Summary</h2>
+              </div>
+              {item.memorySummary?.status === 'READY' ? (
+                <span
+                  className={
+                    item.memorySummary.reviewedAt
+                      ? 'state-chip enabled'
+                      : 'state-chip'
+                  }
+                >
+                  {item.memorySummary.reviewedAt ? 'Approved' : 'Needs review'}
+                </span>
+              ) : null}
+            </div>
+
+            {editingSummary && item.memorySummary ? (
+              <div className="summary-review-form">
+                <label>
+                  Summary text
+                  <textarea
+                    rows={10}
+                    maxLength={20000}
+                    value={summaryDraft}
+                    onChange={(event) => setSummaryDraft(event.target.value)}
+                  />
+                </label>
+                <div className="summary-review-actions">
+                  <button
+                    className="button primary"
+                    disabled={
+                      updateSummary.isPending || !summaryDraft.trim()
+                    }
+                    onClick={() =>
+                      updateSummary.mutate({
+                        version: item.memorySummary?.version ?? 1,
+                        summaryText: summaryDraft.trim(),
+                      })
+                    }
+                  >
+                    {updateSummary.isPending ? 'Saving…' : 'Save reviewed summary'}
+                  </button>
+                  <button
+                    className="button secondary"
+                    disabled={updateSummary.isPending}
+                    onClick={() => {
+                      setEditingSummary(false);
+                      setSummaryDraft('');
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : item.memorySummary?.summaryText ? (
               <p className="summary-copy">{item.memorySummary.summaryText}</p>
             ) : (
               <div className="artifact-placeholder">
@@ -213,6 +295,43 @@ export function MemoryDetailPage() {
                 blocked until a user reviews generated output.
               </div>
             )}
+
+            {item.memorySummary?.status === 'READY' && !editingSummary ? (
+              <div className="summary-review-actions">
+                <button
+                  className="button secondary"
+                  onClick={() => {
+                    setSummaryDraft(item.memorySummary?.summaryText ?? '');
+                    setEditingSummary(true);
+                  }}
+                >
+                  Edit summary
+                </button>
+                <button
+                  className="button primary"
+                  disabled={
+                    approveSummary.isPending ||
+                    Boolean(item.memorySummary.reviewedAt)
+                  }
+                  onClick={() =>
+                    approveSummary.mutate(item.memorySummary?.version ?? 1)
+                  }
+                >
+                  {approveSummary.isPending
+                    ? 'Approving…'
+                    : item.memorySummary.reviewedAt
+                      ? 'Approved'
+                      : 'Approve summary'}
+                </button>
+              </div>
+            ) : null}
+
+            {updateSummary.error || approveSummary.error ? (
+              <div className="error-banner compact-error">
+                {(updateSummary.error ?? approveSummary.error)?.message}
+              </div>
+            ) : null}
+
             <h3>Decisions</h3>
             <pre>{JSON.stringify(item.memorySummary?.decisions ?? [], null, 2)}</pre>
             <h3>Action items</h3>
