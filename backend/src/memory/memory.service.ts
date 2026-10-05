@@ -463,6 +463,247 @@ export class MemoryService {
     return result;
   }
 
+  async generateFollowUp(principal: Principal, sessionId: string) {
+    this.assertHost(principal);
+    const context = await this.database.run(principal, async (transaction) => {
+      const summary = await transaction.memorySummary.findUnique({
+        where: { sessionId },
+        include: {
+          session: {
+            select: {
+              title: true,
+              description: true,
+            },
+          },
+        },
+      });
+      if (!summary) throw new NotFoundException('Memory summary not found');
+      if (summary.status !== ArtifactStatus.READY || !summary.summaryText) {
+        throw new ConflictException('A ready summary is required first');
+      }
+      if (!summary.reviewedAt) {
+        throw new ConflictException(
+          'Approve the meeting summary before drafting a follow-up',
+        );
+      }
+      return summary;
+    });
+
+    const draft = await this.ai.draftFollowUp({
+      title: context.session.title,
+      summary: context.summaryText!,
+      decisions: context.decisions as unknown as AiDecision[],
+      actionItems: context.actionItems as unknown as AiActionItem[],
+      ...(context.session.description
+        ? { audience: context.session.description }
+        : {}),
+    });
+
+    const result = await this.database.run(principal, async (transaction) => {
+      const current = await transaction.memorySummary.findUnique({
+        where: { sessionId },
+      });
+      if (!current) throw new NotFoundException('Memory summary not found');
+      if (!current.reviewedAt) {
+        throw new ConflictException(
+          'Summary approval changed while generating the follow-up',
+        );
+      }
+
+      const updated = await transaction.memorySummary.update({
+        where: { id: current.id },
+        data: {
+          followUpDraft: {
+            subject: draft.subject,
+            body: draft.body,
+            provider: draft.provider,
+            model: draft.model,
+          },
+          followUpGeneratedAt: new Date(),
+          followUpApprovedAt: null,
+          followUpApprovedByUserId: null,
+          version: { increment: 1 },
+        },
+      });
+
+      await this.audit.record(transaction, principal, {
+        action: 'memory.follow_up_generated',
+        resourceType: 'memory_summary',
+        resourceId: current.id,
+        metadata: {
+          sessionId,
+          provider: draft.provider,
+          model: draft.model,
+          version: updated.version,
+        },
+      });
+      await this.outbox.enqueue(transaction, principal, {
+        aggregateType: 'memory_summary',
+        aggregateId: current.id,
+        eventType: 'memory.follow_up.generated',
+        payload: {
+          memorySummaryId: current.id,
+          sessionId,
+          version: updated.version,
+          provider: draft.provider,
+          model: draft.model,
+        },
+      });
+      return updated;
+    });
+
+    this.realtime.publishSessionEvent({
+      sessionId,
+      eventName: 'memory.follow_up.generated',
+      payload: {
+        memorySummaryId: result.id,
+        version: result.version,
+      },
+    });
+    return result;
+  }
+
+  async updateFollowUp(
+    principal: Principal,
+    sessionId: string,
+    expectedVersion: number,
+    body: UpdateFollowUpDraftDto,
+  ) {
+    this.assertHost(principal);
+    const result = await this.database.run(principal, async (transaction) => {
+      const summary = await transaction.memorySummary.findUnique({
+        where: { sessionId },
+      });
+      if (!summary) throw new NotFoundException('Memory summary not found');
+      if (!summary.followUpGeneratedAt) {
+        throw new ConflictException('Generate a follow-up draft first');
+      }
+      if (summary.version !== expectedVersion) {
+        throw new ConflictException(
+          `Summary version mismatch. Current version is ${summary.version}`,
+        );
+      }
+
+      const previous =
+        summary.followUpDraft &&
+        typeof summary.followUpDraft === 'object' &&
+        !Array.isArray(summary.followUpDraft)
+          ? (summary.followUpDraft as Record<string, unknown>)
+          : {};
+
+      const updated = await transaction.memorySummary.update({
+        where: { id: summary.id },
+        data: {
+          followUpDraft: {
+            ...previous,
+            subject: body.subject.trim(),
+            body: body.body.trim(),
+          },
+          followUpApprovedAt: null,
+          followUpApprovedByUserId: null,
+          version: { increment: 1 },
+        },
+      });
+
+      await this.audit.record(transaction, principal, {
+        action: 'memory.follow_up_edited',
+        resourceType: 'memory_summary',
+        resourceId: summary.id,
+        metadata: {
+          sessionId,
+          previousVersion: summary.version,
+          version: updated.version,
+        },
+      });
+      await this.outbox.enqueue(transaction, principal, {
+        aggregateType: 'memory_summary',
+        aggregateId: summary.id,
+        eventType: 'memory.follow_up.updated',
+        payload: {
+          memorySummaryId: summary.id,
+          sessionId,
+          version: updated.version,
+        },
+      });
+      return updated;
+    });
+
+    this.realtime.publishSessionEvent({
+      sessionId,
+      eventName: 'memory.follow_up.updated',
+      payload: {
+        memorySummaryId: result.id,
+        version: result.version,
+      },
+    });
+    return result;
+  }
+
+  async approveFollowUp(
+    principal: Principal,
+    sessionId: string,
+    expectedVersion: number,
+  ) {
+    this.assertHost(principal);
+    const result = await this.database.run(principal, async (transaction) => {
+      const summary = await transaction.memorySummary.findUnique({
+        where: { sessionId },
+      });
+      if (!summary) throw new NotFoundException('Memory summary not found');
+      if (!summary.followUpGeneratedAt) {
+        throw new ConflictException('Generate a follow-up draft first');
+      }
+      if (summary.version !== expectedVersion) {
+        throw new ConflictException(
+          `Summary version mismatch. Current version is ${summary.version}`,
+        );
+      }
+
+      const updated = await transaction.memorySummary.update({
+        where: { id: summary.id },
+        data: {
+          followUpApprovedAt: new Date(),
+          followUpApprovedByUserId: principal.userId,
+          version: { increment: 1 },
+        },
+      });
+
+      await this.audit.record(transaction, principal, {
+        action: 'memory.follow_up_approved',
+        resourceType: 'memory_summary',
+        resourceId: summary.id,
+        metadata: {
+          sessionId,
+          previousVersion: summary.version,
+          version: updated.version,
+        },
+      });
+      await this.outbox.enqueue(transaction, principal, {
+        aggregateType: 'memory_summary',
+        aggregateId: summary.id,
+        eventType: 'memory.follow_up.approved',
+        payload: {
+          memorySummaryId: summary.id,
+          sessionId,
+          version: updated.version,
+          approvedAt: updated.followUpApprovedAt?.toISOString(),
+        },
+      });
+      return updated;
+    });
+
+    this.realtime.publishSessionEvent({
+      sessionId,
+      eventName: 'memory.follow_up.approved',
+      payload: {
+        memorySummaryId: result.id,
+        version: result.version,
+        approvedAt: result.followUpApprovedAt?.toISOString(),
+      },
+    });
+    return result;
+  }
+
   async retryFailed(principal: Principal, sessionId: string) {
     this.assertHost(principal);
     const result = await this.database.run(principal, async (transaction) => {
