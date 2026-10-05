@@ -63,7 +63,8 @@
 - [x] provider-abstracted post-session AI summary execution gateway
 - [x] versioned summary editor and explicit human approval
 - [x] structured action-item editor with approval invalidation
-- [ ] follow-up approval and CRM write controls
+- [x] review-first AI follow-up email drafting and approval
+- [ ] outbound email delivery and CRM write controls
 - [ ] groundedness, privacy, prompt-injection, cost and latency evaluation suite
 
 ## Phase 5 — platform and enterprise
