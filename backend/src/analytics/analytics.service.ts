@@ -52,7 +52,7 @@ export class AnalyticsService {
           orderBy: { startsAt: 'asc' },
         }),
         transaction.eventRegistration.findMany({
-          where: createdWhere,
+          where: { registeredAt: { gte: from, lt: to } },
           select: { registeredAt: true, status: true },
         }),
         transaction.bookingReservation.findMany({
