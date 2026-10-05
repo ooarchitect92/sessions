@@ -135,7 +135,13 @@ export class BreakoutsService {
       }
 
       await transaction.breakoutAssignment.deleteMany({
-        where: { breakoutRoomId },
+        where: {
+          sessionId,
+          OR: [
+            { breakoutRoomId },
+            ...(input.userIds.length ? [{ userId: { in: input.userIds } }] : []),
+          ],
+        },
       });
       if (input.userIds.length) {
         await transaction.breakoutAssignment.createMany({
