@@ -29,6 +29,9 @@ export function MemoryDetailPage() {
   const [summaryDraft, setSummaryDraft] = useState('');
   const [editingActions, setEditingActions] = useState(false);
   const [actionDrafts, setActionDrafts] = useState<AiActionItemRecord[]>([]);
+  const [editingFollowUp, setEditingFollowUp] = useState(false);
+  const [followUpSubject, setFollowUpSubject] = useState('');
+  const [followUpBody, setFollowUpBody] = useState('');
   const memory = useQuery({
     queryKey: ['memory-detail', sessionId],
     queryFn: () => api.getMemory(sessionId),
@@ -102,6 +105,46 @@ export function MemoryDetailPage() {
   const approveSummary = useMutation({
     mutationFn: (version: number) =>
       api.approveMemorySummary(sessionId, version),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ['memory-detail', sessionId],
+      });
+      await queryClient.invalidateQueries({ queryKey: ['memory'] });
+    },
+  });
+
+  const generateFollowUp = useMutation({
+    mutationFn: () => api.generateFollowUpDraft(sessionId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ['memory-detail', sessionId],
+      });
+      await queryClient.invalidateQueries({ queryKey: ['memory'] });
+    },
+  });
+
+  const updateFollowUp = useMutation({
+    mutationFn: (input: {
+      version: number;
+      subject: string;
+      body: string;
+    }) =>
+      api.updateFollowUpDraft(sessionId, input.version, {
+        subject: input.subject,
+        body: input.body,
+      }),
+    onSuccess: async () => {
+      setEditingFollowUp(false);
+      await queryClient.invalidateQueries({
+        queryKey: ['memory-detail', sessionId],
+      });
+      await queryClient.invalidateQueries({ queryKey: ['memory'] });
+    },
+  });
+
+  const approveFollowUp = useMutation({
+    mutationFn: (version: number) =>
+      api.approveFollowUpDraft(sessionId, version),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: ['memory-detail', sessionId],
@@ -496,6 +539,141 @@ export function MemoryDetailPage() {
             ) : (
               <div className="artifact-placeholder">No action items extracted.</div>
             )}
+
+            <div className="follow-up-section">
+              <div className="summary-section-heading">
+                <div>
+                  <span className="eyebrow">AI follow-up</span>
+                  <h3>Email draft</h3>
+                </div>
+                {item.memorySummary?.followUpApprovedAt ? (
+                  <span className="state-chip enabled">Approved</span>
+                ) : item.memorySummary?.followUpGeneratedAt ? (
+                  <span className="state-chip">Needs review</span>
+                ) : null}
+              </div>
+
+              {!item.memorySummary?.followUpGeneratedAt ? (
+                <div className="follow-up-empty">
+                  <p>
+                    Generate a follow-up only after the meeting summary has been
+                    approved. Nothing is sent automatically.
+                  </p>
+                  <button
+                    className="button secondary"
+                    disabled={
+                      generateFollowUp.isPending ||
+                      !Boolean(item.memorySummary?.reviewedAt)
+                    }
+                    onClick={() => generateFollowUp.mutate()}
+                  >
+                    {generateFollowUp.isPending
+                      ? 'Drafting…'
+                      : 'Generate follow-up draft'}
+                  </button>
+                </div>
+              ) : editingFollowUp ? (
+                <div className="follow-up-editor">
+                  <label>
+                    Subject
+                    <input
+                      maxLength={300}
+                      value={followUpSubject}
+                      onChange={(event) => setFollowUpSubject(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Body
+                    <textarea
+                      rows={12}
+                      maxLength={20000}
+                      value={followUpBody}
+                      onChange={(event) => setFollowUpBody(event.target.value)}
+                    />
+                  </label>
+                  <div className="summary-review-actions">
+                    <button
+                      className="button primary"
+                      disabled={
+                        updateFollowUp.isPending ||
+                        !followUpSubject.trim() ||
+                        !followUpBody.trim()
+                      }
+                      onClick={() =>
+                        updateFollowUp.mutate({
+                          version: item.memorySummary?.version ?? 1,
+                          subject: followUpSubject.trim(),
+                          body: followUpBody.trim(),
+                        })
+                      }
+                    >
+                      {updateFollowUp.isPending ? 'Saving…' : 'Save draft'}
+                    </button>
+                    <button
+                      className="button secondary"
+                      disabled={updateFollowUp.isPending}
+                      onClick={() => setEditingFollowUp(false)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="follow-up-preview">
+                  <strong>
+                    {item.memorySummary.followUpDraft.subject ??
+                      'Follow-up subject'}
+                  </strong>
+                  <p>{item.memorySummary.followUpDraft.body ?? ''}</p>
+                  <div className="summary-review-actions">
+                    <button
+                      className="button secondary"
+                      onClick={() => {
+                        setFollowUpSubject(
+                          item.memorySummary?.followUpDraft.subject ?? '',
+                        );
+                        setFollowUpBody(
+                          item.memorySummary?.followUpDraft.body ?? '',
+                        );
+                        setEditingFollowUp(true);
+                      }}
+                    >
+                      Edit follow-up
+                    </button>
+                    <button
+                      className="button primary"
+                      disabled={
+                        approveFollowUp.isPending ||
+                        Boolean(item.memorySummary.followUpApprovedAt)
+                      }
+                      onClick={() =>
+                        approveFollowUp.mutate(
+                          item.memorySummary?.version ?? 1,
+                        )
+                      }
+                    >
+                      {approveFollowUp.isPending
+                        ? 'Approving…'
+                        : item.memorySummary.followUpApprovedAt
+                          ? 'Approved'
+                          : 'Approve follow-up'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {generateFollowUp.error ||
+              updateFollowUp.error ||
+              approveFollowUp.error ? (
+                <div className="error-banner compact-error">
+                  {(
+                    generateFollowUp.error ??
+                    updateFollowUp.error ??
+                    approveFollowUp.error
+                  )?.message}
+                </div>
+              ) : null}
+            </div>
           </section>
 
           <section className="panel transcript-panel">
