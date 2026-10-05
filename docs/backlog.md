@@ -24,7 +24,8 @@
 - [x] poll creation, launch, answer, results and close lifecycle
 - [x] moderated Q&A with voting and answers
 - [ ] reactions and private direct-message channels
-- [ ] whiteboard integration, snapshots and operation compaction
+- [x] persistent collaborative whiteboard with realtime operations, host snapshots and operation compaction
+- [ ] live collaborator cursors, image upload pipeline, undo/redo history and large-board performance qualification
 - [x] breakout assignment, assignment-aware LiveKit media-room transition and host broadcast
 - [ ] durable breakout attendance intervals, forced client migration and webinar-scale qualification
 - [x] HTTPS agenda content blocks with backend validation and sandboxed meeting-stage embeds
