@@ -8,6 +8,7 @@ import { Prisma, SessionStatus } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import type { Principal } from '../common/auth/principal';
 import { TenantDatabaseService } from '../database/tenant-database.service';
+import { ENGAGEMENT_EVENT, EngagementService } from '../engagement/engagement.service';
 import {
   RealtimeEventsService,
   type SessionRealtimeEvent,
@@ -32,6 +33,7 @@ const MUTABLE_SESSION_STATUSES = new Set<SessionStatus>([
 export class WhiteboardsService {
   constructor(
     private readonly database: TenantDatabaseService,
+    private readonly engagement: EngagementService,
     private readonly audit: AuditService,
     private readonly outbox: OutboxService,
     private readonly realtime: RealtimeEventsService,
@@ -163,6 +165,17 @@ export class WhiteboardsService {
             ? await this.compact(transaction, whiteboard.id)
             : false;
 
+        await this.engagement.record(transaction, principal, {
+          sessionId,
+          eventType: ENGAGEMENT_EVENT.WHITEBOARD_CHANGED,
+          sourceType: 'whiteboard_operation',
+          sourceId: operation.id,
+          properties: {
+            operationType: input.type,
+            sequence,
+            compacted,
+          },
+        });
         await this.audit.record(transaction, principal, {
           action: 'whiteboard.operation.applied',
           resourceType: 'whiteboard',
