@@ -75,7 +75,8 @@
 - [ ] webhook delivery reconciliation/operational dashboards
 - [ ] provider integration framework, credential governance and SSRF-safe egress
 - [ ] branding, email templates, custom domains and automated TLS
-- [ ] analytics aggregation and governed exports
+- [x] workspace/session analytics aggregation and dashboard from persisted tenant data
+- [ ] governed analytics exports, attendance intervals and page-view/conversion event qualification
 - [ ] plans, subscriptions, entitlements, seats, quota ledger and reconciliation
 - [ ] SAML/OIDC enterprise SSO, SCIM, audit exports and retention policies
 - [ ] localization, accessibility certification, regional cells and disaster-recovery qualification
