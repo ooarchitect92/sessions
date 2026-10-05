@@ -1,12 +1,13 @@
 import { ConflictException, ForbiddenException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { SessionKind, SessionStatus } from '@prisma/client';
+import { BreakoutRoomStatus, SessionKind, SessionStatus } from '@prisma/client';
 import { AccessToken } from 'livekit-server-sdk';
 import {
   HOST_ROLES,
   hasAnyRole,
   type Principal,
 } from '../common/auth/principal';
+import { TenantDatabaseService } from '../database/tenant-database.service';
 import { RecordingsService } from '../recordings/recordings.service';
 import { SessionsService } from '../sessions/sessions.service';
 
@@ -22,6 +23,7 @@ export class MediaService {
     private readonly config: ConfigService,
     private readonly sessions: SessionsService,
     private readonly recordings: RecordingsService,
+    private readonly database: TenantDatabaseService,
   ) {}
 
   async createJoinToken(
@@ -65,6 +67,80 @@ export class MediaService {
     );
     accessToken.addGrant({
       room: session.livekitRoomName,
+      roomJoin: true,
+      roomAdmin: isHost,
+      canPublish,
+      canSubscribe: true,
+      canPublishData: true,
+    });
+
+    return {
+      url: this.config.getOrThrow<string>('LIVEKIT_URL'),
+      token: await accessToken.toJwt(),
+      expiresIn,
+      expiresAt: new Date(Date.now() + expiresIn * 1000).toISOString(),
+    };
+  }
+
+  async createBreakoutJoinToken(
+    principal: Principal,
+    sessionId: string,
+    breakoutRoomId: string,
+  ): Promise<{ url: string; token: string; expiresIn: number; expiresAt: string }> {
+    const session = await this.sessions.getById(principal, sessionId);
+    const isHost = hasAnyRole(principal, HOST_ROLES);
+    if (!JOINABLE_SESSION_STATUSES.has(session.status)) {
+      throw new ConflictException(
+        `Media access is unavailable while session is ${session.status}`,
+      );
+    }
+
+    const breakout = await this.database.run(principal, async (transaction) => {
+      const room = await transaction.breakoutRoom.findFirst({
+        where: { id: breakoutRoomId, sessionId },
+        include: {
+          assignments: {
+            where: { userId: principal.userId },
+            select: { id: true },
+          },
+        },
+      });
+      if (!room) throw new ForbiddenException('Breakout room is unavailable');
+      if (room.status !== BreakoutRoomStatus.ACTIVE) {
+        throw new ConflictException('Breakout room is not active');
+      }
+      if (!isHost && room.assignments.length === 0) {
+        throw new ForbiddenException('You are not assigned to this breakout room');
+      }
+      return room;
+    });
+
+    await this.recordings.assertConsentAndPrepare(principal, session);
+
+    const canPublish =
+      isHost ||
+      (session.kind === SessionKind.MEETING &&
+        !principal.roles.includes('ANALYST') &&
+        !principal.roles.includes('GUEST'));
+    const expiresIn = this.config.getOrThrow<number>('LIVEKIT_TOKEN_TTL_SECONDS');
+    const accessToken = new AccessToken(
+      this.config.getOrThrow<string>('LIVEKIT_API_KEY'),
+      this.config.getOrThrow<string>('LIVEKIT_API_SECRET'),
+      {
+        identity: principal.userId,
+        name: principal.displayName,
+        ttl: expiresIn,
+        metadata: JSON.stringify({
+          organizationId: principal.organizationId,
+          workspaceId: principal.workspaceId,
+          sessionId,
+          breakoutRoomId,
+          roles: principal.roles,
+        }),
+      },
+    );
+    accessToken.addGrant({
+      room: breakout.livekitRoomName,
       roomJoin: true,
       roomAdmin: isHost,
       canPublish,
