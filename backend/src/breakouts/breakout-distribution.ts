@@ -6,7 +6,9 @@ export function distributeParticipants(
   if (!roomIds.length) return distribution;
 
   userIds.forEach((userId, index) => {
-    distribution.get(roomIds[index % roomIds.length])?.push(userId);
+    const roomId = roomIds[index % roomIds.length];
+    if (!roomId) return;
+    distribution.get(roomId)?.push(userId);
   });
   return distribution;
 }
