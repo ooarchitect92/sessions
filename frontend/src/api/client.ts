@@ -134,6 +134,45 @@ export interface LoginSession {
   current: boolean;
 }
 
+export interface WebhookDeliveryRecord {
+  id: string;
+  subscriptionId: string;
+  outboxEventId: string;
+  eventType: string;
+  status: 'PENDING' | 'PROCESSING' | 'DELIVERED' | 'FAILED';
+  attempts: number;
+  lastStatusCode: number | null;
+  lastResponseBody: string | null;
+  lastError: string | null;
+  nextAttemptAt: string;
+  deliveredAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WebhookSubscriptionRecord {
+  id: string;
+  name: string;
+  url: string;
+  eventTypes: string[];
+  active: boolean;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  _count?: { deliveries: number };
+  deliveries?: Array<
+    Pick<
+      WebhookDeliveryRecord,
+      'id' | 'status' | 'eventType' | 'attempts' | 'deliveredAt' | 'lastError' | 'createdAt'
+    >
+  >;
+}
+
+export interface WebhookCreateResult extends WebhookSubscriptionRecord {
+  secret: string;
+  secretWarning: string;
+}
+
 export interface AgendaItem {
   id: string;
   organizationId: string;
@@ -636,6 +675,52 @@ export const api = {
   revokeWorkspaceInvitation(invitationId: string): Promise<{ id: string; revoked: true }> {
     return request(`/workspaces/current/invitations/${invitationId}`, { method: 'DELETE' });
   },
+
+  listWebhooks(): Promise<WebhookSubscriptionRecord[]> {
+    return request('/webhooks');
+  },
+
+  createWebhook(input: {
+    name: string;
+    url: string;
+    eventTypes: string[];
+  }): Promise<WebhookCreateResult> {
+    return request('/webhooks', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  updateWebhook(
+    id: string,
+    version: number,
+    input: Partial<Pick<WebhookSubscriptionRecord, 'name' | 'url' | 'eventTypes' | 'active'>>,
+  ): Promise<WebhookSubscriptionRecord> {
+    return request(`/webhooks/${id}`, {
+      method: 'PATCH',
+      headers: { 'if-match': String(version) },
+      body: JSON.stringify(input),
+    });
+  },
+
+  deleteWebhook(id: string): Promise<{ id: string; deleted: true }> {
+    return request(`/webhooks/${id}`, { method: 'DELETE' });
+  },
+
+  rotateWebhookSecret(
+    id: string,
+  ): Promise<{ id: string; version: number; secret: string; secretWarning: string }> {
+    return request(`/webhooks/${id}/rotate-secret`, { method: 'POST' });
+  },
+
+  listWebhookDeliveries(id: string): Promise<WebhookDeliveryRecord[]> {
+    return request(`/webhooks/${id}/deliveries`);
+  },
+
+  replayWebhookDelivery(deliveryId: string): Promise<WebhookDeliveryRecord> {
+    return request(`/webhooks/deliveries/${deliveryId}/replay`, { method: 'POST' });
+  },
+
   listRooms(): Promise<Room[]> {
     return request<Room[]>("/rooms");
   },
