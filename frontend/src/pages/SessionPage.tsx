@@ -5,6 +5,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api, type AgendaDraft, type MediaToken } from '../api/client';
 import { AgendaContentStage } from '../components/AgendaContentStage';
+import { LiveCaptionsPanel } from '../components/LiveCaptionsPanel';
 import { SessionCollaborationPanel } from '../components/SessionCollaborationPanel';
 import { WhiteboardPanel } from '../components/WhiteboardPanel';
 import { useSessionRealtime } from '../hooks/use-session-realtime';
@@ -852,6 +853,11 @@ export function SessionPage() {
               ) : null}
             </div>
           )}
+          <LiveCaptionsPanel
+            sessionId={sessionId}
+            enabled={current.transcriptionEnabled}
+            live={current.status === 'LIVE'}
+          />
           {reactionFeed.length ? (
             <div className="reaction-feed" aria-live="polite">
               {reactionFeed.map((item) => (
