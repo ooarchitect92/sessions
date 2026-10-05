@@ -26,7 +26,8 @@ export interface SessionRealtimeEvent {
     | 'memory.summary.approved'
     | 'memory.follow_up.generated'
     | 'memory.follow_up.updated'
-    | 'memory.follow_up.approved';
+    | 'memory.follow_up.approved'
+    | 'memory.follow_up.delivery_requested';
   payload: unknown;
 }
 
