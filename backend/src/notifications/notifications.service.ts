@@ -200,7 +200,12 @@ export class NotificationsService {
 
   @Interval(60_000)
   async planScheduledNotifications(): Promise<void> {
-    if (this.planning) return;
+    if (
+      this.planning ||
+      !this.config.get<boolean>('EMAIL_DELIVERY_ENABLED', false)
+    ) {
+      return;
+    }
     this.planning = true;
     try {
       const now = new Date();
@@ -344,11 +349,22 @@ export class NotificationsService {
         },
         event: {
           status: { in: [EventStatus.PUBLISHED, EventStatus.LIVE] },
-          startsAt: {
-            gt: new Date(now.getTime() - CONFIRMATION_LOOKBACK_MS),
-            lte: new Date(now.getTime() + REMINDER_WINDOW_MS),
-          },
         },
+        OR: [
+          {
+            registeredAt: {
+              gte: new Date(now.getTime() - CONFIRMATION_LOOKBACK_MS),
+            },
+          },
+          {
+            event: {
+              startsAt: {
+                gt: now,
+                lte: new Date(now.getTime() + REMINDER_WINDOW_MS),
+              },
+            },
+          },
+        ],
       },
       include: {
         event: true,
@@ -401,6 +417,55 @@ export class NotificationsService {
           reminder1Kind: NotificationKind.EVENT_REMINDER_1H,
         });
       }
+    }
+
+    const inactive = await this.workerPrisma.eventRegistration.findMany({
+      where: {
+        OR: [
+          {
+            status: {
+              notIn: [
+                RegistrationStatus.REGISTERED,
+                RegistrationStatus.WAITLISTED,
+              ],
+            },
+          },
+          {
+            event: {
+              status: {
+                notIn: [EventStatus.PUBLISHED, EventStatus.LIVE],
+              },
+            },
+          },
+        ],
+      },
+      select: { id: true },
+      take: 1000,
+    });
+    if (inactive.length > 0) {
+      await this.workerPrisma.notificationDelivery.updateMany({
+        where: {
+          kind: {
+            in: [
+              NotificationKind.EVENT_REGISTRATION_CONFIRMATION,
+              NotificationKind.EVENT_REMINDER_24H,
+              NotificationKind.EVENT_REMINDER_1H,
+            ],
+          },
+          status: {
+            in: [
+              NotificationDeliveryStatus.PENDING,
+              NotificationDeliveryStatus.RETRYING,
+              NotificationDeliveryStatus.DELIVERING,
+            ],
+          },
+          sourceId: { in: inactive.map((row) => row.id) },
+        },
+        data: {
+          status: NotificationDeliveryStatus.CANCELLED,
+          lastError: 'Event registration is no longer eligible for delivery',
+        },
+      });
     }
   }
 
@@ -637,7 +702,8 @@ export class NotificationsService {
       'attempt_count = delivery.attempt_count + 1, updated_at = NOW() ' +
       'WHERE delivery.id IN (' +
       'SELECT candidate.id FROM notification_deliveries AS candidate ' +
-      'WHERE candidate.status IN (\'PENDING\'::"NotificationDeliveryStatus", \'RETRYING\'::"NotificationDeliveryStatus") ' +
+      'WHERE (candidate.status IN (\'PENDING\'::"NotificationDeliveryStatus", \'RETRYING\'::"NotificationDeliveryStatus") ' +
+      'OR (candidate.status = \'DELIVERING\'::"NotificationDeliveryStatus" AND candidate.updated_at < NOW() - INTERVAL \'5 minutes\')) ' +
       'AND candidate.scheduled_for <= NOW() AND candidate.next_attempt_at <= NOW() ' +
       'AND candidate.attempt_count < $1 ' +
       'ORDER BY candidate.scheduled_for, candidate.created_at LIMIT 25 FOR UPDATE SKIP LOCKED' +
