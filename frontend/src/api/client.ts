@@ -471,6 +471,29 @@ export interface MemoryDetail extends SessionDetail {
   questions: QuestionRecord[];
 }
 
+export interface BreakoutAssignmentRecord {
+  id: string;
+  userId: string;
+  assignedAt: string;
+  user: {
+    id: string;
+    displayName: string;
+    avatarUrl: string | null;
+  };
+}
+
+export interface BreakoutRoomRecord {
+  id: string;
+  sessionId: string;
+  name: string;
+  position: number;
+  status: 'DRAFT' | 'ACTIVE' | 'CLOSED';
+  livekitRoomName: string;
+  createdAt: string;
+  updatedAt: string;
+  assignments: BreakoutAssignmentRecord[];
+}
+
 export interface ChatMessageRecord {
   id: string;
   sessionId: string;
@@ -1188,6 +1211,86 @@ export const api = {
       {
         method: "POST",
       },
+    );
+  },
+
+  listBreakouts(sessionId: string): Promise<BreakoutRoomRecord[]> {
+    return request(`/sessions/${sessionId}/breakouts`);
+  },
+
+  createBreakout(
+    sessionId: string,
+    input: { name: string; position: number },
+  ): Promise<BreakoutRoomRecord> {
+    return request(`/sessions/${sessionId}/breakouts`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+
+  assignBreakout(
+    sessionId: string,
+    breakoutRoomId: string,
+    userIds: string[],
+  ): Promise<BreakoutRoomRecord> {
+    return request(
+      `/sessions/${sessionId}/breakouts/${breakoutRoomId}/assignments`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ userIds }),
+      },
+    );
+  },
+
+  randomizeBreakouts(
+    sessionId: string,
+    userIds: string[],
+  ): Promise<{ sessionId: string; roomCount: number; participantCount: number }> {
+    return request(`/sessions/${sessionId}/breakouts/randomize`, {
+      method: "POST",
+      body: JSON.stringify({ userIds }),
+    });
+  },
+
+  startBreakouts(
+    sessionId: string,
+  ): Promise<{ sessionId: string; roomCount: number; status: "ACTIVE" }> {
+    return request(`/sessions/${sessionId}/breakouts/start`, {
+      method: "POST",
+    });
+  },
+
+  closeBreakouts(
+    sessionId: string,
+  ): Promise<{ sessionId: string; roomCount: number; status: "CLOSED" }> {
+    return request(`/sessions/${sessionId}/breakouts/close`, {
+      method: "POST",
+    });
+  },
+
+  broadcastBreakout(
+    sessionId: string,
+    message: string,
+  ): Promise<{
+    sessionId: string;
+    message: string;
+    sentByUserId: string;
+    sentByDisplayName: string;
+    sentAt: string;
+  }> {
+    return request(`/sessions/${sessionId}/breakouts/broadcast`, {
+      method: "POST",
+      body: JSON.stringify({ message }),
+    });
+  },
+
+  createBreakoutMediaToken(
+    sessionId: string,
+    breakoutRoomId: string,
+  ): Promise<MediaToken> {
+    return request(
+      `/sessions/${sessionId}/breakouts/${breakoutRoomId}/media-token`,
+      { method: "POST" },
     );
   },
 
