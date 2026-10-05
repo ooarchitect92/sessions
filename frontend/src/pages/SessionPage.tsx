@@ -31,6 +31,15 @@ export function SessionPage() {
   const [agendaText, setAgendaText] = useState('');
   const [showSharedContent, setShowSharedContent] = useState(true);
   const [breakoutNotice, setBreakoutNotice] = useState<string | null>(null);
+  const [handRaised, setHandRaised] = useState(false);
+  const [raisedHands, setRaisedHands] = useState<Record<string, string>>({});
+  const [reactionFeed, setReactionFeed] = useState<
+    Array<{
+      id: string;
+      displayName: string;
+      reaction: string;
+    }>
+  >([]);
   const [agendaType, setAgendaType] = useState<
     | 'TEXT'
     | 'PRESENTATION'
@@ -45,16 +54,54 @@ export function SessionPage() {
   useSessionRealtime(sessionId);
 
   useEffect(() => {
-    const handler = (event: Event) => {
+    const breakoutHandler = (event: Event) => {
       const detail = (event as CustomEvent<{ message?: string }>).detail;
       if (!detail?.message) return;
       setBreakoutNotice(detail.message);
-      const timeout = window.setTimeout(() => setBreakoutNotice(null), 8000);
-      return () => window.clearTimeout(timeout);
+      window.setTimeout(() => setBreakoutNotice(null), 8000);
     };
-    window.addEventListener('sessions:breakout-broadcast', handler);
+    const reactionHandler = (event: Event) => {
+      const detail = (
+        event as CustomEvent<{
+          userId?: string;
+          displayName?: string;
+          reaction?: string;
+          occurredAt?: string;
+        }>
+      ).detail;
+      if (!detail?.reaction || !detail.displayName) return;
+      const id = `${detail.userId ?? 'user'}-${detail.occurredAt ?? Date.now()}`;
+      setReactionFeed((current) =>
+        [...current, { id, displayName: detail.displayName!, reaction: detail.reaction! }].slice(-6),
+      );
+      window.setTimeout(() => {
+        setReactionFeed((current) => current.filter((item) => item.id !== id));
+      }, 4500);
+    };
+    const handRaiseHandler = (event: Event) => {
+      const detail = (
+        event as CustomEvent<{
+          userId?: string;
+          displayName?: string;
+          raised?: boolean;
+        }>
+      ).detail;
+      if (!detail?.userId || !detail.displayName) return;
+      setRaisedHands((current) => {
+        const next = { ...current };
+        if (detail.raised) next[detail.userId!] = detail.displayName!;
+        else delete next[detail.userId!];
+        return next;
+      });
+    };
+
+    window.addEventListener('sessions:breakout-broadcast', breakoutHandler);
+    window.addEventListener('sessions:reaction', reactionHandler);
+    window.addEventListener('sessions:hand-raise', handRaiseHandler);
     return () => {
-      window.removeEventListener('sessions:breakout-broadcast', handler);
+      window.removeEventListener('sessions:breakout-broadcast', breakoutHandler);
+      window.removeEventListener('sessions:reaction', reactionHandler);
+      window.removeEventListener('sessions:hand-raise', handRaiseHandler);
     };
   }, []);
 
@@ -111,6 +158,16 @@ export function SessionPage() {
       setShowSharedContent(false);
       setMedia(token);
     },
+  });
+
+  const sendReaction = useMutation({
+    mutationFn: (reaction: '👍' | '👏' | '❤️' | '😂' | '🎉') =>
+      api.sendReaction(sessionId, reaction),
+  });
+
+  const toggleHandRaise = useMutation({
+    mutationFn: (raised: boolean) => api.setHandRaise(sessionId, raised),
+    onSuccess: (result) => setHandRaised(result.raised),
   });
 
   const activate = useMutation({
@@ -243,6 +300,28 @@ export function SessionPage() {
               End session
             </button>
           ) : null}
+          <div className="session-reaction-controls" aria-label="Meeting reactions">
+            {(['👍', '👏', '❤️', '😂', '🎉'] as const).map((reaction) => (
+              <button
+                key={reaction}
+                type="button"
+                className="reaction-button"
+                disabled={sendReaction.isPending}
+                onClick={() => sendReaction.mutate(reaction)}
+                aria-label={`Send ${reaction} reaction`}
+              >
+                {reaction}
+              </button>
+            ))}
+            <button
+              type="button"
+              className={handRaised ? 'hand-raise-button active' : 'hand-raise-button'}
+              disabled={toggleHandRaise.isPending}
+              onClick={() => toggleHandRaise.mutate(!handRaised)}
+            >
+              ✋ {handRaised ? 'Lower hand' : 'Raise hand'}
+            </button>
+          </div>
           <button
             className="button primary"
             onClick={() => join.mutate()}
@@ -617,6 +696,22 @@ export function SessionPage() {
               ) : null}
             </div>
           )}
+          {reactionFeed.length ? (
+            <div className="reaction-feed" aria-live="polite">
+              {reactionFeed.map((item) => (
+                <div key={item.id}>
+                  <span>{item.reaction}</span>
+                  <small>{item.displayName}</small>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {Object.keys(raisedHands).length ? (
+            <div className="raised-hands-badge">
+              <span>✋</span>
+              <strong>{Object.values(raisedHands).join(', ')}</strong>
+            </div>
+          ) : null}
         </section>
 
         <SessionCollaborationPanel
