@@ -247,6 +247,8 @@ model Workspace {
   workspaceInvitations WorkspaceInvitation[]
   agendaTemplates     AgendaTemplate[]
   agendaTemplateItems AgendaTemplateItem[]
+  calendarConnections CalendarConnection[]
+  calendarOAuthStates CalendarOAuthState[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
