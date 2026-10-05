@@ -78,6 +78,32 @@ export function useSessionRealtime(sessionId: string): void {
           });
         });
       }
+      socket.on(
+        'session.reaction',
+        (payload: {
+          userId?: string;
+          displayName?: string;
+          reaction?: string;
+          occurredAt?: string;
+        }) => {
+          window.dispatchEvent(
+            new CustomEvent('sessions:reaction', { detail: payload }),
+          );
+        },
+      );
+      socket.on(
+        'session.hand_raise',
+        (payload: {
+          userId?: string;
+          displayName?: string;
+          raised?: boolean;
+          occurredAt?: string;
+        }) => {
+          window.dispatchEvent(
+            new CustomEvent('sessions:hand-raise', { detail: payload }),
+          );
+        },
+      );
       socket.on('breakout.broadcast', (payload: { message?: string }) => {
         if (payload?.message) {
           window.dispatchEvent(
