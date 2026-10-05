@@ -844,3 +844,39 @@
   font-size: 8px;
   line-height: 1.45;
 }
+
+.calendar-integration-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.calendar-integration-card {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(39, 73, 63, 0.13);
+  border-radius: 14px;
+  background: #fbfcfb;
+}
+
+.calendar-integration-card h3,
+.calendar-integration-card p {
+  margin: 0;
+}
+
+.calendar-integration-card h3 {
+  margin-top: 8px;
+  color: #243f37;
+}
+
+.calendar-integration-card p,
+.calendar-integration-card small {
+  color: #687871;
+}
+
+@media (max-width: 760px) {
+  .calendar-integration-grid {
+    grid-template-columns: 1fr;
+  }
+}
