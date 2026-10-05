@@ -860,8 +860,8 @@ export const api = {
     version: number,
     input: {
       summaryText: string;
-      decisions?: Record<string, unknown>[];
-      actionItems?: Record<string, unknown>[];
+      decisions?: AiDecisionRecord[];
+      actionItems?: AiActionItemRecord[];
     },
   ): Promise<MemorySummaryRecord> {
     return request<MemorySummaryRecord>(`/memory/${sessionId}/summary`, {
