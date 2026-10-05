@@ -148,6 +148,24 @@ export interface AgendaItem {
   updatedAt: string;
 }
 
+export interface AgendaDraftItem {
+  title: string;
+  durationSeconds: number;
+  type: AgendaItemType;
+  content: Record<string, unknown>;
+  rationale?: string;
+}
+
+export interface AgendaDraft {
+  sessionId: string;
+  provider: string;
+  model: string;
+  items: AgendaDraftItem[];
+  totalDurationSeconds: number;
+  generatedAt: string;
+  persisted: false;
+}
+
 export interface SessionDetail extends Session {
   livekitRoomName: string;
   agendaItems: AgendaItem[];
@@ -641,6 +659,30 @@ export const api = {
     return request<AgendaItem>(`/sessions/${sessionId}/agenda-items`, {
       method: "POST",
       body: JSON.stringify(input),
+    });
+  },
+
+  generateAgendaDraft(
+    sessionId: string,
+    input: {
+      objective?: string;
+      audience?: string;
+      durationMinutes?: number;
+    },
+  ): Promise<AgendaDraft> {
+    return request<AgendaDraft>(`/sessions/${sessionId}/agenda-items/ai-draft`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+
+  applyAgendaDraft(
+    sessionId: string,
+    items: AgendaDraftItem[],
+  ): Promise<AgendaItem[]> {
+    return request<AgendaItem[]>(`/sessions/${sessionId}/agenda-items/ai-apply`, {
+      method: "POST",
+      body: JSON.stringify({ items }),
     });
   },
 
