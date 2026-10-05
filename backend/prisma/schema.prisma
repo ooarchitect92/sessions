@@ -505,6 +505,7 @@ model Transcript {
   session        Session             @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   recording      Recording?          @relation(fields: [recordingId], references: [id], onDelete: SetNull)
   segments       TranscriptSegment[]
+  revisions      TranscriptRevision[]
 
   @@index([organizationId, workspaceId, status])
   @@map("transcripts")
@@ -528,6 +529,22 @@ model TranscriptSegment {
   @@unique([transcriptId, position])
   @@index([organizationId, workspaceId, transcriptId])
   @@map("transcript_segments")
+}
+
+model TranscriptRevision {
+  id             String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String            @map("organization_id") @db.Uuid
+  workspaceId    String            @map("workspace_id") @db.Uuid
+  transcriptId   String            @map("transcript_id") @db.Uuid
+  segmentId      String            @map("segment_id") @db.Uuid
+  editedByUserId String            @map("edited_by_user_id") @db.Uuid
+  before         Json
+  after          Json
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  transcript     Transcript        @relation(fields: [transcriptId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, workspaceId, transcriptId, createdAt])
+  @@map("transcript_revisions")
 }
 
 model MemorySummary {
