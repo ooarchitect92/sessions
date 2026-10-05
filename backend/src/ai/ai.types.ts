@@ -81,3 +81,23 @@ export interface AgendaAiProvider {
   readonly name: string;
   generateAgenda(request: AgendaDraftRequest): Promise<AgendaDraftResult>;
 }
+
+export interface FollowUpDraftRequest {
+  title: string;
+  summary: string;
+  decisions: AiDecision[];
+  actionItems: AiActionItem[];
+  audience?: string;
+}
+
+export interface FollowUpDraftResult {
+  provider: string;
+  model: string;
+  subject: string;
+  body: string;
+}
+
+export interface FollowUpAiProvider {
+  readonly name: string;
+  draftFollowUp(request: FollowUpDraftRequest): Promise<FollowUpDraftResult>;
+}
