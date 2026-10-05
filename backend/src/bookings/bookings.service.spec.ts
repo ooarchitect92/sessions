@@ -27,6 +27,7 @@ function createService(): AvailabilityHarness {
     undefined as never,
     undefined as never,
     undefined as never,
+    undefined as never,
   ) as unknown as AvailabilityHarness;
 }
 
