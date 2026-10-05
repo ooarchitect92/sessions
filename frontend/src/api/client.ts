@@ -1379,6 +1379,38 @@ export const api = {
     });
   },
 
+  sendReaction(
+    sessionId: string,
+    reaction: "👍" | "👏" | "❤️" | "😂" | "🎉",
+  ): Promise<{
+    sessionId: string;
+    userId: string;
+    displayName: string;
+    reaction: string;
+    occurredAt: string;
+  }> {
+    return request(`/sessions/${sessionId}/reactions`, {
+      method: "POST",
+      body: JSON.stringify({ reaction }),
+    });
+  },
+
+  setHandRaise(
+    sessionId: string,
+    raised: boolean,
+  ): Promise<{
+    sessionId: string;
+    userId: string;
+    displayName: string;
+    raised: boolean;
+    occurredAt: string;
+  }> {
+    return request(`/sessions/${sessionId}/hand-raise`, {
+      method: "POST",
+      body: JSON.stringify({ raised }),
+    });
+  },
+
   listPolls(sessionId: string): Promise<PollRecord[]> {
     return request<PollRecord[]>(`/sessions/${sessionId}/polls`);
   },
