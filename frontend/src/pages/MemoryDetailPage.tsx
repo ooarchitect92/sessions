@@ -495,7 +495,7 @@ export function MemoryDetailPage() {
               </div>
             ) : (
               <div className="artifact-placeholder">No action items extracted.</div>
-            )
+            )}
           </section>
 
           <section className="panel transcript-panel">
