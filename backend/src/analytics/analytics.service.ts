@@ -111,8 +111,12 @@ export class AnalyticsService {
       const noShowRegistrations = registrations.filter(
         (item) => item.status === RegistrationStatus.NO_SHOW,
       ).length;
+      const confirmedBookingStatuses: BookingStatus[] = [
+        BookingStatus.CONFIRMED,
+        BookingStatus.COMPLETED,
+      ];
       const confirmedBookings = reservations.filter((item) =>
-        [BookingStatus.CONFIRMED, BookingStatus.COMPLETED].includes(item.status),
+        confirmedBookingStatuses.includes(item.status),
       ).length;
       const noShowBookings = reservations.filter(
         (item) => item.status === BookingStatus.NO_SHOW,
