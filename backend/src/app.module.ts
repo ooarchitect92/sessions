@@ -8,6 +8,7 @@ import { ApiKeysModule } from "./api-keys/api-keys.module";
 import { AiModule } from "./ai/ai.module";
 import { AuthModule } from "./auth/auth.module";
 import { BookingsModule } from "./bookings/bookings.module";
+import { BreakoutsModule } from "./breakouts/breakouts.module";
 import { CollaborationModule } from "./collaboration/collaboration.module";
 import { PrincipalGuard } from "./common/auth/principal.guard";
 import { validateEnvironment } from "./common/config/env.validation";
@@ -52,6 +53,7 @@ import { WorkspacesModule } from "./workspaces/workspaces.module";
     ApiKeysModule,
     EventsModule,
     BookingsModule,
+    BreakoutsModule,
     CollaborationModule,
     MediaModule,
     RealtimeModule,
