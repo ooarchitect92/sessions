@@ -84,7 +84,20 @@ Access tokens are short-lived JWTs. Managed browser sessions use opaque, hashed 
 | `POST`  | `/v1/sessions/{id}/agenda-items`                   | append an agenda item                                   |
 | `PUT`   | `/v1/sessions/{id}/agenda-items/order`             | atomically reorder all items                            |
 | `POST`  | `/v1/sessions/{id}/agenda-items/{itemId}/activate` | make item current and emit event                        |
+| `POST`  | `/v1/sessions/{id}/agenda-items/save-template`      | save the current ordered agenda as a workspace template |
+| `POST`  | `/v1/sessions/{id}/agenda-items/apply-template/{templateId}` | append or replace agenda items from a template |
+| `POST`  | `/v1/sessions/{id}/transcription/chunks`            | submit a bounded live microphone audio chunk for STT and realtime captions |
 | `POST`  | `/v1/sessions/{id}/media-token`                    | short-lived LiveKit room token                          |
+
+### Agenda templates
+
+| Method   | Path                                | Purpose |
+| -------- | ----------------------------------- | ------- |
+| `GET`    | `/v1/agenda-templates`              | list workspace templates and ordered items |
+| `GET`    | `/v1/agenda-templates/{templateId}` | read one reusable agenda template |
+| `POST`   | `/v1/agenda-templates`              | create a reusable workspace template |
+| `PATCH`  | `/v1/agenda-templates/{templateId}` | update a versioned template with `If-Match` |
+| `DELETE` | `/v1/agenda-templates/{templateId}` | delete a workspace template |
 
 ### Events and registrations
 
@@ -151,6 +164,7 @@ Authenticated clients join `session:{sessionId}` through the `/realtime` Socket.
 - `poll.created`, `poll.launched`, `poll.closed`, `poll.results.updated`
 - `question.created`, `question.updated`, `question.votes.updated`
 - `memory.updated`
+- `transcript.live.segment`
 
 The current single-replica event bridge is in-process. A Redis/NATS adapter is a mandatory gate before horizontally scaling realtime API replicas.
 
