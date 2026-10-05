@@ -938,3 +938,116 @@
     grid-template-columns: 1fr;
   }
 }
+
+.agenda-template-button {
+  border: 1px solid rgba(35, 89, 76, 0.16);
+  border-radius: 8px;
+  background: rgba(35, 89, 76, 0.06);
+  color: #365149;
+  padding: 6px 8px;
+  font-size: 8px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.agenda-template-button:hover {
+  background: rgba(35, 89, 76, 0.11);
+}
+
+.agenda-template-panel {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-bottom: 1px solid rgba(36, 73, 63, 0.12);
+  background: #f7faf8;
+}
+
+.agenda-template-panel h3,
+.agenda-template-panel p {
+  margin: 0;
+}
+
+.agenda-template-panel p {
+  color: #61716c;
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.agenda-template-panel label {
+  display: grid;
+  gap: 5px;
+  color: #365149;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.agenda-template-panel input,
+.agenda-template-panel select {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid rgba(36, 73, 63, 0.14);
+  border-radius: 8px;
+  background: #fff;
+  color: #243b35;
+  padding: 8px 9px;
+  font: inherit;
+}
+
+.agenda-template-save-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+}
+
+.agenda-template-checkbox {
+  display: flex !important;
+  grid-template-columns: none;
+  align-items: center;
+  gap: 7px !important;
+  font-weight: 700 !important;
+}
+
+.agenda-template-checkbox input {
+  width: auto;
+  margin: 0;
+}
+
+.agenda-template-preview {
+  display: grid;
+  gap: 5px;
+  max-height: 170px;
+  overflow: auto;
+  padding: 7px;
+  border: 1px solid rgba(36, 73, 63, 0.1);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.agenda-template-preview > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: 6px;
+  background: #f4f7f5;
+}
+
+.agenda-template-preview strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #29453d;
+  font-size: 8px;
+}
+
+.agenda-template-preview span {
+  flex: 0 0 auto;
+  color: #71817c;
+  font-size: 7px;
+}
+
+.agenda-template-actions {
+  display: flex;
+  gap: 7px;
+}
