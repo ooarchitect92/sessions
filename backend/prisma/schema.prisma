@@ -561,6 +561,8 @@ model MemorySummary {
   citations      Json           @default("[]")
   completedAt    DateTime?      @map("completed_at") @db.Timestamptz(6)
   failureCode    String?        @map("failure_code") @db.VarChar(160)
+  reviewedAt     DateTime?      @map("reviewed_at") @db.Timestamptz(6)
+  reviewedByUserId String?      @map("reviewed_by_user_id") @db.Uuid
   version        Int            @default(1)
   createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -569,6 +571,7 @@ model MemorySummary {
   session        Session        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@index([organizationId, workspaceId, status])
+  @@index([reviewedByUserId])
   @@map("memory_summaries")
 }
 
