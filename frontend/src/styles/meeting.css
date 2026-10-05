@@ -372,3 +372,244 @@
   font-size: 11px;
   line-height: 1.6;
 }
+
+.side-tabs.five-tabs {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.side-tabs.five-tabs button {
+  padding-inline: 4px;
+  font-size: 8px;
+}
+
+.breakout-panel-body {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+
+.breakout-summary,
+.breakout-room-card,
+.breakout-manager {
+  border: 1px solid rgba(255,255,255,.09);
+  border-radius: 12px;
+  background: rgba(255,255,255,.025);
+}
+
+.breakout-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  padding: 11px 12px;
+}
+
+.breakout-summary strong,
+.breakout-summary small {
+  display: block;
+}
+
+.breakout-summary strong {
+  font-size: 10px;
+}
+
+.breakout-summary small {
+  color: #82948f;
+  font-size: 8px;
+}
+
+.breakout-manager {
+  display: grid;
+  gap: 11px;
+  padding: 11px;
+}
+
+.breakout-create-row,
+.breakout-broadcast-row,
+.breakout-global-actions {
+  display: flex;
+  gap: 7px;
+}
+
+.breakout-create-row input,
+.breakout-broadcast-row input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 8px;
+  background: rgba(255,255,255,.04);
+  color: #ecf3f0;
+  padding: 8px 9px;
+  font: inherit;
+}
+
+.breakout-create-row button,
+.breakout-broadcast-row button,
+.breakout-global-actions button,
+.breakout-assignment-editor button,
+.breakout-join-button,
+.breakout-participant-picker > button {
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 8px;
+  background: rgba(255,255,255,.06);
+  color: #dce7e3;
+  padding: 7px 9px;
+  font-size: 8px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.breakout-global-actions button:first-child,
+.breakout-join-button {
+  background: #245e50;
+  border-color: #357866;
+  color: #fff;
+}
+
+.breakout-global-actions button:disabled,
+.breakout-create-row button:disabled,
+.breakout-broadcast-row button:disabled,
+.breakout-assignment-editor button:disabled,
+.breakout-join-button:disabled,
+.breakout-participant-picker > button:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+.breakout-participant-picker {
+  display: grid;
+  gap: 7px;
+}
+
+.breakout-participant-picker > strong {
+  color: #b9c8c4;
+  font-size: 9px;
+}
+
+.breakout-participant-picker > div {
+  display: grid;
+  gap: 5px;
+  max-height: 120px;
+  overflow: auto;
+}
+
+.breakout-participant-picker label {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  color: #93a39f;
+  font-size: 8px;
+}
+
+.breakout-participant-picker input {
+  width: 13px;
+  height: 13px;
+}
+
+.breakout-room-list {
+  display: grid;
+  gap: 9px;
+}
+
+.breakout-room-card {
+  display: grid;
+  gap: 9px;
+  padding: 11px;
+}
+
+.breakout-room-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.breakout-room-heading strong,
+.breakout-room-heading small {
+  display: block;
+}
+
+.breakout-room-heading strong {
+  font-size: 10px;
+}
+
+.breakout-room-heading small {
+  margin-top: 3px;
+  color: #81938e;
+  font-size: 8px;
+}
+
+.breakout-room-heading > span {
+  padding: 4px 6px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.06);
+  color: #82948f;
+  font-size: 7px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.breakout-room-heading > span.active {
+  background: rgba(48,130,107,.2);
+  color: #8ed4c0;
+}
+
+.breakout-assignment-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.breakout-assignment-chips span {
+  padding: 4px 6px;
+  border-radius: 7px;
+  background: rgba(255,255,255,.05);
+  color: #a7b8b3;
+  font-size: 7px;
+}
+
+.breakout-assignment-editor {
+  display: grid;
+  gap: 6px;
+}
+
+.breakout-assignment-editor select {
+  min-height: 76px;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 8px;
+  background: #111b19;
+  color: #dce7e3;
+  padding: 6px;
+  font-size: 8px;
+}
+
+.breakout-toast {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 50;
+  display: grid;
+  gap: 4px;
+  max-width: 360px;
+  padding: 12px 14px;
+  border: 1px solid rgba(137,194,176,.35);
+  border-radius: 12px;
+  background: #153229;
+  color: #eef7f3;
+  box-shadow: 0 16px 40px rgba(0,0,0,.28);
+}
+
+.breakout-toast strong {
+  font-size: 10px;
+}
+
+.breakout-toast span {
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+@media (max-width: 980px) {
+  .side-tabs.five-tabs {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
