@@ -23,7 +23,10 @@ export interface SessionRealtimeEvent {
     | 'agenda.updated'
     | 'transcript.corrected'
     | 'memory.summary.updated'
-    | 'memory.summary.approved';
+    | 'memory.summary.approved'
+    | 'memory.follow_up.generated'
+    | 'memory.follow_up.updated'
+    | 'memory.follow_up.approved';
   payload: unknown;
 }
 
