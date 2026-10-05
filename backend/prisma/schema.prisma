@@ -254,6 +254,8 @@ model Workspace {
   whiteboards          WhiteboardDocument[]
   whiteboardOperations WhiteboardOperation[]
   fileAssets           FileAsset[]
+  calendarConnections  CalendarConnection[]
+  calendarBusyBlocks   CalendarBusyBlock[]
   webhookSubscriptions WebhookSubscription[]
   webhookDeliveries   WebhookDelivery[]
   authSessions        AuthSession[]
