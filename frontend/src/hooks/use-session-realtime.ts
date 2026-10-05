@@ -68,6 +68,16 @@ export function useSessionRealtime(sessionId: string): void {
           });
         });
       }
+      for (const eventName of [
+        'whiteboard.operation',
+        'whiteboard.snapshot.updated',
+      ]) {
+        socket.on(eventName, () => {
+          void queryClient.invalidateQueries({
+            queryKey: ['whiteboard', sessionId],
+          });
+        });
+      }
       socket.on('breakout.broadcast', (payload: { message?: string }) => {
         if (payload?.message) {
           window.dispatchEvent(
