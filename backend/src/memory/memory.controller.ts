@@ -14,6 +14,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentPrincipal } from '../common/auth/current-principal.decorator';
 import type { Principal } from '../common/auth/principal';
 import { ListMemoryQuery } from './dto/list-memory.query';
+import { SendFollowUpDto } from './dto/send-follow-up.dto';
 import { UpdateFollowUpDraftDto } from './dto/update-follow-up-draft.dto';
 import { UpdateMemorySummaryDto } from './dto/update-memory-summary.dto';
 import { MemoryService } from './memory.service';
@@ -108,6 +109,15 @@ export class MemoryController {
       sessionId,
       parseVersion(ifMatch),
     );
+  }
+
+  @Post(':sessionId/follow-up/send')
+  sendFollowUp(
+    @CurrentPrincipal() principal: Principal,
+    @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
+    @Body() body: SendFollowUpDto,
+  ) {
+    return this.memory.sendFollowUp(principal, sessionId, body);
   }
 
   @Post(':sessionId/retry')
