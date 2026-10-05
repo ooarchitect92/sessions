@@ -29,7 +29,11 @@ export interface SessionRealtimeEvent {
     | 'memory.follow_up.approved'
     | 'memory.follow_up.delivery_requested'
     | 'email.delivery.sent'
-    | 'email.delivery.failed';
+    | 'email.delivery.failed'
+    | 'breakout.updated'
+    | 'breakout.started'
+    | 'breakout.closed'
+    | 'breakout.broadcast';
   payload: unknown;
 }
 
