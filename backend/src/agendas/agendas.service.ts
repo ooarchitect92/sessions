@@ -14,6 +14,7 @@ import {
 } from '../common/auth/principal';
 import { TenantDatabaseService } from '../database/tenant-database.service';
 import { RealtimeEventsService } from '../infrastructure/realtime-events.service';
+import { normalizeAgendaContent } from './agenda-content';
 import { OutboxService } from '../outbox/outbox.service';
 import { ApplyAgendaDraftDto } from './dto/apply-agenda-draft.dto';
 import { CreateAgendaItemDto } from './dto/create-agenda-item.dto';
@@ -121,7 +122,7 @@ export class AgendasService {
               title: item.title.trim(),
               durationSeconds: item.durationSeconds,
               type: item.type,
-              content: item.content as Prisma.InputJsonValue,
+              content: normalizeAgendaContent(item.type, item.content),
             },
           }),
         );
@@ -184,7 +185,7 @@ export class AgendasService {
           title: input.title.trim(),
           durationSeconds: input.durationSeconds,
           type: input.type,
-          content: input.content as Prisma.InputJsonValue,
+          content: normalizeAgendaContent(input.type, input.content),
         },
       });
 
