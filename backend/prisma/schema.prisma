@@ -87,6 +87,13 @@ enum ArtifactStatus {
   DELETED
 }
 
+enum EmailDeliveryStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+}
+
 enum RecordingConsentDecision {
   GRANTED
   DECLINED
@@ -138,6 +145,7 @@ model Organization {
   transcripts         Transcript[]
   transcriptSegments  TranscriptSegment[]
   memorySummaries     MemorySummary[]
+  emailDeliveries     EmailDelivery[]
   chatMessages        ChatMessage[]
   polls               Poll[]
   pollOptions         PollOption[]
@@ -174,6 +182,7 @@ model Workspace {
   transcripts         Transcript[]
   transcriptSegments  TranscriptSegment[]
   memorySummaries     MemorySummary[]
+  emailDeliveries     EmailDelivery[]
   chatMessages        ChatMessage[]
   polls               Poll[]
   pollOptions         PollOption[]
@@ -217,6 +226,7 @@ model User {
   sentInvitations         WorkspaceInvitation[]    @relation("InvitationSender")
   acceptedInvitations     WorkspaceInvitation[]    @relation("InvitationAcceptor")
   recordingConsents       RecordingConsent[]
+  requestedEmailDeliveries EmailDelivery[]          @relation("EmailDeliveryRequester")
 
   @@index([status])
   @@map("users")
@@ -290,6 +300,7 @@ model Session {
   recordingConsents    RecordingConsent[]
   transcript           Transcript?
   memorySummary        MemorySummary?
+  emailDeliveries      EmailDelivery[]
   chatMessages         ChatMessage[]
   polls                Poll[]
   questions            Question[]
@@ -573,11 +584,42 @@ model MemorySummary {
   organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   workspace      Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   session        Session        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  emailDeliveries EmailDelivery[]
 
   @@index([organizationId, workspaceId, status])
   @@index([reviewedByUserId])
   @@index([followUpApprovedByUserId])
   @@map("memory_summaries")
+}
+
+model EmailDelivery {
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId    String              @map("organization_id") @db.Uuid
+  workspaceId       String              @map("workspace_id") @db.Uuid
+  sessionId         String              @map("session_id") @db.Uuid
+  memorySummaryId   String?             @map("memory_summary_id") @db.Uuid
+  requestedByUserId String              @map("requested_by_user_id") @db.Uuid
+  status            EmailDeliveryStatus @default(PENDING)
+  provider          String?             @db.VarChar(100)
+  providerMessageId String?             @map("provider_message_id") @db.VarChar(320)
+  recipients        Json                @default("[]")
+  subject           String              @db.VarChar(300)
+  body              String              @db.Text
+  attempts          Int                 @default(0)
+  failureCode       String?             @map("failure_code") @db.VarChar(320)
+  sentAt            DateTime?           @map("sent_at") @db.Timestamptz(6)
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization      Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace         Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  session           Session             @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  memorySummary     MemorySummary?      @relation(fields: [memorySummaryId], references: [id], onDelete: SetNull)
+  requestedBy       User                @relation("EmailDeliveryRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, workspaceId, status, createdAt])
+  @@index([sessionId, createdAt])
+  @@index([memorySummaryId])
+  @@map("email_deliveries")
 }
 
 model ChatMessage {
