@@ -16,6 +16,7 @@ import { TenantDatabaseService } from '../database/tenant-database.service';
 import { RealtimeEventsService } from '../infrastructure/realtime-events.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { ListMemoryQuery } from './dto/list-memory.query';
+import { UpdateMemorySummaryDto } from './dto/update-memory-summary.dto';
 import { UpdateTranscriptSegmentDto } from './dto/update-transcript-segment.dto';
 
 @Injectable()
@@ -317,6 +318,142 @@ export class MemoryService {
         transcriptId: result.id,
         segmentId,
         version: result.version,
+      },
+    });
+    return result;
+  }
+
+  async updateSummary(
+    principal: Principal,
+    sessionId: string,
+    expectedVersion: number,
+    body: UpdateMemorySummaryDto,
+  ) {
+    this.assertHost(principal);
+    const result = await this.database.run(principal, async (transaction) => {
+      const summary = await transaction.memorySummary.findUnique({
+        where: { sessionId },
+      });
+      if (!summary) throw new NotFoundException('Memory summary not found');
+      if (summary.status !== ArtifactStatus.READY) {
+        throw new ConflictException('Only ready summaries can be edited');
+      }
+      if (summary.version !== expectedVersion) {
+        throw new ConflictException(
+          `Summary version mismatch. Current version is ${summary.version}`,
+        );
+      }
+
+      const updated = await transaction.memorySummary.update({
+        where: { id: summary.id },
+        data: {
+          summaryText: body.summaryText.trim(),
+          ...(body.decisions
+            ? { decisions: body.decisions as Prisma.InputJsonValue }
+            : {}),
+          ...(body.actionItems
+            ? { actionItems: body.actionItems as Prisma.InputJsonValue }
+            : {}),
+          reviewedAt: null,
+          reviewedByUserId: null,
+          version: { increment: 1 },
+        },
+      });
+
+      await this.audit.record(transaction, principal, {
+        action: 'memory.summary_edited',
+        resourceType: 'memory_summary',
+        resourceId: summary.id,
+        metadata: {
+          sessionId,
+          previousVersion: summary.version,
+          version: updated.version,
+        },
+      });
+      await this.outbox.enqueue(transaction, principal, {
+        aggregateType: 'memory_summary',
+        aggregateId: summary.id,
+        eventType: 'memory.summary.updated',
+        payload: {
+          memorySummaryId: summary.id,
+          sessionId,
+          version: updated.version,
+        },
+      });
+      return updated;
+    });
+
+    this.realtime.publishSessionEvent({
+      sessionId,
+      eventName: 'memory.summary.updated',
+      payload: {
+        memorySummaryId: result.id,
+        version: result.version,
+      },
+    });
+    return result;
+  }
+
+  async approveSummary(
+    principal: Principal,
+    sessionId: string,
+    expectedVersion: number,
+  ) {
+    this.assertHost(principal);
+    const result = await this.database.run(principal, async (transaction) => {
+      const summary = await transaction.memorySummary.findUnique({
+        where: { sessionId },
+      });
+      if (!summary) throw new NotFoundException('Memory summary not found');
+      if (summary.status !== ArtifactStatus.READY) {
+        throw new ConflictException('Only ready summaries can be approved');
+      }
+      if (summary.version !== expectedVersion) {
+        throw new ConflictException(
+          `Summary version mismatch. Current version is ${summary.version}`,
+        );
+      }
+
+      const updated = await transaction.memorySummary.update({
+        where: { id: summary.id },
+        data: {
+          reviewedAt: new Date(),
+          reviewedByUserId: principal.userId,
+          version: { increment: 1 },
+        },
+      });
+
+      await this.audit.record(transaction, principal, {
+        action: 'memory.summary_approved',
+        resourceType: 'memory_summary',
+        resourceId: summary.id,
+        metadata: {
+          sessionId,
+          previousVersion: summary.version,
+          version: updated.version,
+        },
+      });
+      await this.outbox.enqueue(transaction, principal, {
+        aggregateType: 'memory_summary',
+        aggregateId: summary.id,
+        eventType: 'memory.summary.approved',
+        payload: {
+          memorySummaryId: summary.id,
+          sessionId,
+          version: updated.version,
+          reviewedAt: updated.reviewedAt?.toISOString(),
+        },
+      });
+      return updated;
+    });
+
+    this.realtime.publishSessionEvent({
+      sessionId,
+      eventName: 'memory.summary.approved',
+      payload: {
+        memorySummaryId: result.id,
+        version: result.version,
+        reviewedAt: result.reviewedAt?.toISOString(),
       },
     });
     return result;
