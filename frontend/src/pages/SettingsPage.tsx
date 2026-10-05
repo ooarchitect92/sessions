@@ -5,7 +5,7 @@ import { useSearchParams } from 'react-router-dom';
 import { api, type WorkspaceMember } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 
-const TABS = ['workspace', 'members', 'workspaces', 'security'] as const;
+const TABS = ['workspace', 'members', 'workspaces', 'integrations', 'security'] as const;
 type SettingsTab = (typeof TABS)[number];
 
 const MEMBER_ROLES: WorkspaceRole[] = ['ADMIN', 'HOST', 'MEMBER', 'ANALYST', 'GUEST'];
@@ -63,7 +63,9 @@ export function SettingsPage() {
                     ? '◎'
                     : item === 'workspaces'
                       ? '▦'
-                      : '⌾'}
+                      : item === 'integrations'
+                        ? '↗'
+                        : '⌾'}
               </span>
               {item === 'workspace'
                 ? 'Workspace profile'
@@ -71,7 +73,9 @@ export function SettingsPage() {
                   ? 'Members and invites'
                   : item === 'workspaces'
                     ? 'Your workspaces'
-                    : 'Security'}
+                    : item === 'integrations'
+                      ? 'Integrations'
+                      : 'Security'}
             </button>
           ))}
         </nav>
@@ -79,6 +83,7 @@ export function SettingsPage() {
           {tab === 'workspace' ? <WorkspaceProfile /> : null}
           {tab === 'members' ? <MembersAndInvitations /> : null}
           {tab === 'workspaces' ? <WorkspaceDirectory /> : null}
+          {tab === 'integrations' ? <WebhookSettings /> : null}
           {tab === 'security' ? <SecuritySettings /> : null}
         </section>
       </div>
@@ -779,6 +784,274 @@ function SecuritySettings() {
           ))}
         </div>
         {revoke.error ? <div className="error-banner">{revoke.error.message}</div> : null}
+      </section>
+    </div>
+  );
+}
+
+function WebhookSettings() {
+  const auth = useAuth();
+  const queryClient = useQueryClient();
+  const currentRole = auth.me?.principal.roles[0] ?? 'GUEST';
+  const canManage = ['OWNER', 'ADMIN'].includes(currentRole);
+  const [name, setName] = useState('');
+  const [url, setUrl] = useState('');
+  const [eventTypes, setEventTypes] = useState(
+    'session.started\nsession.ended\nrecording.ready\ntranscript.ready',
+  );
+  const [revealedSecret, setRevealedSecret] = useState<{
+    subscriptionId: string;
+    secret: string;
+    warning: string;
+  } | null>(null);
+
+  const webhooks = useQuery({
+    queryKey: ['webhooks'],
+    queryFn: () => api.listWebhooks(),
+    enabled: canManage,
+  });
+
+  const create = useMutation({
+    mutationFn: () =>
+      api.createWebhook({
+        name,
+        url,
+        eventTypes: eventTypes
+          .split(/[\n,;]/)
+          .map((value) => value.trim())
+          .filter(Boolean),
+      }),
+    onSuccess: async (result) => {
+      setName('');
+      setUrl('');
+      setRevealedSecret({
+        subscriptionId: result.id,
+        secret: result.secret,
+        warning: result.secretWarning,
+      });
+      await queryClient.invalidateQueries({ queryKey: ['webhooks'] });
+    },
+  });
+
+  const toggle = useMutation({
+    mutationFn: (input: { id: string; version: number; active: boolean }) =>
+      api.updateWebhook(input.id, input.version, { active: input.active }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['webhooks'] });
+    },
+  });
+
+  const remove = useMutation({
+    mutationFn: (id: string) => api.deleteWebhook(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['webhooks'] });
+    },
+  });
+
+  const rotate = useMutation({
+    mutationFn: (id: string) => api.rotateWebhookSecret(id),
+    onSuccess: async (result) => {
+      setRevealedSecret({
+        subscriptionId: result.id,
+        secret: result.secret,
+        warning: result.secretWarning,
+      });
+      await queryClient.invalidateQueries({ queryKey: ['webhooks'] });
+    },
+  });
+
+  if (!canManage) {
+    return (
+      <div className="settings-stack">
+        <section className="panel settings-panel">
+          <div className="settings-panel-heading">
+            <div>
+              <span className="eyebrow">External automation</span>
+              <h2>Webhook integrations</h2>
+              <p>Workspace owner or admin access is required to manage webhook endpoints.</p>
+            </div>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  return (
+    <div className="settings-stack">
+      <section className="panel settings-panel">
+        <div className="settings-panel-heading">
+          <div>
+            <span className="eyebrow">Signed event delivery</span>
+            <h2>Create webhook endpoint</h2>
+            <p>
+              Subscribe an HTTPS endpoint to workspace events. Deliveries use an HMAC-SHA256
+              signature and retry with bounded exponential backoff.
+            </p>
+          </div>
+        </div>
+        <form
+          className="settings-form"
+          onSubmit={(event: FormEvent) => {
+            event.preventDefault();
+            create.mutate();
+          }}
+        >
+          <div className="settings-form-grid">
+            <label>
+              Endpoint name
+              <input
+                required
+                maxLength={160}
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="CRM automation"
+              />
+            </label>
+            <label>
+              HTTPS endpoint
+              <input
+                required
+                type="url"
+                maxLength={2000}
+                value={url}
+                onChange={(event) => setUrl(event.target.value)}
+                placeholder="https://example.com/webhooks/sessions"
+              />
+            </label>
+            <label className="settings-grid-span">
+              Event types
+              <textarea
+                required
+                rows={6}
+                value={eventTypes}
+                onChange={(event) => setEventTypes(event.target.value)}
+                placeholder="session.started&#10;session.ended&#10;recording.ready"
+              />
+              <small>One event per line, or separate events with commas.</small>
+            </label>
+          </div>
+          {create.error ? <div className="error-banner">{create.error.message}</div> : null}
+          <div className="settings-actions">
+            <button
+              className="button primary"
+              disabled={
+                create.isPending ||
+                !name.trim() ||
+                !url.trim() ||
+                !eventTypes.trim()
+              }
+            >
+              {create.isPending ? 'Creating…' : 'Create webhook'}
+            </button>
+          </div>
+        </form>
+
+        {revealedSecret ? (
+          <div className="webhook-secret-box">
+            <div>
+              <strong>Signing secret</strong>
+              <small>{revealedSecret.warning}</small>
+            </div>
+            <code>{revealedSecret.secret}</code>
+            <button
+              type="button"
+              className="button secondary"
+              onClick={() => {
+                void navigator.clipboard.writeText(revealedSecret.secret);
+              }}
+            >
+              Copy secret
+            </button>
+          </div>
+        ) : null}
+      </section>
+
+      <section className="panel settings-panel">
+        <div className="settings-panel-heading compact-settings-heading">
+          <div>
+            <span className="eyebrow">Workspace endpoints</span>
+            <h2>Webhook subscriptions</h2>
+          </div>
+          <span className="count-pill">{webhooks.data?.length ?? 0}</span>
+        </div>
+        {webhooks.isLoading ? <SettingsLoading /> : null}
+        {webhooks.error ? <SettingsError message={webhooks.error.message} /> : null}
+        <div className="webhook-card-list">
+          {webhooks.data?.map((webhook) => {
+            const latest = webhook.deliveries?.[0];
+            return (
+              <article className="webhook-card" key={webhook.id}>
+                <div className="webhook-card-heading">
+                  <div>
+                    <strong>{webhook.name}</strong>
+                    <span>{webhook.url}</span>
+                  </div>
+                  <span className={webhook.active ? 'state-chip enabled' : 'state-chip'}>
+                    {webhook.active ? 'Active' : 'Paused'}
+                  </span>
+                </div>
+                <div className="webhook-event-tags">
+                  {webhook.eventTypes.map((eventType) => (
+                    <code key={eventType}>{eventType}</code>
+                  ))}
+                </div>
+                <div className="webhook-card-meta">
+                  <span>{webhook._count?.deliveries ?? 0} deliveries</span>
+                  <span>
+                    {latest
+                      ? `Latest: ${latest.status.toLowerCase()} · ${latest.eventType}`
+                      : 'No deliveries yet'}
+                  </span>
+                </div>
+                {latest?.lastError ? (
+                  <small className="webhook-last-error">{latest.lastError}</small>
+                ) : null}
+                <div className="webhook-card-actions">
+                  <button
+                    type="button"
+                    className="button secondary"
+                    disabled={toggle.isPending}
+                    onClick={() =>
+                      toggle.mutate({
+                        id: webhook.id,
+                        version: webhook.version,
+                        active: !webhook.active,
+                      })
+                    }
+                  >
+                    {webhook.active ? 'Pause' : 'Resume'}
+                  </button>
+                  <button
+                    type="button"
+                    className="button secondary"
+                    disabled={rotate.isPending}
+                    onClick={() => rotate.mutate(webhook.id)}
+                  >
+                    Rotate secret
+                  </button>
+                  <button
+                    type="button"
+                    className="button danger"
+                    disabled={remove.isPending}
+                    onClick={() => {
+                      if (window.confirm(`Delete webhook "${webhook.name}"?`)) {
+                        remove.mutate(webhook.id);
+                      }
+                    }}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+          {webhooks.data?.length === 0 ? (
+            <div className="settings-empty-row">No webhook endpoints have been created.</div>
+          ) : null}
+        </div>
+        {toggle.error ? <div className="error-banner">{toggle.error.message}</div> : null}
+        {rotate.error ? <div className="error-banner">{rotate.error.message}</div> : null}
+        {remove.error ? <div className="error-banner">{remove.error.message}</div> : null}
       </section>
     </div>
   );
