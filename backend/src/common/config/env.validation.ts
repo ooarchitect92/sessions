@@ -68,6 +68,11 @@ const environmentSchema = z
     WEBHOOK_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(10000),
     WEBHOOK_WORKER_BATCH_SIZE: z.coerce.number().int().min(1).max(100).default(10),
     WEBHOOK_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(8),
+    GOOGLE_CALENDAR_CLIENT_ID: z.string().min(1).optional(),
+    GOOGLE_CALENDAR_CLIENT_SECRET: z.string().min(1).optional(),
+    MICROSOFT_CALENDAR_CLIENT_ID: z.string().min(1).optional(),
+    MICROSOFT_CALENDAR_CLIENT_SECRET: z.string().min(1).optional(),
+    CALENDAR_OAUTH_STATE_TTL_SECONDS: z.coerce.number().int().min(60).max(1800).default(600),
     S3_ENDPOINT: z.string().url(),
     S3_PUBLIC_ENDPOINT: z.string().url().default('http://localhost:9000'),
     S3_REGION: z.string().min(1).max(100),
@@ -175,6 +180,24 @@ const environmentSchema = z
       productionIssue(
         'EMAIL_API_KEY',
         'Enabled production email delivery requires a provider API key',
+      );
+    }
+    if (
+      Boolean(value.GOOGLE_CALENDAR_CLIENT_ID) !==
+      Boolean(value.GOOGLE_CALENDAR_CLIENT_SECRET)
+    ) {
+      productionIssue(
+        'GOOGLE_CALENDAR_CLIENT_SECRET',
+        'Google Calendar client ID and secret must be configured together',
+      );
+    }
+    if (
+      Boolean(value.MICROSOFT_CALENDAR_CLIENT_ID) !==
+      Boolean(value.MICROSOFT_CALENDAR_CLIENT_SECRET)
+    ) {
+      productionIssue(
+        'MICROSOFT_CALENDAR_CLIENT_SECRET',
+        'Microsoft Calendar client ID and secret must be configured together',
       );
     }
     if (!value.S3_ENDPOINT.startsWith('https://')) {
