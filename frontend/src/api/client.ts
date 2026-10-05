@@ -260,6 +260,9 @@ export interface MemorySummaryRecord {
   actionItems: unknown[];
   citations: unknown[];
   failureCode: string | null;
+  reviewedAt: string | null;
+  reviewedByUserId: string | null;
+  version: number;
 }
 
 export interface MemoryListItem extends Session {
@@ -822,6 +825,35 @@ export const api = {
         method: "PATCH",
         headers: { "if-match": String(version) },
         body: JSON.stringify(input),
+      },
+    );
+  },
+
+  updateMemorySummary(
+    sessionId: string,
+    version: number,
+    input: {
+      summaryText: string;
+      decisions?: Record<string, unknown>[];
+      actionItems?: Record<string, unknown>[];
+    },
+  ): Promise<MemorySummaryRecord> {
+    return request<MemorySummaryRecord>(`/memory/${sessionId}/summary`, {
+      method: "PATCH",
+      headers: { "if-match": String(version) },
+      body: JSON.stringify(input),
+    });
+  },
+
+  approveMemorySummary(
+    sessionId: string,
+    version: number,
+  ): Promise<MemorySummaryRecord> {
+    return request<MemorySummaryRecord>(
+      `/memory/${sessionId}/summary/approve`,
+      {
+        method: "POST",
+        headers: { "if-match": String(version) },
       },
     );
   },
