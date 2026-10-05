@@ -22,6 +22,7 @@ import {
   type Principal,
 } from "../common/auth/principal";
 import { TenantDatabaseService } from "../database/tenant-database.service";
+import { ENGAGEMENT_EVENT, EngagementService } from "../engagement/engagement.service";
 import { PresenceService } from "../infrastructure/presence.service";
 import { RealtimeEventsService } from "../infrastructure/realtime-events.service";
 import { OutboxService } from "../outbox/outbox.service";
@@ -59,6 +60,7 @@ const VOTABLE_QUESTION_STATUSES: QuestionStatus[] = [
 export class CollaborationService {
   constructor(
     private readonly database: TenantDatabaseService,
+    private readonly engagement: EngagementService,
     private readonly audit: AuditService,
     private readonly outbox: OutboxService,
     private readonly realtime: RealtimeEventsService,
@@ -176,6 +178,16 @@ export class CollaborationService {
         },
       });
 
+      await this.engagement.record(transaction, principal, {
+        sessionId,
+        eventType: ENGAGEMENT_EVENT.CHAT_MESSAGE_SENT,
+        sourceType: "chat_message",
+        sourceId: created.id,
+        properties: {
+          channel: created.channel,
+          private: privateMessage,
+        },
+      });
       await this.outbox.enqueue(transaction, principal, {
         aggregateType: "chat_message",
         aggregateId: created.id,
@@ -423,6 +435,17 @@ export class CollaborationService {
           textAnswer: input.textAnswer?.trim() || null,
         },
       });
+      await this.engagement.record(transaction, principal, {
+        sessionId,
+        eventType: ENGAGEMENT_EVENT.POLL_ANSWERED,
+        sourceType: "poll",
+        sourceId: pollId,
+        properties: {
+          pollType: poll.type,
+          selectedOptionCount: input.selectedOptionIds.length,
+          hasTextAnswer: Boolean(input.textAnswer?.trim()),
+        },
+      });
       await this.outbox.enqueue(transaction, principal, {
         aggregateType: "poll",
         aggregateId: pollId,
@@ -538,6 +561,16 @@ export class CollaborationService {
         },
         include: { _count: { select: { votes: true } } },
       });
+      await this.engagement.record(transaction, principal, {
+        sessionId,
+        eventType: ENGAGEMENT_EVENT.QUESTION_SUBMITTED,
+        sourceType: "question",
+        sourceId: created.id,
+        properties: {
+          anonymous: created.isAnonymous,
+          status: created.status,
+        },
+      });
       await this.outbox.enqueue(transaction, principal, {
         aggregateType: "question",
         aggregateId: created.id,
@@ -586,6 +619,16 @@ export class CollaborationService {
       }
       const voteCount = await transaction.questionVote.count({
         where: { questionId },
+      });
+      await this.engagement.record(transaction, principal, {
+        sessionId,
+        eventType: ENGAGEMENT_EVENT.QUESTION_VOTED,
+        sourceType: "question",
+        sourceId: questionId,
+        properties: {
+          voted: !existing,
+          voteCount,
+        },
       });
       return { questionId, voted: !existing, voteCount };
     });
