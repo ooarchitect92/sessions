@@ -277,6 +277,36 @@ export class MemoryService {
         },
       });
 
+      const summary = await transaction.memorySummary.findUnique({
+        where: { sessionId },
+      });
+      if (summary) {
+        await transaction.memorySummary.update({
+          where: { id: summary.id },
+          data: {
+            status: ArtifactStatus.PENDING,
+            summaryText: null,
+            decisions: [],
+            actionItems: [],
+            citations: [],
+            completedAt: null,
+            failureCode: null,
+            version: { increment: 1 },
+          },
+        });
+        await this.outbox.enqueue(transaction, principal, {
+          aggregateType: 'memory_summary',
+          aggregateId: summary.id,
+          eventType: 'memory.summary.requested',
+          payload: {
+            memorySummaryId: summary.id,
+            sessionId,
+            reason: 'transcript_corrected',
+            transcriptVersion: updated.version,
+          },
+        });
+      }
+
       return updated;
     });
 
