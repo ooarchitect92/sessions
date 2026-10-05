@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { type Principal, hasAnyRole } from '../common/auth/principal';
 import { TenantDatabaseService } from '../database/tenant-database.service';
+import { ENGAGEMENT_EVENT, EngagementService } from '../engagement/engagement.service';
 import { OutboxService } from '../outbox/outbox.service';
 
 const ATTENDANCE_READ_ROLES = ['OWNER', 'ADMIN', 'HOST', 'ANALYST'] as const;
@@ -13,6 +14,7 @@ const ATTENDANCE_READ_ROLES = ['OWNER', 'ADMIN', 'HOST', 'ANALYST'] as const;
 export class AttendanceService {
   constructor(
     private readonly database: TenantDatabaseService,
+    private readonly engagement: EngagementService,
     private readonly outbox: OutboxService,
   ) {}
 
@@ -85,6 +87,16 @@ export class AttendanceService {
         }
       }
 
+      await this.engagement.record(transaction, principal, {
+        sessionId,
+        eventType: ENGAGEMENT_EVENT.PARTICIPANT_JOINED,
+        sourceType: 'attendance_interval',
+        sourceId: interval.id,
+        occurredAt,
+        properties: {
+          webinar: Boolean(session.event),
+        },
+      });
       await this.outbox.enqueue(transaction, principal, {
         aggregateType: 'session_attendance',
         aggregateId: interval.id,
@@ -143,6 +155,16 @@ export class AttendanceService {
               lastHeartbeatAt: occurredAt,
             },
           });
+          await this.engagement.record(transaction, principal, {
+            sessionId,
+            eventType: ENGAGEMENT_EVENT.PARTICIPANT_JOINED,
+            sourceType: 'attendance_interval',
+            sourceId: interval.id,
+            occurredAt,
+            properties: {
+              recoveredFromHeartbeat: true,
+            },
+          });
           await this.outbox.enqueue(transaction, principal, {
             aggregateType: 'session_attendance',
             aggregateId: interval.id,
@@ -190,6 +212,18 @@ export class AttendanceService {
         },
       });
 
+      const durationSeconds = Math.max(
+        0,
+        Math.round((leftAt.getTime() - interval.joinedAt.getTime()) / 1000),
+      );
+      await this.engagement.record(transaction, principal, {
+        sessionId,
+        eventType: ENGAGEMENT_EVENT.PARTICIPANT_LEFT,
+        sourceType: 'attendance_interval',
+        sourceId: interval.id,
+        occurredAt: leftAt,
+        properties: { durationSeconds },
+      });
       await this.outbox.enqueue(transaction, principal, {
         aggregateType: 'session_attendance',
         aggregateId: interval.id,
@@ -201,10 +235,7 @@ export class AttendanceService {
           displayName: principal.displayName,
           joinedAt: interval.joinedAt.toISOString(),
           occurredAt: leftAt.toISOString(),
-          durationSeconds: Math.max(
-            0,
-            Math.round((leftAt.getTime() - interval.joinedAt.getTime()) / 1000),
-          ),
+          durationSeconds,
         },
       });
 
