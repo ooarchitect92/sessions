@@ -57,6 +57,26 @@ export function useSessionRealtime(sessionId: string): void {
           void queryClient.invalidateQueries({ queryKey: ['questions', sessionId] });
         });
       }
+      for (const eventName of [
+        'breakout.updated',
+        'breakout.started',
+        'breakout.closed',
+      ]) {
+        socket.on(eventName, () => {
+          void queryClient.invalidateQueries({
+            queryKey: ['breakouts', sessionId],
+          });
+        });
+      }
+      socket.on('breakout.broadcast', (payload: { message?: string }) => {
+        if (payload?.message) {
+          window.dispatchEvent(
+            new CustomEvent('sessions:breakout-broadcast', {
+              detail: { message: payload.message },
+            }),
+          );
+        }
+      });
       socket.on('memory.updated', () => {
         void queryClient.invalidateQueries({ queryKey: ['memory'] });
         void queryClient.invalidateQueries({
