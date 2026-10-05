@@ -19,7 +19,11 @@ export interface SessionRealtimeEvent {
     | 'question.created'
     | 'question.updated'
     | 'question.votes.updated'
-    | 'memory.updated';
+    | 'memory.updated'
+    | 'agenda.updated'
+    | 'transcript.corrected'
+    | 'memory.summary.updated'
+    | 'memory.summary.approved';
   payload: unknown;
 }
 
