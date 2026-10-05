@@ -149,6 +149,18 @@ enum WebhookDeliveryStatus {
   FAILED
 }
 
+enum CalendarProvider {
+  GOOGLE
+  MICROSOFT
+}
+
+enum CalendarConnectionStatus {
+  ACTIVE
+  REAUTH_REQUIRED
+  ERROR
+  REVOKED
+}
+
 enum FileAssetStatus {
   PENDING_UPLOAD
   QUARANTINED
@@ -664,6 +676,54 @@ model EventRegistration {
   @@index([organizationId, workspaceId, eventId])
   @@index([eventId, status, registeredAt])
   @@map("event_registrations")
+}
+
+model CalendarConnection {
+  id                    String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId        String                   @map("organization_id") @db.Uuid
+  workspaceId           String                   @map("workspace_id") @db.Uuid
+  userId                String                   @map("user_id") @db.Uuid
+  provider              CalendarProvider
+  status                CalendarConnectionStatus @default(ACTIVE)
+  providerAccountId     String                   @map("provider_account_id") @db.VarChar(255)
+  accountEmail          String?                  @map("account_email") @db.Citext
+  accessTokenEncrypted  String                   @map("access_token_encrypted") @db.Text
+  refreshTokenEncrypted String?                  @map("refresh_token_encrypted") @db.Text
+  accessTokenExpiresAt  DateTime?                @map("access_token_expires_at") @db.Timestamptz(6)
+  scopes                Json                     @default("[]")
+  calendarIds           Json                     @default("[]") @map("calendar_ids")
+  lastSyncedAt          DateTime?                @map("last_synced_at") @db.Timestamptz(6)
+  lastError             String?                  @map("last_error") @db.Text
+  version               Int                      @default(1)
+  createdAt             DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization          Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace             Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user                  User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  busyBlocks            CalendarBusyBlock[]
+
+  @@unique([workspaceId, userId, provider])
+  @@index([organizationId, workspaceId, status])
+  @@index([userId, provider, status])
+  @@map("calendar_connections")
+}
+
+model CalendarBusyBlock {
+  id                   String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId       String             @map("organization_id") @db.Uuid
+  workspaceId          String             @map("workspace_id") @db.Uuid
+  calendarConnectionId String             @map("calendar_connection_id") @db.Uuid
+  providerEventId      String?            @map("provider_event_id") @db.VarChar(500)
+  startsAt             DateTime           @map("starts_at") @db.Timestamptz(6)
+  endsAt               DateTime           @map("ends_at") @db.Timestamptz(6)
+  fetchedAt            DateTime           @default(now()) @map("fetched_at") @db.Timestamptz(6)
+  organization         Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace            Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  calendarConnection   CalendarConnection @relation(fields: [calendarConnectionId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, workspaceId, startsAt, endsAt])
+  @@index([calendarConnectionId, startsAt, endsAt])
+  @@map("calendar_busy_blocks")
 }
 
 model BookingPage {
