@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { api, type BreakoutRoomRecord } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 
@@ -245,6 +245,10 @@ function BreakoutRoomCard({
   const [draftAssignments, setDraftAssignments] = useState<string[]>(
     room.assignments.map((assignment) => assignment.userId),
   );
+
+  useEffect(() => {
+    setDraftAssignments(room.assignments.map((assignment) => assignment.userId));
+  }, [room.assignments]);
 
   return (
     <article className="breakout-room-card">
