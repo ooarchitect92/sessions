@@ -94,6 +94,13 @@ enum EmailDeliveryStatus {
   FAILED
 }
 
+enum WebhookDeliveryStatus {
+  PENDING
+  PROCESSING
+  DELIVERED
+  FAILED
+}
+
 enum RecordingConsentDecision {
   GRANTED
   DECLINED
@@ -146,6 +153,8 @@ model Organization {
   transcriptSegments  TranscriptSegment[]
   memorySummaries     MemorySummary[]
   emailDeliveries     EmailDelivery[]
+  webhookSubscriptions WebhookSubscription[]
+  webhookDeliveries   WebhookDelivery[]
   chatMessages        ChatMessage[]
   polls               Poll[]
   pollOptions         PollOption[]
@@ -183,6 +192,8 @@ model Workspace {
   transcriptSegments  TranscriptSegment[]
   memorySummaries     MemorySummary[]
   emailDeliveries     EmailDelivery[]
+  webhookSubscriptions WebhookSubscription[]
+  webhookDeliveries   WebhookDelivery[]
   chatMessages        ChatMessage[]
   polls               Poll[]
   pollOptions         PollOption[]
@@ -227,6 +238,7 @@ model User {
   acceptedInvitations     WorkspaceInvitation[]    @relation("InvitationAcceptor")
   recordingConsents       RecordingConsent[]
   requestedEmailDeliveries EmailDelivery[]          @relation("EmailDeliveryRequester")
+  createdWebhookSubscriptions WebhookSubscription[]  @relation("WebhookSubscriptionCreator")
 
   @@index([status])
   @@map("users")
@@ -760,6 +772,55 @@ model IdempotencyKey {
   @@map("idempotency_keys")
 }
 
+model WebhookSubscription {
+  id                String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId    String            @map("organization_id") @db.Uuid
+  workspaceId       String            @map("workspace_id") @db.Uuid
+  createdByUserId   String            @map("created_by_user_id") @db.Uuid
+  name              String            @db.VarChar(160)
+  url               String            @db.Text
+  encryptedSecret   String            @map("encrypted_secret") @db.Text
+  eventTypes        Json              @default("[]") @map("event_types")
+  active            Boolean           @default(true)
+  version           Int               @default(1)
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace         Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy         User              @relation("WebhookSubscriptionCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  deliveries        WebhookDelivery[]
+
+  @@index([organizationId, workspaceId, active])
+  @@map("webhook_subscriptions")
+}
+
+model WebhookDelivery {
+  id                String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId    String                @map("organization_id") @db.Uuid
+  workspaceId       String                @map("workspace_id") @db.Uuid
+  subscriptionId    String                @map("subscription_id") @db.Uuid
+  outboxEventId     String                @map("outbox_event_id") @db.Uuid
+  eventType         String                @map("event_type") @db.VarChar(160)
+  status            WebhookDeliveryStatus @default(PENDING)
+  attempts          Int                   @default(0)
+  lastStatusCode    Int?                  @map("last_status_code")
+  lastResponseBody  String?               @map("last_response_body") @db.Text
+  lastError         String?               @map("last_error") @db.Text
+  nextAttemptAt     DateTime              @default(now()) @map("next_attempt_at") @db.Timestamptz(6)
+  deliveredAt       DateTime?             @map("delivered_at") @db.Timestamptz(6)
+  createdAt         DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization      Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace         Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  subscription      WebhookSubscription   @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  outboxEvent       OutboxEvent           @relation(fields: [outboxEventId], references: [id], onDelete: Cascade)
+
+  @@unique([subscriptionId, outboxEventId])
+  @@index([organizationId, workspaceId, status, nextAttemptAt])
+  @@index([subscriptionId, createdAt])
+  @@map("webhook_deliveries")
+}
+
 model OutboxEvent {
   id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   organizationId String    @map("organization_id") @db.Uuid
@@ -776,6 +837,7 @@ model OutboxEvent {
   lastError      String?   @map("last_error") @db.Text
   deadLetteredAt DateTime? @map("dead_lettered_at") @db.Timestamptz(6)
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  webhookDeliveries WebhookDelivery[]
 
   @@index([publishedAt, deadLetteredAt, availableAt])
   @@index([workspaceId, createdAt])
