@@ -691,3 +691,84 @@
   gap: 8px;
   margin: 14px 0;
 }
+
+.summary-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.action-review-list,
+.reviewed-action-list {
+  display: grid;
+  gap: 10px;
+}
+
+.action-review-card,
+.reviewed-action-list article {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+  background: #fff;
+}
+
+.action-review-card {
+  display: grid;
+  gap: 10px;
+}
+
+.action-review-card label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.action-review-card input,
+.action-review-card textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px;
+  color: var(--ink);
+  font: inherit;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.action-review-card textarea {
+  resize: vertical;
+}
+
+.action-review-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.reviewed-action-list article {
+  display: grid;
+  gap: 5px;
+}
+
+.reviewed-action-list strong {
+  color: var(--ink);
+  line-height: 1.5;
+}
+
+.reviewed-action-list span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+@media (max-width: 720px) {
+  .action-review-grid {
+    grid-template-columns: 1fr;
+  }
+}
