@@ -118,3 +118,17 @@ CREATE POLICY "tenant_isolation_notification_deliveries"
     "organization_id" = app.current_organization_id()
     AND "workspace_id" = app.current_workspace_id()
   );
+
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'sessions_api') THEN
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE notification_templates TO sessions_api;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE notification_deliveries TO sessions_api;
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'sessions_worker') THEN
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE notification_templates TO sessions_worker;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE notification_deliveries TO sessions_worker;
+  END IF;
+END $$;
