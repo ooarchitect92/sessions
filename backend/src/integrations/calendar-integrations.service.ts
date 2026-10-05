@@ -312,6 +312,233 @@ export class CalendarIntegrationsService {
     });
   }
 
+  async getBusyIntervalsForUser(input: {
+    workspaceId: string;
+    userId: string;
+    startsAt: Date;
+    endsAt: Date;
+  }): Promise<Array<{ startsAt: Date; endsAt: Date }>> {
+    const connections = await this.worker.calendarConnection.findMany({
+      where: {
+        workspaceId: input.workspaceId,
+        userId: input.userId,
+        syncEnabled: true,
+        status: CalendarConnectionStatus.CONNECTED,
+      },
+    });
+
+    const intervals: Array<{ startsAt: Date; endsAt: Date }> = [];
+    for (const connection of connections) {
+      try {
+        const accessToken = await this.usableAccessToken(connection);
+        const providerIntervals =
+          connection.provider === CalendarProvider.GOOGLE
+            ? await this.googleBusy(
+                accessToken,
+                connection.calendarId || 'primary',
+                input.startsAt,
+                input.endsAt,
+              )
+            : await this.microsoftBusy(accessToken, input.startsAt, input.endsAt);
+        intervals.push(...providerIntervals);
+        await this.worker.calendarConnection.update({
+          where: { id: connection.id },
+          data: {
+            lastSyncedAt: new Date(),
+            lastError: null,
+            status: CalendarConnectionStatus.CONNECTED,
+          },
+        });
+      } catch (error: unknown) {
+        await this.worker.calendarConnection.update({
+          where: { id: connection.id },
+          data: {
+            lastError:
+              error instanceof Error ? error.message.slice(0, 2000) : 'Calendar sync failed',
+            status: CalendarConnectionStatus.ERROR,
+          },
+        });
+      }
+    }
+    return intervals;
+  }
+
+  private async usableAccessToken(connection: {
+    id: string;
+    provider: CalendarProvider;
+    encryptedAccessToken: string;
+    encryptedRefreshToken: string | null;
+    tokenExpiresAt: Date | null;
+  }): Promise<string> {
+    if (
+      !connection.tokenExpiresAt ||
+      connection.tokenExpiresAt.getTime() > Date.now() + 60_000
+    ) {
+      return this.security.decryptSensitiveValue(
+        connection.encryptedAccessToken,
+        `calendar-access:${connection.provider}`,
+      );
+    }
+    if (!connection.encryptedRefreshToken) {
+      throw new Error('Calendar access token expired and no refresh token is available');
+    }
+
+    const refreshToken = this.security.decryptSensitiveValue(
+      connection.encryptedRefreshToken,
+      `calendar-refresh:${connection.provider}`,
+    );
+    const credentials = this.credentials(connection.provider);
+    if (!credentials.clientId || !credentials.clientSecret) {
+      throw new Error('Calendar OAuth provider is not configured');
+    }
+    const endpoint =
+      connection.provider === CalendarProvider.GOOGLE
+        ? 'https://oauth2.googleapis.com/token'
+        : 'https://login.microsoftonline.com/common/oauth2/v2.0/token';
+    const body = new URLSearchParams({
+      client_id: credentials.clientId,
+      client_secret: credentials.clientSecret,
+      refresh_token: refreshToken,
+      grant_type: 'refresh_token',
+      ...(connection.provider === CalendarProvider.MICROSOFT
+        ? { scope: 'offline_access User.Read Calendars.ReadWrite' }
+        : {}),
+    });
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body,
+      signal: AbortSignal.timeout(15_000),
+    });
+    const payload = (await response.json().catch(() => ({}))) as TokenResponse;
+    if (!response.ok || !payload.access_token) {
+      throw new Error(
+        payload.error_description || payload.error || 'Calendar token refresh failed',
+      );
+    }
+    const expiresAt =
+      payload.expires_in && payload.expires_in > 0
+        ? new Date(Date.now() + payload.expires_in * 1000)
+        : null;
+    await this.worker.calendarConnection.update({
+      where: { id: connection.id },
+      data: {
+        encryptedAccessToken: this.security.encryptSensitiveValue(
+          payload.access_token,
+          `calendar-access:${connection.provider}`,
+        ),
+        ...(payload.refresh_token
+          ? {
+              encryptedRefreshToken: this.security.encryptSensitiveValue(
+                payload.refresh_token,
+                `calendar-refresh:${connection.provider}`,
+              ),
+            }
+          : {}),
+        tokenExpiresAt: expiresAt,
+        status: CalendarConnectionStatus.CONNECTED,
+        lastError: null,
+        version: { increment: 1 },
+      },
+    });
+    return payload.access_token;
+  }
+
+  private async googleBusy(
+    accessToken: string,
+    calendarId: string,
+    startsAt: Date,
+    endsAt: Date,
+  ): Promise<Array<{ startsAt: Date; endsAt: Date }>> {
+    const response = await fetch('https://www.googleapis.com/calendar/v3/freeBusy', {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        timeMin: startsAt.toISOString(),
+        timeMax: endsAt.toISOString(),
+        timeZone: 'UTC',
+        items: [{ id: calendarId }],
+      }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!response.ok) throw new Error('Google Calendar free/busy request failed');
+    const payload = (await response.json()) as {
+      calendars?: Record<string, { busy?: Array<{ start?: string; end?: string }> }>;
+    };
+    return (payload.calendars?.[calendarId]?.busy || [])
+      .map((item) => ({
+        startsAt: new Date(item.start || ''),
+        endsAt: new Date(item.end || ''),
+      }))
+      .filter(
+        (item) =>
+          !Number.isNaN(item.startsAt.getTime()) &&
+          !Number.isNaN(item.endsAt.getTime()) &&
+          item.endsAt > item.startsAt,
+      );
+  }
+
+  private async microsoftBusy(
+    accessToken: string,
+    startsAt: Date,
+    endsAt: Date,
+  ): Promise<Array<{ startsAt: Date; endsAt: Date }>> {
+    const params = new URLSearchParams({
+      startDateTime: startsAt.toISOString(),
+      endDateTime: endsAt.toISOString(),
+      '$select': 'start,end,showAs,isCancelled',
+      '$top': '1000',
+    });
+    const response = await fetch(
+      `https://graph.microsoft.com/v1.0/me/calendarView?${params.toString()}`,
+      {
+        headers: {
+          authorization: `Bearer ${accessToken}`,
+          Prefer: 'outlook.timezone="UTC"',
+        },
+        signal: AbortSignal.timeout(15_000),
+      },
+    );
+    if (!response.ok) throw new Error('Microsoft Calendar availability request failed');
+    const payload = (await response.json()) as {
+      value?: Array<{
+        start?: { dateTime?: string };
+        end?: { dateTime?: string };
+        showAs?: string;
+        isCancelled?: boolean;
+      }>;
+    };
+    return (payload.value || [])
+      .filter(
+        (item) =>
+          !item.isCancelled &&
+          item.showAs !== 'free' &&
+          item.start?.dateTime &&
+          item.end?.dateTime,
+      )
+      .map((item) => ({
+        startsAt: new Date(
+          item.start!.dateTime!.endsWith('Z')
+            ? item.start!.dateTime!
+            : `${item.start!.dateTime!}Z`,
+        ),
+        endsAt: new Date(
+          item.end!.dateTime!.endsWith('Z')
+            ? item.end!.dateTime!
+            : `${item.end!.dateTime!}Z`,
+        ),
+      }))
+      .filter(
+        (item) =>
+          !Number.isNaN(item.startsAt.getTime()) &&
+          !Number.isNaN(item.endsAt.getTime()) &&
+          item.endsAt > item.startsAt,
+      );
+  }
+
   private parseProvider(value: string): CalendarProvider {
     const normalized = value.trim().toUpperCase();
     if (normalized === CalendarProvider.GOOGLE) return CalendarProvider.GOOGLE;
