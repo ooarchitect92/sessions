@@ -88,6 +88,15 @@ export function SessionPage() {
     onSuccess: setMedia,
   });
 
+  const joinBreakout = useMutation({
+    mutationFn: (breakoutRoomId: string) =>
+      api.createBreakoutMediaToken(sessionId, breakoutRoomId),
+    onSuccess: (token) => {
+      setShowSharedContent(false);
+      setMedia(token);
+    },
+  });
+
   const activate = useMutation({
     mutationFn: (agendaItemId: string) => api.activateAgendaItem(sessionId, agendaItemId),
     onSuccess: async () => {
@@ -576,8 +585,16 @@ export function SessionPage() {
           )}
         </section>
 
-        <SessionCollaborationPanel sessionId={sessionId} />
+        <SessionCollaborationPanel
+          sessionId={sessionId}
+          onJoinBreakout={(breakoutRoomId) => joinBreakout.mutate(breakoutRoomId)}
+        />
       </div>
+      {joinBreakout.error ? (
+        <div className="breakout-toast error-banner">
+          {joinBreakout.error.message}
+        </div>
+      ) : null}
     </div>
   );
 }
