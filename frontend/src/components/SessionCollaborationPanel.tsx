@@ -1,10 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FormEvent, useState } from 'react';
 import { api, type PollRecord } from '../api/client';
+import { BreakoutPanel } from './BreakoutPanel';
 
-type PanelTab = 'people' | 'chat' | 'polls' | 'questions';
+type PanelTab = 'people' | 'chat' | 'polls' | 'questions' | 'breakouts';
 
-export function SessionCollaborationPanel({ sessionId }: { sessionId: string }) {
+export function SessionCollaborationPanel({
+  sessionId,
+  onJoinBreakout,
+}: {
+  sessionId: string;
+  onJoinBreakout: (breakoutRoomId: string) => void;
+}) {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<PanelTab>('people');
   const [chatBody, setChatBody] = useState('');
@@ -93,11 +100,12 @@ export function SessionCollaborationPanel({ sessionId }: { sessionId: string }) 
 
   return (
     <aside className="meeting-side-panel collaboration-panel">
-      <div className="side-tabs four-tabs">
+      <div className="side-tabs five-tabs">
         <button className={tab === 'people' ? 'active' : ''} onClick={() => setTab('people')}>People</button>
         <button className={tab === 'chat' ? 'active' : ''} onClick={() => setTab('chat')}>Chat</button>
         <button className={tab === 'polls' ? 'active' : ''} onClick={() => setTab('polls')}>Polls</button>
         <button className={tab === 'questions' ? 'active' : ''} onClick={() => setTab('questions')}>Q&amp;A</button>
+        <button className={tab === 'breakouts' ? 'active' : ''} onClick={() => setTab('breakouts')}>Breakouts</button>
       </div>
 
       {tab === 'people' ? (
@@ -138,6 +146,10 @@ export function SessionCollaborationPanel({ sessionId }: { sessionId: string }) 
           </div>
           <form className="side-builder" onSubmit={submitPoll}><input value={pollQuestion} onChange={(event) => setPollQuestion(event.target.value)} placeholder="Poll question" maxLength={1000} /><textarea value={pollOptions} onChange={(event) => setPollOptions(event.target.value)} placeholder="One option per line" /><button disabled={createPoll.isPending || !pollQuestion.trim()}>Create poll</button></form>
         </div>
+      ) : null}
+
+      {tab === 'breakouts' ? (
+        <BreakoutPanel sessionId={sessionId} onJoinBreakout={onJoinBreakout} />
       ) : null}
 
       {tab === 'questions' ? (
