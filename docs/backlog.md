@@ -55,7 +55,7 @@
 - [ ] visual webinar landing-page builder
 - [ ] notification templates, reminder jobs and delivery reconciliation
 - [x] durable realtime attendance intervals, heartbeat recovery, attendee check-in and participant join/leave webhooks
-- [ ] unified engagement event model and long-term aggregation
+- [x] unified tenant-scoped engagement event model with durable collaboration/attendance/whiteboard instrumentation and analytics aggregation
 
 ## Phase 4 — memory and AI
 
