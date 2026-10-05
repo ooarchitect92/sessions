@@ -83,8 +83,13 @@ export class AnalyticsService {
         select: { id: true, status: true },
       });
       const pollIds = polls.map((poll) => poll.id);
-      const [chatMessages, questions, pollAnswers, attendanceIntervals] =
-        await Promise.all([
+      const [
+        chatMessages,
+        questions,
+        pollAnswers,
+        attendanceIntervals,
+        engagementGroups,
+      ] = await Promise.all([
         transaction.chatMessage.count({
           where: { sessionId, deletedAt: null },
         }),
@@ -102,6 +107,11 @@ export class AnalyticsService {
             leftAt: true,
             lastHeartbeatAt: true,
           },
+        }),
+        transaction.engagementEvent.groupBy({
+          by: ['eventType'],
+          where: { sessionId },
+          _count: { _all: true },
         }),
       ]);
 
@@ -150,6 +160,16 @@ export class AnalyticsService {
           pollAnswers,
           questions,
           totalActions: chatMessages + pollAnswers + questions,
+          unifiedEventCount: engagementGroups.reduce(
+            (sum, group) => sum + group._count._all,
+            0,
+          ),
+          byType: Object.fromEntries(
+            engagementGroups.map((group) => [
+              group.eventType,
+              group._count._all,
+            ]),
+          ),
         },
         artifacts: {
           recordingStatus: session.recording?.status ?? null,
@@ -185,6 +205,13 @@ export class AnalyticsService {
         ['participant_sessions', overview.attendance.participantSessions],
         ['attendance_seconds', overview.attendance.totalSeconds],
         ['engagement_actions', overview.engagement.totalActions],
+        ['unified_engagement_events', overview.engagement.unifiedEventCount],
+        ...Object.entries(overview.engagement.byType)
+          .sort(([left], [right]) => left.localeCompare(right))
+          .map(([eventType, count]) => [
+            `engagement_${eventType.replace(/[^a-z0-9]+/gi, '_').toLowerCase()}`,
+            count,
+          ]),
         ['ready_recordings', overview.memory.readyRecordings],
         ['ready_summaries', overview.memory.readySummaries],
         [],
@@ -237,6 +264,7 @@ export class AnalyticsService {
       readyRecordings,
       readySummaries,
       attendanceIntervals,
+      engagementGroups,
     ] = await Promise.all([
       transaction.session.findMany({
         where: { startsAt: { gte: since, lte: end } },
@@ -286,6 +314,11 @@ export class AnalyticsService {
           leftAt: true,
           lastHeartbeatAt: true,
         },
+      }),
+      transaction.engagementEvent.groupBy({
+        by: ['eventType'],
+        where: { occurredAt: { gte: since, lte: end } },
+        _count: { _all: true },
       }),
     ]);
 
@@ -365,6 +398,16 @@ export class AnalyticsService {
         pollAnswers,
         questions,
         totalActions: chatMessages + pollAnswers + questions,
+        unifiedEventCount: engagementGroups.reduce(
+          (sum, group) => sum + group._count._all,
+          0,
+        ),
+        byType: Object.fromEntries(
+          engagementGroups.map((group) => [
+            group.eventType,
+            group._count._all,
+          ]),
+        ),
       },
       memory: {
         readyRecordings,
