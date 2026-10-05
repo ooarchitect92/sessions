@@ -699,3 +699,70 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+.calendar-provider-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.calendar-provider-card {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.calendar-provider-card strong,
+.calendar-provider-card span {
+  display: block;
+}
+
+.calendar-provider-card strong {
+  font-size: 12px;
+}
+
+.calendar-provider-card span {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.calendar-connection-row {
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+}
+
+.invitation-status.status-active {
+  background: #def0e8;
+  color: #266553;
+}
+
+.invitation-status.status-error,
+.invitation-status.status-reauth_required {
+  background: #fff0d7;
+  color: #8a6425;
+}
+
+.invitation-status.status-revoked {
+  background: #eceae4;
+  color: #747b78;
+}
+
+@media (max-width: 1060px) {
+  .settings-nav {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .calendar-provider-grid,
+  .calendar-connection-row {
+    grid-template-columns: 1fr;
+  }
+}
