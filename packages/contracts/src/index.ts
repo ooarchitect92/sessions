@@ -55,7 +55,7 @@ export const RecordingConsentDecisionSchema = z.enum([
   'DECLINED',
   'REVOKED',
 ]);
-export const ChatChannelSchema = z.enum(['EVERYONE', 'HOSTS']);
+export const ChatChannelSchema = z.enum(['EVERYONE', 'HOSTS', 'PRIVATE']);
 export const PollTypeSchema = z.enum([
   'SINGLE_CHOICE',
   'MULTIPLE_CHOICE',
@@ -226,6 +226,7 @@ export const ChatMessageSchema = z.object({
   id: z.uuid(),
   sessionId: z.uuid(),
   authorUserId: z.uuid(),
+  recipientUserId: z.uuid().nullable().optional(),
   channel: ChatChannelSchema,
   body: z.string(),
   editedAt: z.iso.datetime().nullable(),
