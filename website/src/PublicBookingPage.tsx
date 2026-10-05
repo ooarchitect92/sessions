@@ -86,6 +86,13 @@ export function PublicBookingPage({
   const [managingReservation, setManagingReservation] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  const managementLink = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    const reservationId = params.get('reservationId');
+    const token = params.get('token');
+    return reservationId && token ? { reservationId, token } : null;
+  }, []);
+
   const basePath = useMemo(
     () =>
       `/public/${encodeURIComponent(organizationSlug)}/${encodeURIComponent(
@@ -104,10 +111,22 @@ export function PublicBookingPage({
         )}&dateTo=${encodeURIComponent(dateRange.dateTo)}`,
       ),
     ])
-      .then(([nextPage, nextSlots]) => {
-        if (!cancelled) {
-          setPage(nextPage);
-          setSlots(nextSlots);
+      .then(async ([nextPage, nextSlots]) => {
+        if (cancelled) return;
+        setPage(nextPage);
+        setSlots(nextSlots);
+        if (managementLink) {
+          const managed = await publicApi<Omit<Reservation, 'managementToken'>>(
+            `${basePath}/reservations/${encodeURIComponent(
+              managementLink.reservationId,
+            )}?token=${encodeURIComponent(managementLink.token)}`,
+          );
+          if (!cancelled) {
+            setReservation({
+              ...managed,
+              managementToken: managementLink.token,
+            });
+          }
         }
       })
       .catch((caught: unknown) => {
@@ -121,7 +140,7 @@ export function PublicBookingPage({
     return () => {
       cancelled = true;
     };
-  }, [basePath, dateRange]);
+  }, [basePath, dateRange, managementLink]);
 
   const reloadSlots = async () => {
     const nextSlots = await publicApi<Slot[]>(
