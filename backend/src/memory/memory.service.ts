@@ -709,6 +709,86 @@ export class MemoryService {
     return result;
   }
 
+  async sendFollowUp(
+    principal: Principal,
+    sessionId: string,
+    body: SendFollowUpDto,
+  ) {
+    this.assertHost(principal);
+    const result = await this.database.run(principal, async (transaction) => {
+      const summary = await transaction.memorySummary.findUnique({
+        where: { sessionId },
+      });
+      if (!summary) throw new NotFoundException('Memory summary not found');
+      if (!summary.followUpGeneratedAt || !summary.followUpApprovedAt) {
+        throw new ConflictException(
+          'Approve the follow-up draft before requesting delivery',
+        );
+      }
+
+      const draft =
+        summary.followUpDraft &&
+        typeof summary.followUpDraft === 'object' &&
+        !Array.isArray(summary.followUpDraft)
+          ? (summary.followUpDraft as Record<string, unknown>)
+          : {};
+      const subject =
+        typeof draft.subject === 'string' ? draft.subject.trim() : '';
+      const text = typeof draft.body === 'string' ? draft.body.trim() : '';
+      if (!subject || !text) {
+        throw new ConflictException('Approved follow-up draft is incomplete');
+      }
+
+      const recipients = [...new Set(body.recipients.map((item) => item.toLowerCase()))];
+
+      const delivery = await transaction.emailDelivery.create({
+        data: {
+          organizationId: principal.organizationId,
+          workspaceId: principal.workspaceId,
+          sessionId,
+          memorySummaryId: summary.id,
+          requestedByUserId: principal.userId,
+          recipients,
+          subject,
+          body: text,
+        },
+      });
+
+      await this.audit.record(transaction, principal, {
+        action: 'memory.follow_up_send_requested',
+        resourceType: 'email_delivery',
+        resourceId: delivery.id,
+        metadata: {
+          sessionId,
+          memorySummaryId: summary.id,
+          recipientCount: recipients.length,
+        },
+      });
+      await this.outbox.enqueue(transaction, principal, {
+        aggregateType: 'email_delivery',
+        aggregateId: delivery.id,
+        eventType: 'email.delivery.requested',
+        payload: {
+          emailDeliveryId: delivery.id,
+          memorySummaryId: summary.id,
+          sessionId,
+          recipientCount: recipients.length,
+        },
+      });
+      return delivery;
+    });
+
+    this.realtime.publishSessionEvent({
+      sessionId,
+      eventName: 'memory.follow_up.delivery_requested',
+      payload: {
+        emailDeliveryId: result.id,
+        status: result.status,
+      },
+    });
+    return result;
+  }
+
   async retryFailed(principal: Principal, sessionId: string) {
     this.assertHost(principal);
     const result = await this.database.run(principal, async (transaction) => {
