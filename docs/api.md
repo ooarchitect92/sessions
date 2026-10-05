@@ -123,6 +123,9 @@ Access tokens are short-lived JWTs. Managed browser sessions use opaque, hashed 
 | `GET`   | `/v1/bookings/{id}`                                                        | page details                                                         |
 | `PATCH` | `/v1/bookings/{id}`                                                        | update rules or active state with `If-Match`                         |
 | `GET`   | `/v1/bookings/{id}/reservations`                                           | list reservations and linked sessions                                |
+| `PATCH` | `/v1/bookings/{id}/reservations/{reservationId}/reschedule`                  | move a confirmed reservation to an available slot and sync its session |
+| `POST`  | `/v1/bookings/{id}/reservations/{reservationId}/cancel`                      | cancel a confirmed reservation and eligible linked session           |
+| `GET`   | `/v1/bookings/{id}/reservations/{reservationId}/calendar`                    | generate an RFC 5545-compatible ICS payload                           |
 | `GET`   | `/v1/public/{orgSlug}/{workspaceSlug}/bookings/{bookingSlug}`              | public page metadata                                                 |
 | `GET`   | `/v1/public/{orgSlug}/{workspaceSlug}/bookings/{bookingSlug}/slots`        | generate available slots for a bounded date range                    |
 | `POST`  | `/v1/public/{orgSlug}/{workspaceSlug}/bookings/{bookingSlug}/reservations` | lock a slot and atomically create reservation plus scheduled session |
