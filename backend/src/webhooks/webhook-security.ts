@@ -1,4 +1,5 @@
-import { createHmac, isIP } from 'node:crypto';
+import { createHmac } from 'node:crypto';
+import { isIP } from 'node:net';
 import { lookup } from 'node:dns/promises';
 
 export function signWebhookPayload(
