@@ -5,6 +5,9 @@ import type {
   AgendaDraftItem,
   AgendaDraftRequest,
   AgendaDraftResult,
+  FollowUpAiProvider,
+  FollowUpDraftRequest,
+  FollowUpDraftResult,
   AiActionItem,
   AiCitation,
   AiDecision,
@@ -35,7 +38,9 @@ const AGENDA_ITEM_TYPES = new Set([
 ]);
 
 @Injectable()
-export class HttpAiProvider implements MeetingAiProvider, AgendaAiProvider {
+export class HttpAiProvider
+  implements MeetingAiProvider, AgendaAiProvider, FollowUpAiProvider
+{
   readonly name = 'http';
 
   constructor(private readonly config: ConfigService) {}
@@ -91,6 +96,62 @@ export class HttpAiProvider implements MeetingAiProvider, AgendaAiProvider {
       model,
       request.segments.length,
     );
+  }
+
+  async draftFollowUp(
+    request: FollowUpDraftRequest,
+  ): Promise<FollowUpDraftResult> {
+    const endpoint = this.config.getOrThrow<string>('AI_HTTP_ENDPOINT');
+    const model = this.config.get<string>('AI_MODEL', 'default');
+    const apiKey = this.config.get<string>('AI_API_KEY');
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {}),
+      },
+      body: JSON.stringify({
+        model,
+        task: 'meeting_follow_up_email',
+        input: request,
+        outputSchema: {
+          subject: 'string',
+          body: 'string',
+        },
+      }),
+      signal: AbortSignal.timeout(
+        this.config.get<number>('AI_REQUEST_TIMEOUT_MS', 120_000),
+      ),
+    });
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      throw new Error(
+        `AI provider returned ${response.status}${body ? `: ${body.slice(0, 500)}` : ''}`,
+      );
+    }
+
+    const payload = (await response.json()) as ProviderResponse & {
+      subject?: unknown;
+      body?: unknown;
+    };
+    const subject =
+      typeof payload.subject === 'string' ? payload.subject.trim() : '';
+    const body = typeof payload.body === 'string' ? payload.body.trim() : '';
+    if (!subject || !body) {
+      throw new Error('AI provider response did not contain a follow-up draft');
+    }
+
+    return {
+      provider: this.name,
+      model:
+        typeof payload.model === 'string' && payload.model.trim()
+          ? payload.model.trim().slice(0, 160)
+          : model,
+      subject: subject.slice(0, 300),
+      body: body.slice(0, 20000),
+    };
   }
 
   async generateAgenda(request: AgendaDraftRequest): Promise<AgendaDraftResult> {
