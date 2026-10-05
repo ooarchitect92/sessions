@@ -28,6 +28,7 @@ import { RoomsModule } from "./rooms/rooms.module";
 import { SessionsModule } from "./sessions/sessions.module";
 import { TranscriptionModule } from "./transcription/transcription.module";
 import { WebhooksModule } from "./webhooks/webhooks.module";
+import { WhiteboardModule } from "./whiteboard/whiteboard.module";
 import { WorkspacesModule } from "./workspaces/workspaces.module";
 
 @Module({
