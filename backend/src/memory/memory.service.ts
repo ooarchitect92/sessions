@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import {
   ArtifactStatus,
+  ChatChannel,
   Prisma,
   SessionStatus,
   type Session,
@@ -118,6 +119,7 @@ export class MemoryService {
 
   async getBySession(principal: Principal, sessionId: string) {
     return this.database.run(principal, async (transaction) => {
+      const host = hasAnyRole(principal, HOST_ROLES);
       const session = await transaction.session.findUnique({
         where: { id: sessionId },
         include: {
@@ -135,8 +137,26 @@ export class MemoryService {
             take: 20,
           },
           chatMessages: {
-            where: { deletedAt: null },
-            include: { author: { select: { displayName: true } } },
+            where: {
+              deletedAt: null,
+              OR: [
+                { channel: ChatChannel.EVERYONE },
+                ...(host ? [{ channel: ChatChannel.HOSTS }] : []),
+                {
+                  channel: ChatChannel.PRIVATE,
+                  OR: [
+                    { authorUserId: principal.userId },
+                    { recipientUserId: principal.userId },
+                  ],
+                },
+              ],
+            },
+            include: {
+              author: { select: { displayName: true, avatarUrl: true } },
+              recipient: {
+                select: { id: true, displayName: true, avatarUrl: true },
+              },
+            },
             orderBy: { createdAt: 'asc' },
           },
           polls: {
