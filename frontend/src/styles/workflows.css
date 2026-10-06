@@ -953,3 +953,16 @@
     grid-template-columns: 1fr;
   }
 }
+
+.booking-calendar-syncs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.state-chip.error {
+  border-color: rgba(170, 47, 47, 0.22);
+  background: rgba(170, 47, 47, 0.08);
+  color: #9a3434;
+}
