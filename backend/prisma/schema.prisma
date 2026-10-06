@@ -194,8 +194,6 @@ model Organization {
   transcriptSegments  TranscriptSegment[]
   memorySummaries     MemorySummary[]
   emailDeliveries     EmailDelivery[]
-  bookingEmailDeliveries EmailDelivery[] @relation("BookingEmailDeliveries")
-  registrationEmailDeliveries EmailDelivery[] @relation("RegistrationEmailDeliveries")
   webhookSubscriptions WebhookSubscription[]
   webhookDeliveries   WebhookDelivery[]
   apiKeys             ApiKey[]
