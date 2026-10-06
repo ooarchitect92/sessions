@@ -326,6 +326,13 @@ export class BookingsService {
 
       const requestedParts = this.getZonedParts(requested, page.timezone);
       const localDate = this.formatCalendarDate(requestedParts);
+      const dayRange = this.validateDateRange(localDate, localDate);
+      const externalBusy = await this.calendars.getBusyIntervalsForUser({
+        workspaceId: page.workspaceId,
+        userId: page.createdById,
+        startsAt: dayRange.start,
+        endsAt: dayRange.endExclusive,
+      });
       const reservations = await transaction.bookingReservation.findMany({
         where: {
           bookingPageId,
@@ -336,7 +343,10 @@ export class BookingsService {
         },
         select: { startsAt: true, endsAt: true },
       });
-      const available = this.generateSlots(page, localDate, localDate, reservations);
+      const available = this.generateSlots(page, localDate, localDate, [
+        ...reservations,
+        ...externalBusy,
+      ]);
       const selected = available.find(
         (slot) => slot.startsAt === requested.toISOString(),
       );
@@ -431,7 +441,7 @@ export class BookingsService {
     return this.database.run(principal, async (transaction) => {
       const reservation = await transaction.bookingReservation.findFirst({
         where: { id: reservationId, bookingPageId },
-        include: { session: true },
+        include: { session: true, bookingPage: true },
       });
       if (!reservation) throw new NotFoundException('Booking reservation not found');
       if (reservation.status === BookingStatus.CANCELLED) {
