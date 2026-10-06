@@ -73,6 +73,8 @@ const environmentSchema = z
     MICROSOFT_CALENDAR_CLIENT_ID: z.string().min(1).optional(),
     MICROSOFT_CALENDAR_CLIENT_SECRET: z.string().min(1).optional(),
     CALENDAR_OAUTH_STATE_TTL_SECONDS: z.coerce.number().int().min(60).max(1800).default(600),
+    CALENDAR_SYNC_WORKER_BATCH_SIZE: z.coerce.number().int().min(1).max(50).default(10),
+    CALENDAR_SYNC_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(8),
     S3_ENDPOINT: z.string().url(),
     S3_PUBLIC_ENDPOINT: z.string().url().default('http://localhost:9000'),
     S3_REGION: z.string().min(1).max(100),
