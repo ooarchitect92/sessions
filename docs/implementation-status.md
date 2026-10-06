@@ -44,3 +44,16 @@ No provider-dependent workflow is marked production-ready until credentials, fai
 - public booking/event pages consume theme variables without changing scheduling or registration behavior
 - unsafe URL/color/font values are rejected server-side, with focused unit coverage
 - custom-domain DNS/TLS provisioning and email-template branding remain separate infrastructure increments
+
+
+### Workspace email-template increment
+- owner/admin settings now include a dedicated lifecycle email-template editor
+- booking confirmation, reschedule, cancellation and 24h/1h reminder templates
+- event confirmation, waitlist and 24h/1h reminder templates
+- global workspace email signature with safe placeholder interpolation
+- server-side validation for known purposes, bounded subject/body sizes and allow-listed placeholders
+- scheduler resolves templates transactionally when EmailDelivery rows are created
+- queued messages keep their rendered subject/body even if templates are later changed
+- brand name from workspace branding is available as a template variable
+- defaults remain in place for every message type when no custom override is configured
+- focused validation/rendering unit tests added
