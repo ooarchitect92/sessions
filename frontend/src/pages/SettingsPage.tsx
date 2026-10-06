@@ -9,11 +9,110 @@ import {
 } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 
-const TABS = ['workspace', 'members', 'workspaces', 'integrations', 'security'] as const;
+const TABS = [
+  'workspace',
+  'emails',
+  'members',
+  'workspaces',
+  'integrations',
+  'security',
+] as const;
 type SettingsTab = (typeof TABS)[number];
 
 const MEMBER_ROLES: WorkspaceRole[] = ['ADMIN', 'HOST', 'MEMBER', 'ANALYST', 'GUEST'];
 const ALL_ROLES: WorkspaceRole[] = ['OWNER', ...MEMBER_ROLES];
+
+const EMAIL_TEMPLATE_PURPOSES = [
+  'BOOKING_CONFIRMATION',
+  'BOOKING_RESCHEDULED',
+  'BOOKING_CANCELLED',
+  'BOOKING_REMINDER_24H',
+  'BOOKING_REMINDER_1H',
+  'EVENT_CONFIRMATION',
+  'EVENT_WAITLIST',
+  'EVENT_REMINDER_24H',
+  'EVENT_REMINDER_1H',
+] as const;
+
+type EmailTemplatePurpose = (typeof EMAIL_TEMPLATE_PURPOSES)[number];
+
+interface EmailTemplateDefinition {
+  subject: string;
+  body: string;
+}
+
+interface EmailTemplateSettingsState {
+  signature: string;
+  templates: Record<EmailTemplatePurpose, EmailTemplateDefinition>;
+}
+
+const DEFAULT_EMAIL_TEMPLATES: Record<EmailTemplatePurpose, EmailTemplateDefinition> = {
+  BOOKING_CONFIRMATION: {
+    subject: 'Booking confirmed: {{title}}',
+    body: 'Hi {{name}},\n\n{{status_message}}\n\nBooking: {{title}}\nStarts: {{starts_at}}\nEnds: {{ends_at}}\nTimezone: {{timezone}}',
+  },
+  BOOKING_RESCHEDULED: {
+    subject: 'Booking rescheduled: {{title}}',
+    body: 'Hi {{name}},\n\n{{status_message}}\n\nBooking: {{title}}\nStarts: {{starts_at}}\nEnds: {{ends_at}}\nTimezone: {{timezone}}',
+  },
+  BOOKING_CANCELLED: {
+    subject: 'Booking cancelled: {{title}}',
+    body: 'Hi {{name}},\n\n{{status_message}}\n\nBooking: {{title}}',
+  },
+  BOOKING_REMINDER_24H: {
+    subject: 'Reminder: {{title}} is tomorrow',
+    body: 'Hi {{name}},\n\n{{status_message}}\n\nBooking: {{title}}\nStarts: {{starts_at}}\nTimezone: {{timezone}}',
+  },
+  BOOKING_REMINDER_1H: {
+    subject: 'Reminder: {{title}} starts soon',
+    body: 'Hi {{name}},\n\n{{status_message}}\n\nBooking: {{title}}\nStarts: {{starts_at}}\nTimezone: {{timezone}}',
+  },
+  EVENT_CONFIRMATION: {
+    subject: 'Registration confirmed: {{title}}',
+    body: 'Hi {{name}},\n\n{{status_message}}\n\nEvent: {{title}}\nStarts: {{starts_at}}\nEnds: {{ends_at}}\nTimezone: {{timezone}}',
+  },
+  EVENT_WAITLIST: {
+    subject: 'Waitlist: {{title}}',
+    body: 'Hi {{name}},\n\n{{status_message}}\n\nEvent: {{title}}\nStarts: {{starts_at}}\nTimezone: {{timezone}}',
+  },
+  EVENT_REMINDER_24H: {
+    subject: 'Reminder: {{title}} is tomorrow',
+    body: 'Hi {{name}},\n\n{{status_message}}\n\nEvent: {{title}}\nStarts: {{starts_at}}\nTimezone: {{timezone}}',
+  },
+  EVENT_REMINDER_1H: {
+    subject: 'Reminder: {{title}} starts soon',
+    body: 'Hi {{name}},\n\n{{status_message}}\n\nEvent: {{title}}\nStarts: {{starts_at}}\nTimezone: {{timezone}}',
+  },
+};
+
+function emailTemplatesFromSettings(
+  settings: Record<string, unknown>,
+): EmailTemplateSettingsState {
+  const raw =
+    settings.emailTemplates &&
+    typeof settings.emailTemplates === 'object' &&
+    !Array.isArray(settings.emailTemplates)
+      ? (settings.emailTemplates as Record<string, unknown>)
+      : {};
+  const rawTemplates =
+    raw.templates && typeof raw.templates === 'object' && !Array.isArray(raw.templates)
+      ? (raw.templates as Record<string, unknown>)
+      : {};
+  const templates = { ...DEFAULT_EMAIL_TEMPLATES };
+  for (const purpose of EMAIL_TEMPLATE_PURPOSES) {
+    const candidate = rawTemplates[purpose];
+    if (candidate && typeof candidate === 'object' && !Array.isArray(candidate)) {
+      const object = candidate as Record<string, unknown>;
+      if (typeof object.subject === 'string' && typeof object.body === 'string') {
+        templates[purpose] = { subject: object.subject, body: object.body };
+      }
+    }
+  }
+  return {
+    signature: typeof raw.signature === 'string' ? raw.signature : '',
+    templates,
+  };
+}
 
 interface WorkspaceBrandingSettings {
   brandName: string;
@@ -109,28 +208,33 @@ export function SettingsPage() {
               <span>
                 {item === 'workspace'
                   ? '◇'
-                  : item === 'members'
-                    ? '◎'
-                    : item === 'workspaces'
-                      ? '▦'
-                      : item === 'integrations'
-                        ? '↗'
-                        : '⌾'}
+                  : item === 'emails'
+                    ? '✉'
+                    : item === 'members'
+                      ? '◎'
+                      : item === 'workspaces'
+                        ? '▦'
+                        : item === 'integrations'
+                          ? '↗'
+                          : '⌾'}
               </span>
               {item === 'workspace'
                 ? 'Workspace profile'
-                : item === 'members'
-                  ? 'Members and invites'
-                  : item === 'workspaces'
-                    ? 'Your workspaces'
-                    : item === 'integrations'
-                      ? 'Integrations'
-                      : 'Security'}
+                : item === 'emails'
+                  ? 'Email templates'
+                  : item === 'members'
+                    ? 'Members and invites'
+                    : item === 'workspaces'
+                      ? 'Your workspaces'
+                      : item === 'integrations'
+                        ? 'Integrations'
+                        : 'Security'}
             </button>
           ))}
         </nav>
         <section className="settings-content">
           {tab === 'workspace' ? <WorkspaceProfile /> : null}
+          {tab === 'emails' ? <EmailTemplateSettings /> : null}
           {tab === 'members' ? <MembersAndInvitations /> : null}
           {tab === 'workspaces' ? <WorkspaceDirectory /> : null}
           {tab === 'integrations' ? <IntegrationSettings /> : null}
@@ -424,6 +528,201 @@ function WorkspaceProfile() {
           label="Audience workflows"
           value={workspace.data._count.events + workspace.data._count.bookingPages}
         />
+      </section>
+    </div>
+  );
+}
+
+function EmailTemplateSettings() {
+  const queryClient = useQueryClient();
+  const workspace = useQuery({
+    queryKey: ['workspace-current'],
+    queryFn: () => api.getCurrentWorkspace(),
+  });
+  const [selectedPurpose, setSelectedPurpose] =
+    useState<EmailTemplatePurpose>('BOOKING_CONFIRMATION');
+  const [state, setState] = useState<EmailTemplateSettingsState>({
+    signature: '',
+    templates: { ...DEFAULT_EMAIL_TEMPLATES },
+  });
+  const canManage = ['OWNER', 'ADMIN'].includes(workspace.data?.currentRole ?? 'GUEST');
+
+  useEffect(() => {
+    if (workspace.data) {
+      setState(emailTemplatesFromSettings(workspace.data.settings));
+    }
+  }, [workspace.data]);
+
+  const save = useMutation({
+    mutationFn: () => {
+      if (!workspace.data) throw new Error('Workspace is unavailable');
+      return api.updateCurrentWorkspace(workspace.data.version, {
+        settings: {
+          emailTemplates: state,
+        },
+      });
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['workspace-current'] });
+    },
+  });
+
+  if (workspace.isLoading) return <SettingsLoading />;
+  if (workspace.error || !workspace.data) {
+    return <SettingsError message={workspace.error?.message ?? 'Workspace unavailable'} />;
+  }
+
+  const template = state.templates[selectedPurpose];
+  const purposeLabel = selectedPurpose
+    .toLowerCase()
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+
+  return (
+    <div className="settings-stack">
+      <section className="panel settings-panel">
+        <div className="settings-panel-heading">
+          <div>
+            <span className="eyebrow">Transactional messaging</span>
+            <h2>Email templates</h2>
+            <p>
+              Customize booking and event lifecycle messages. Templates are resolved when an
+              email is queued, so each delivery keeps the exact approved subject and body.
+            </p>
+          </div>
+          <span className="settings-role-chip">{workspace.data.currentRole.toLowerCase()}</span>
+        </div>
+
+        <div className="email-template-layout">
+          <div className="email-template-sidebar">
+            {EMAIL_TEMPLATE_PURPOSES.map((purpose) => (
+              <button
+                type="button"
+                key={purpose}
+                className={purpose === selectedPurpose ? 'active' : ''}
+                onClick={() => setSelectedPurpose(purpose)}
+              >
+                {purpose
+                  .toLowerCase()
+                  .split('_')
+                  .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+                  .join(' ')}
+              </button>
+            ))}
+          </div>
+
+          <form
+            className="settings-form email-template-editor"
+            onSubmit={(event) => {
+              event.preventDefault();
+              save.mutate();
+            }}
+          >
+            <div className="settings-section-heading">
+              <div>
+                <span className="eyebrow">Selected message</span>
+                <h3>{purposeLabel}</h3>
+                <p>
+                  Supported placeholders: {'{{name}}'}, {'{{title}}'}, {'{{starts_at}}'},{' '}
+                  {'{{ends_at}}'}, {'{{timezone}}'}, {'{{brand_name}}'} and{' '}
+                  {'{{status_message}}'}.
+                </p>
+              </div>
+            </div>
+
+            <label>
+              Subject
+              <input
+                disabled={!canManage}
+                required
+                maxLength={240}
+                value={template.subject}
+                onChange={(event) =>
+                  setState((current) => ({
+                    ...current,
+                    templates: {
+                      ...current.templates,
+                      [selectedPurpose]: {
+                        ...current.templates[selectedPurpose],
+                        subject: event.target.value,
+                      },
+                    },
+                  }))
+                }
+              />
+            </label>
+            <label>
+              Body
+              <textarea
+                disabled={!canManage}
+                required
+                maxLength={10000}
+                rows={12}
+                value={template.body}
+                onChange={(event) =>
+                  setState((current) => ({
+                    ...current,
+                    templates: {
+                      ...current.templates,
+                      [selectedPurpose]: {
+                        ...current.templates[selectedPurpose],
+                        body: event.target.value,
+                      },
+                    },
+                  }))
+                }
+              />
+            </label>
+            <label>
+              Global signature
+              <textarea
+                disabled={!canManage}
+                maxLength={2000}
+                rows={4}
+                value={state.signature}
+                onChange={(event) =>
+                  setState((current) => ({
+                    ...current,
+                    signature: event.target.value,
+                  }))
+                }
+                placeholder={'Regards,\n{{brand_name}} team'}
+              />
+            </label>
+            <div className="email-template-preview">
+              <span>Preview structure</span>
+              <strong>{template.subject}</strong>
+              <pre>{template.body}</pre>
+              {state.signature ? <pre>{state.signature}</pre> : null}
+            </div>
+            {save.error ? <div className="error-banner">{save.error.message}</div> : null}
+            {save.isSuccess ? (
+              <div className="success-banner">Email templates saved.</div>
+            ) : null}
+            <div className="settings-actions">
+              <button className="button primary" disabled={!canManage || save.isPending}>
+                {save.isPending ? 'Saving…' : 'Save email templates'}
+              </button>
+              <button
+                className="button secondary"
+                type="button"
+                disabled={!canManage || save.isPending}
+                onClick={() =>
+                  setState((current) => ({
+                    ...current,
+                    templates: {
+                      ...current.templates,
+                      [selectedPurpose]: DEFAULT_EMAIL_TEMPLATES[selectedPurpose],
+                    },
+                  }))
+                }
+              >
+                Reset selected template
+              </button>
+            </div>
+          </form>
+        </div>
       </section>
     </div>
   );
