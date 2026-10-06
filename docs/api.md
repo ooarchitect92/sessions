@@ -228,3 +228,8 @@ Connected Google and Microsoft calendars are queried for external busy intervals
 ### Booking calendar reconciliation
 
 Confirmed bookings now create durable calendar synchronization records for every enabled Google or Microsoft calendar connection owned by the booking-page host. Creation, reschedule and cancellation queue `CREATE`, `UPDATE` or `CANCEL` operations inside the same database transaction as the booking change. A background worker performs provider API writes with bounded exponential retry, persists provider event IDs, and emits `calendar.event.synced` or `calendar.event.sync_failed` outbox events.
+
+
+### Booking and event notification scheduling
+
+Public booking reservations and confirmed event registrations now create email-delivery records inside the same database transaction as the source record. The notification pipeline queues immediate confirmations plus 24-hour and 1-hour reminders when those reminder times are still in the future. Waitlisted event registrations receive a waitlist notice instead of reminders. Booking reschedules replace pending reminders and queue a reschedule notice. The email worker only claims rows whose `scheduled_for` time is due and suppresses reminders when their booking or event registration is no longer active.
