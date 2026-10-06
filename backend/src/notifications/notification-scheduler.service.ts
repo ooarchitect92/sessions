@@ -69,13 +69,7 @@ export class NotificationSchedulerService {
       },
     });
 
-    await this.queueReminder(
-      transaction,
-      base,
-      'BOOKING_REMINDER_24H',
-      new Date(reservation.startsAt.getTime() - 24 * 60 * 60 * 1000),
-      ...Object.values(
-        this.render(
+    const bookingReminder24h = this.render(
           templateContext,
           'BOOKING_REMINDER_24H',
           {
@@ -92,16 +86,16 @@ export class NotificationSchedulerService {
             reservation,
             'Reminder: your booking starts in about 24 hours.',
           ),
-        ),
-      ),
-    );
+        );
     await this.queueReminder(
       transaction,
       base,
-      'BOOKING_REMINDER_1H',
-      new Date(reservation.startsAt.getTime() - 60 * 60 * 1000),
-      ...Object.values(
-        this.render(
+      'BOOKING_REMINDER_24H',
+      new Date(reservation.startsAt.getTime() - 24 * 60 * 60 * 1000),
+      bookingReminder24h.subject,
+      bookingReminder24h.body,
+    );
+    const bookingReminder1h = this.render(
           templateContext,
           'BOOKING_REMINDER_1H',
           {
@@ -118,8 +112,14 @@ export class NotificationSchedulerService {
             reservation,
             'Reminder: your booking starts in about 1 hour.',
           ),
-        ),
-      ),
+        );
+    await this.queueReminder(
+      transaction,
+      base,
+      'BOOKING_REMINDER_1H',
+      new Date(reservation.startsAt.getTime() - 60 * 60 * 1000),
+      bookingReminder1h.subject,
+      bookingReminder1h.body,
     );
   }
 
@@ -182,13 +182,7 @@ export class NotificationSchedulerService {
       },
     });
 
-    await this.queueReminder(
-      transaction,
-      base,
-      'BOOKING_REMINDER_24H',
-      new Date(reservation.startsAt.getTime() - 24 * 60 * 60 * 1000),
-      ...Object.values(
-        this.render(
+    const rescheduledReminder24h = this.render(
           templateContext,
           'BOOKING_REMINDER_24H',
           {
@@ -205,16 +199,16 @@ export class NotificationSchedulerService {
             reservation,
             'Reminder: your booking starts in about 24 hours.',
           ),
-        ),
-      ),
-    );
+        );
     await this.queueReminder(
       transaction,
       base,
-      'BOOKING_REMINDER_1H',
-      new Date(reservation.startsAt.getTime() - 60 * 60 * 1000),
-      ...Object.values(
-        this.render(
+      'BOOKING_REMINDER_24H',
+      new Date(reservation.startsAt.getTime() - 24 * 60 * 60 * 1000),
+      rescheduledReminder24h.subject,
+      rescheduledReminder24h.body,
+    );
+    const rescheduledReminder1h = this.render(
           templateContext,
           'BOOKING_REMINDER_1H',
           {
@@ -231,8 +225,14 @@ export class NotificationSchedulerService {
             reservation,
             'Reminder: your booking starts in about 1 hour.',
           ),
-        ),
-      ),
+        );
+    await this.queueReminder(
+      transaction,
+      base,
+      'BOOKING_REMINDER_1H',
+      new Date(reservation.startsAt.getTime() - 60 * 60 * 1000),
+      rescheduledReminder1h.subject,
+      rescheduledReminder1h.body,
     );
   }
 
@@ -376,13 +376,7 @@ export class NotificationSchedulerService {
       },
     });
 
-    await this.queueReminder(
-      transaction,
-      base,
-      'EVENT_REMINDER_24H',
-      new Date(event.startsAt.getTime() - 24 * 60 * 60 * 1000),
-      ...Object.values(
-        this.render(
+    const eventReminder24h = this.render(
           templateContext,
           'EVENT_REMINDER_24H',
           {
@@ -399,16 +393,16 @@ export class NotificationSchedulerService {
             registration,
             'Reminder: the event starts in about 24 hours.',
           ),
-        ),
-      ),
-    );
+        );
     await this.queueReminder(
       transaction,
       base,
-      'EVENT_REMINDER_1H',
-      new Date(event.startsAt.getTime() - 60 * 60 * 1000),
-      ...Object.values(
-        this.render(
+      'EVENT_REMINDER_24H',
+      new Date(event.startsAt.getTime() - 24 * 60 * 60 * 1000),
+      eventReminder24h.subject,
+      eventReminder24h.body,
+    );
+    const eventReminder1h = this.render(
           templateContext,
           'EVENT_REMINDER_1H',
           {
@@ -425,8 +419,14 @@ export class NotificationSchedulerService {
             registration,
             'Reminder: the event starts in about 1 hour.',
           ),
-        ),
-      ),
+        );
+    await this.queueReminder(
+      transaction,
+      base,
+      'EVENT_REMINDER_1H',
+      new Date(event.startsAt.getTime() - 60 * 60 * 1000),
+      eventReminder1h.subject,
+      eventReminder1h.body,
     );
   }
 
