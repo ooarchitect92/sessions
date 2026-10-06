@@ -25,7 +25,10 @@ import {
   assertPublicFormFields,
   validatePublicFormAnswers,
 } from "../common/forms/public-form-validation";
-import { publicWorkspaceBranding } from "../common/branding/workspace-branding";
+import {
+  normalizeWorkspaceBranding,
+  publicWorkspaceBranding,
+} from "../common/branding/workspace-branding";
 import type { PublicFormFieldDto } from "../common/forms/public-form-field.dto";
 import { TenantDatabaseService } from "../database/tenant-database.service";
 import { WorkerPrismaService } from "../database/worker-prisma.service";
@@ -439,10 +442,10 @@ export class EventsService {
       timezone: event.timezone,
       capacity: event.capacity,
       registrationFields: event.registrationFields,
-      branding: {
+      branding: normalizeWorkspaceBranding({
         ...publicWorkspaceBranding(event.workspace.settings, event.workspace.name),
-        ...(event.branding as Record<string, unknown>),
-      },
+        ...this.jsonObject(event.branding),
+      }),
       status: event.status,
       registrationCount: event._count.registrations,
     };
@@ -573,6 +576,12 @@ export class EventsService {
     if (!hasAnyRole(principal, HOST_ROLES)) {
       throw new ForbiddenException("A host role is required");
     }
+  }
+
+  private jsonObject(value: unknown): Record<string, unknown> {
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
   }
 
   private toJson(value: unknown): Prisma.JsonObject {
