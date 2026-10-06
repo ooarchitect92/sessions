@@ -5,6 +5,11 @@ import {
   type PublicFormAnswers,
   type PublicFormField,
 } from './PublicCustomFields';
+import {
+  PublicWordmark,
+  publicBrandStyle,
+  type PublicBranding,
+} from './PublicBranding';
 
 interface PublicBookingPage {
   id: string;
@@ -16,6 +21,7 @@ interface PublicBookingPage {
   minimumNoticeMinutes: number;
   availabilityRules: Array<Record<string, unknown>>;
   intakeFields: PublicFormField[];
+  branding: PublicBranding;
 }
 
 interface Slot {
@@ -130,12 +136,12 @@ export function PublicBookingPage({
   if (!page) return <PublicBookingState title="Booking page unavailable" />;
 
   return (
-    <main className="public-flow-page booking-flow-page">
+    <main
+      className="public-flow-page booking-flow-page"
+      style={publicBrandStyle(page.branding)}
+    >
       <header className="public-flow-nav">
-        <a className="public-wordmark" href="/">
-          <span>S</span>
-          Sessions
-        </a>
+        <PublicWordmark branding={page.branding} />
         <span className="public-live-label">Secure scheduling</span>
       </header>
 
