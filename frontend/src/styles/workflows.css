@@ -966,3 +966,54 @@
   background: rgba(170, 47, 47, 0.08);
   color: #9a3434;
 }
+
+.custom-field-builder {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+}
+
+.custom-field-builder-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.custom-field-builder-heading > div {
+  display: grid;
+  gap: 3px;
+}
+
+.custom-field-builder-heading small {
+  color: var(--text-muted);
+}
+
+.custom-field-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(120px, 0.8fr) auto auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.custom-field-row .inline-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.custom-field-options {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 720px) {
+  .custom-field-row {
+    grid-template-columns: 1fr;
+  }
+
+  .custom-field-options {
+    grid-column: auto;
+  }
+}
