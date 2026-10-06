@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { CreateEventInput } from '@sessions/contracts';
+import type { CreateEventInput, PublicFormField } from '@sessions/contracts';
 import { FormEvent, useMemo, useState } from 'react';
 import { api, type EventRecord } from '../api/client';
 
@@ -32,6 +32,7 @@ export function EventsPage() {
   const [startsAt, setStartsAt] = useState(defaultStart);
   const [durationMinutes, setDurationMinutes] = useState(60);
   const [capacity, setCapacity] = useState('250');
+  const [registrationFields, setRegistrationFields] = useState<PublicFormField[]>([]);
 
   const events = useQuery({ queryKey: ['events'], queryFn: () => api.listEvents() });
   const create = useMutation({
@@ -40,6 +41,7 @@ export function EventsPage() {
       setTitle('');
       setSlug('');
       setSlugEdited(false);
+      setRegistrationFields([]);
       await queryClient.invalidateQueries({ queryKey: ['events'] });
     },
   });
@@ -66,7 +68,7 @@ export function EventsPage() {
       durationMinutes,
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       capacity: capacity.trim() ? Number(capacity) : null,
-      registrationFields: [],
+      registrationFields,
       branding: {},
     });
   };
@@ -141,6 +143,134 @@ export function EventsPage() {
               Public slug
               <input required minLength={2} maxLength={100} value={slug} onChange={(event) => { setSlugEdited(true); setSlug(toSlug(event.target.value)); }} placeholder="finance-summit" />
             </label>
+            <div className="custom-field-builder">
+              <div className="custom-field-builder-heading">
+                <div>
+                  <strong>Registration form</strong>
+                  <small>Ask attendee questions or collect consent.</small>
+                </div>
+                <button
+                  className="button secondary"
+                  type="button"
+                  onClick={() =>
+                    setRegistrationFields((fields) => [
+                      ...fields,
+                      {
+                        key: `question_${fields.length + 1}`,
+                        label: 'New question',
+                        type: 'TEXT',
+                        required: false,
+                        options: [],
+                      },
+                    ])
+                  }
+                >
+                  Add field
+                </button>
+              </div>
+              {registrationFields.map((field, index) => (
+                <div className="custom-field-row" key={`${field.key}-${index}`}>
+                  <input
+                    aria-label="Field label"
+                    maxLength={160}
+                    value={field.label}
+                    onChange={(event) =>
+                      setRegistrationFields((fields) =>
+                        fields.map((candidate, candidateIndex) =>
+                          candidateIndex === index
+                            ? {
+                                ...candidate,
+                                label: event.target.value,
+                                key:
+                                  toSlug(event.target.value).replace(/-/g, '_') ||
+                                  `question_${index + 1}`,
+                              }
+                            : candidate,
+                        ),
+                      )
+                    }
+                  />
+                  <select
+                    aria-label="Field type"
+                    value={field.type}
+                    onChange={(event) =>
+                      setRegistrationFields((fields) =>
+                        fields.map((candidate, candidateIndex) =>
+                          candidateIndex === index
+                            ? {
+                                ...candidate,
+                                type: event.target.value as PublicFormField['type'],
+                                options:
+                                  event.target.value === 'SELECT'
+                                    ? candidate.options.length
+                                      ? candidate.options
+                                      : ['Option 1', 'Option 2']
+                                    : [],
+                              }
+                            : candidate,
+                        ),
+                      )
+                    }
+                  >
+                    <option value="TEXT">Short text</option>
+                    <option value="TEXTAREA">Long text</option>
+                    <option value="SELECT">Dropdown</option>
+                    <option value="CHECKBOX">Checkbox</option>
+                    <option value="CONSENT">Consent</option>
+                  </select>
+                  <label className="inline-checkbox">
+                    <input
+                      checked={field.required}
+                      type="checkbox"
+                      onChange={(event) =>
+                        setRegistrationFields((fields) =>
+                          fields.map((candidate, candidateIndex) =>
+                            candidateIndex === index
+                              ? { ...candidate, required: event.target.checked }
+                              : candidate,
+                          ),
+                        )
+                      }
+                    />
+                    Required
+                  </label>
+                  <button
+                    className="button secondary"
+                    type="button"
+                    onClick={() =>
+                      setRegistrationFields((fields) =>
+                        fields.filter((_, candidateIndex) => candidateIndex !== index),
+                      )
+                    }
+                  >
+                    Remove
+                  </button>
+                  {field.type === 'SELECT' ? (
+                    <input
+                      className="custom-field-options"
+                      aria-label="Dropdown options"
+                      value={field.options.join(', ')}
+                      onChange={(event) =>
+                        setRegistrationFields((fields) =>
+                          fields.map((candidate, candidateIndex) =>
+                            candidateIndex === index
+                              ? {
+                                  ...candidate,
+                                  options: event.target.value
+                                    .split(',')
+                                    .map((option) => option.trim())
+                                    .filter(Boolean),
+                                }
+                              : candidate,
+                          ),
+                        )
+                      }
+                      placeholder="Option 1, Option 2"
+                    />
+                  ) : null}
+                </div>
+              ))}
+            </div>
             <label>
               Starts at
               <input required type="datetime-local" value={startsAt} onChange={(event) => setStartsAt(event.target.value)} />
