@@ -90,6 +90,19 @@ enum CalendarConnectionStatus {
   ERROR
 }
 
+enum CalendarSyncAction {
+  CREATE
+  UPDATE
+  CANCEL
+}
+
+enum CalendarSyncStatus {
+  PENDING
+  PROCESSING
+  SYNCED
+  FAILED
+}
+
 enum ArtifactStatus {
   PENDING
   PROCESSING
@@ -201,6 +214,7 @@ model Organization {
   agendaTemplateItems AgendaTemplateItem[]
   calendarConnections CalendarConnection[]
   calendarOAuthStates CalendarOAuthState[]
+  calendarEventSyncs CalendarEventSync[]
 
   @@map("organizations")
 }
@@ -249,6 +263,7 @@ model Workspace {
   agendaTemplateItems AgendaTemplateItem[]
   calendarConnections CalendarConnection[]
   calendarOAuthStates CalendarOAuthState[]
+  calendarEventSyncs CalendarEventSync[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -516,6 +531,7 @@ model CalendarConnection {
   organization          Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   workspace             Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   user                  User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  eventSyncs             CalendarEventSync[]
 
   @@unique([workspaceId, userId, provider])
   @@index([organizationId, workspaceId, status])
@@ -594,11 +610,41 @@ model BookingReservation {
   workspace      Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   bookingPage    BookingPage   @relation(fields: [bookingPageId], references: [id], onDelete: Cascade)
   session        Session?      @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  calendarEventSyncs CalendarEventSync[]
 
   @@unique([bookingPageId, startsAt])
   @@index([organizationId, workspaceId, startsAt])
   @@index([bookingPageId, status, startsAt])
   @@map("booking_reservations")
+}
+
+model CalendarEventSync {
+  id              String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String             @map("organization_id") @db.Uuid
+  workspaceId     String             @map("workspace_id") @db.Uuid
+  reservationId   String             @map("reservation_id") @db.Uuid
+  connectionId    String             @map("connection_id") @db.Uuid
+  provider        CalendarProvider
+  providerEventId String?            @map("provider_event_id") @db.VarChar(512)
+  action          CalendarSyncAction @default(CREATE)
+  status          CalendarSyncStatus @default(PENDING)
+  attempts        Int                @default(0)
+  nextAttemptAt   DateTime?          @map("next_attempt_at") @db.Timestamptz(6)
+  lastAttemptAt   DateTime?          @map("last_attempt_at") @db.Timestamptz(6)
+  syncedAt        DateTime?          @map("synced_at") @db.Timestamptz(6)
+  failureCode     String?            @map("failure_code") @db.Text
+  version         Int                @default(1)
+  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization    Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace       Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  reservation     BookingReservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  connection      CalendarConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@unique([reservationId, connectionId])
+  @@index([organizationId, workspaceId, status, nextAttemptAt])
+  @@index([connectionId, status])
+  @@map("calendar_event_syncs")
 }
 
 model Recording {
