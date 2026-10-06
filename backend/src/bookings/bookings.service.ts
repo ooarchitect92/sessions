@@ -655,7 +655,7 @@ export class BookingsService {
         reservation,
       });
       return {
-        ...reservation,
+        ...this.publicReservationShape(reservation),
         manageToken: manageToken.token,
       };
     });
@@ -933,7 +933,7 @@ export class BookingsService {
     reservationId: string,
     token: string,
   ): void {
-    const parsed = this.security.parseOpaqueToken(token);
+    const parsed = token ? this.security.parseOpaqueToken(token) : null;
     if (
       !parsed ||
       parsed.id !== reservationId ||
