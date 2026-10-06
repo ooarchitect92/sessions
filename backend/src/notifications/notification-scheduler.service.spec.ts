@@ -47,6 +47,8 @@ function reservation(): BookingReservation {
     answers: {},
     status: BookingStatus.CONFIRMED,
     version: 1,
+    manageTokenHash: null,
+    manageTokenExpiresAt: null,
     rescheduledAt: null,
     cancelledAt: null,
     createdAt: new Date(),
