@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { CreateBookingPageInput } from '@sessions/contracts';
+import type { CreateBookingPageInput, PublicFormField } from '@sessions/contracts';
 import { FormEvent, useState } from 'react';
 import { api, type BookingPageRecord } from '../api/client';
 
@@ -31,6 +31,7 @@ export function BookingsPage() {
   const [slugEdited, setSlugEdited] = useState(false);
   const [durationMinutes, setDurationMinutes] = useState(30);
   const [minimumNoticeMinutes, setMinimumNoticeMinutes] = useState(120);
+  const [intakeFields, setIntakeFields] = useState<PublicFormField[]>([]);
   const [selectedBookingId, setSelectedBookingId] = useState('');
   const [rescheduleReservationId, setRescheduleReservationId] = useState('');
   const [rescheduleStartsAt, setRescheduleStartsAt] = useState('');
@@ -42,6 +43,7 @@ export function BookingsPage() {
       setTitle('');
       setSlug('');
       setSlugEdited(false);
+      setIntakeFields([]);
       await queryClient.invalidateQueries({ queryKey: ['bookings'] });
     },
   });
@@ -125,7 +127,7 @@ export function BookingsPage() {
       bufferBeforeMinutes: 10,
       bufferAfterMinutes: 10,
       availabilityRules: WEEKDAY_RULES,
-      intakeFields: [],
+      intakeFields,
     });
   };
 
@@ -347,6 +349,134 @@ export function BookingsPage() {
               Public slug
               <input required minLength={2} maxLength={100} value={slug} onChange={(event) => { setSlugEdited(true); setSlug(toSlug(event.target.value)); }} placeholder="discovery-call" />
             </label>
+            <div className="custom-field-builder">
+              <div className="custom-field-builder-heading">
+                <div>
+                  <strong>Intake form</strong>
+                  <small>Collect extra information before the meeting.</small>
+                </div>
+                <button
+                  className="button secondary"
+                  type="button"
+                  onClick={() =>
+                    setIntakeFields((fields) => [
+                      ...fields,
+                      {
+                        key: `question_${fields.length + 1}`,
+                        label: 'New question',
+                        type: 'TEXT',
+                        required: false,
+                        options: [],
+                      },
+                    ])
+                  }
+                >
+                  Add field
+                </button>
+              </div>
+              {intakeFields.map((field, index) => (
+                <div className="custom-field-row" key={`${field.key}-${index}`}>
+                  <input
+                    aria-label="Field label"
+                    maxLength={160}
+                    value={field.label}
+                    onChange={(event) =>
+                      setIntakeFields((fields) =>
+                        fields.map((candidate, candidateIndex) =>
+                          candidateIndex === index
+                            ? {
+                                ...candidate,
+                                label: event.target.value,
+                                key:
+                                  toSlug(event.target.value).replace(/-/g, '_') ||
+                                  `question_${index + 1}`,
+                              }
+                            : candidate,
+                        ),
+                      )
+                    }
+                  />
+                  <select
+                    aria-label="Field type"
+                    value={field.type}
+                    onChange={(event) =>
+                      setIntakeFields((fields) =>
+                        fields.map((candidate, candidateIndex) =>
+                          candidateIndex === index
+                            ? {
+                                ...candidate,
+                                type: event.target.value as PublicFormField['type'],
+                                options:
+                                  event.target.value === 'SELECT'
+                                    ? candidate.options.length
+                                      ? candidate.options
+                                      : ['Option 1', 'Option 2']
+                                    : [],
+                              }
+                            : candidate,
+                        ),
+                      )
+                    }
+                  >
+                    <option value="TEXT">Short text</option>
+                    <option value="TEXTAREA">Long text</option>
+                    <option value="SELECT">Dropdown</option>
+                    <option value="CHECKBOX">Checkbox</option>
+                    <option value="CONSENT">Consent</option>
+                  </select>
+                  <label className="inline-checkbox">
+                    <input
+                      checked={field.required}
+                      type="checkbox"
+                      onChange={(event) =>
+                        setIntakeFields((fields) =>
+                          fields.map((candidate, candidateIndex) =>
+                            candidateIndex === index
+                              ? { ...candidate, required: event.target.checked }
+                              : candidate,
+                          ),
+                        )
+                      }
+                    />
+                    Required
+                  </label>
+                  <button
+                    className="button secondary"
+                    type="button"
+                    onClick={() =>
+                      setIntakeFields((fields) =>
+                        fields.filter((_, candidateIndex) => candidateIndex !== index),
+                      )
+                    }
+                  >
+                    Remove
+                  </button>
+                  {field.type === 'SELECT' ? (
+                    <input
+                      className="custom-field-options"
+                      aria-label="Dropdown options"
+                      value={field.options.join(', ')}
+                      onChange={(event) =>
+                        setIntakeFields((fields) =>
+                          fields.map((candidate, candidateIndex) =>
+                            candidateIndex === index
+                              ? {
+                                  ...candidate,
+                                  options: event.target.value
+                                    .split(',')
+                                    .map((option) => option.trim())
+                                    .filter(Boolean),
+                                }
+                              : candidate,
+                          ),
+                        )
+                      }
+                      placeholder="Option 1, Option 2"
+                    />
+                  ) : null}
+                </div>
+              ))}
+            </div>
             <div className="form-grid">
               <label>
                 Duration
