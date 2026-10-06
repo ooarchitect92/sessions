@@ -7,6 +7,9 @@ import {
 } from '@nestjs/common';
 import {
   BookingStatus,
+  CalendarConnectionStatus,
+  CalendarSyncAction,
+  CalendarSyncStatus,
   Prisma,
   SessionKind,
   SessionStatus,
@@ -383,6 +386,13 @@ export class BookingsService {
         eventType: 'booking.rescheduled',
         payload: this.toJson(updated),
       });
+      await this.queueCalendarEventSyncs(transaction, {
+        organizationId: principal.organizationId,
+        workspaceId: principal.workspaceId,
+        userId: page.createdById,
+        reservationId,
+        action: CalendarSyncAction.UPDATE,
+      });
       return updated;
     });
   }
@@ -466,6 +476,17 @@ export class BookingsService {
         aggregateId: reservationId,
         eventType: 'booking.cancelled',
         payload: this.toJson(updated),
+      });
+      const page = await transaction.bookingPage.findUniqueOrThrow({
+        where: { id: bookingPageId },
+        select: { createdById: true },
+      });
+      await this.queueCalendarEventSyncs(transaction, {
+        organizationId: principal.organizationId,
+        workspaceId: principal.workspaceId,
+        userId: page.createdById,
+        reservationId,
+        action: CalendarSyncAction.CANCEL,
       });
       return updated;
     });
@@ -593,8 +614,71 @@ export class BookingsService {
           payload: this.toJson(reservation),
         },
       );
+      await this.queueCalendarEventSyncs(transaction, {
+        organizationId: page.organizationId,
+        workspaceId: page.workspaceId,
+        userId: page.createdById,
+        reservationId: reservation.id,
+        action: CalendarSyncAction.CREATE,
+      });
       return reservation;
     });
+  }
+
+  private async queueCalendarEventSyncs(
+    transaction: Prisma.TransactionClient,
+    input: {
+      organizationId: string;
+      workspaceId: string;
+      userId: string;
+      reservationId: string;
+      action: CalendarSyncAction;
+    },
+  ): Promise<void> {
+    const connections = await transaction.calendarConnection.findMany({
+      where: {
+        organizationId: input.organizationId,
+        workspaceId: input.workspaceId,
+        userId: input.userId,
+        syncEnabled: true,
+        status: {
+          in: [
+            CalendarConnectionStatus.CONNECTED,
+            CalendarConnectionStatus.ERROR,
+          ],
+        },
+      },
+      select: { id: true, provider: true },
+    });
+
+    for (const connection of connections) {
+      await transaction.calendarEventSync.upsert({
+        where: {
+          reservationId_connectionId: {
+            reservationId: input.reservationId,
+            connectionId: connection.id,
+          },
+        },
+        update: {
+          action: input.action,
+          status: CalendarSyncStatus.PENDING,
+          attempts: 0,
+          nextAttemptAt: null,
+          failureCode: null,
+          syncedAt: null,
+          version: { increment: 1 },
+        },
+        create: {
+          organizationId: input.organizationId,
+          workspaceId: input.workspaceId,
+          reservationId: input.reservationId,
+          connectionId: connection.id,
+          provider: connection.provider,
+          action: input.action,
+          status: CalendarSyncStatus.PENDING,
+        },
+      });
+    }
   }
 
   private async findPublicPage(
