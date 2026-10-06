@@ -24,6 +24,7 @@ import {
 import { TenantDatabaseService } from "../database/tenant-database.service";
 import { WorkerPrismaService } from "../database/worker-prisma.service";
 import { OutboxService } from "../outbox/outbox.service";
+import { NotificationSchedulerService } from "../notifications/notification-scheduler.service";
 import { CreateEventDto } from "./dto/create-event.dto";
 import { RegisterEventDto } from "./dto/register-event.dto";
 import { UpdateEventDto } from "./dto/update-event.dto";
@@ -45,6 +46,7 @@ export class EventsService {
     private readonly publicDatabase: WorkerPrismaService,
     private readonly audit: AuditService,
     private readonly outbox: OutboxService,
+    private readonly notifications: NotificationSchedulerService,
   ) {}
 
   async create(
@@ -484,6 +486,10 @@ export class EventsService {
           payload: this.toJson(registration),
         },
       );
+      await this.notifications.queueEventRegistrationEmails(transaction, {
+        event,
+        registration,
+      });
       return registration;
     });
   }
