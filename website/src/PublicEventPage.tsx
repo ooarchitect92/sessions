@@ -1,5 +1,10 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { publicApi } from './public-api';
+import {
+  PublicCustomFields,
+  type PublicFormAnswers,
+  type PublicFormField,
+} from './PublicCustomFields';
 
 interface PublicEvent {
   id: string;
@@ -10,7 +15,7 @@ interface PublicEvent {
   durationMinutes: number;
   timezone: string;
   capacity: number | null;
-  registrationFields: Array<Record<string, unknown>>;
+  registrationFields: PublicFormField[];
   branding: Record<string, unknown>;
   status: 'PUBLISHED' | 'LIVE';
   registrationCount: number;
@@ -36,6 +41,7 @@ export function PublicEventPage({
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [registration, setRegistration] = useState<Registration | null>(null);
+  const [answers, setAnswers] = useState<PublicFormAnswers>({});
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -72,7 +78,7 @@ export function PublicEventPage({
         )}/events/${encodeURIComponent(eventSlug)}/registrations`,
         {
           method: 'POST',
-          body: JSON.stringify({ name, email, answers: {} }),
+          body: JSON.stringify({ name, email, answers }),
         },
       );
       setRegistration(result);
@@ -177,12 +183,13 @@ export function PublicEventPage({
                     autoComplete="email"
                   />
                 </label>
-                {event.registrationFields.length > 0 ? (
-                  <div className="public-form-note">
-                    This event has {event.registrationFields.length} additional organizer-defined
-                    fields. The full dynamic form renderer is the next form-builder increment.
-                  </div>
-                ) : null}
+                <PublicCustomFields
+                  fields={event.registrationFields}
+                  answers={answers}
+                  onChange={(key, value) =>
+                    setAnswers((current) => ({ ...current, [key]: value }))
+                  }
+                />
                 {error ? <div className="public-error">{error}</div> : null}
                 <button disabled={submitting || !name.trim() || !email.trim()}>
                   {submitting ? 'Registering…' : 'Register now'}
