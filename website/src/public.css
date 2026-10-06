@@ -467,3 +467,42 @@
   font-size: 10px;
   line-height: 1.6;
 }
+
+.public-form textarea,
+.public-form select {
+  width: 100%;
+  border: 1px solid #d4d3cc;
+  border-radius: 11px;
+  padding: 12px;
+  outline: 0;
+  background: #fff;
+  color: #142421;
+  font: inherit;
+}
+
+.public-form textarea {
+  min-height: 110px;
+  resize: vertical;
+}
+
+.public-form select {
+  min-height: 45px;
+}
+
+.public-form textarea:focus,
+.public-form select:focus {
+  border-color: #507b70;
+  box-shadow: 0 0 0 3px rgba(48, 111, 85, 0.12);
+}
+
+.public-checkbox-field {
+  grid-template-columns: 18px minmax(0, 1fr) !important;
+  align-items: start;
+  gap: 10px !important;
+}
+
+.public-checkbox-field input {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+}
