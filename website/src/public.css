@@ -506,3 +506,47 @@
   height: 16px;
   margin-top: 2px;
 }
+
+.public-flow-page {
+  font-family: var(--public-font, 'Manrope'), sans-serif;
+  background:
+    linear-gradient(rgba(241, 238, 230, 0.92), rgba(241, 238, 230, 0.96)),
+    var(--public-hero-image, none),
+    #f1eee6;
+  background-size: cover;
+  background-position: center;
+}
+
+.public-flow-page .public-wordmark span,
+.public-flow-page .public-action-card > button,
+.public-flow-page .public-form button {
+  background: var(--public-primary, #183f38);
+}
+
+.public-flow-page .public-live-label {
+  background: var(--public-accent, #dff0e9);
+  color: var(--public-primary, #26614f);
+}
+
+.public-flow-page .public-kicker,
+.public-flow-page .slot-grid button.selected {
+  color: var(--public-primary, #183f38);
+}
+
+.public-wordmark img {
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  object-fit: contain;
+  background: #fff;
+}
+
+.public-wordmark strong {
+  font: inherit;
+}
+
+.public-wordmark small {
+  color: #7b8582;
+  font-size: 9px;
+  font-weight: 700;
+}
