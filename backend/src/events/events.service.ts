@@ -543,7 +543,10 @@ export class EventsService {
         slug: eventSlug,
         status: { in: PUBLIC_EVENT_STATUSES },
       },
-      include: { _count: { select: { registrations: true } } },
+      include: {
+        workspace: { select: { name: true, settings: true } },
+        _count: { select: { registrations: true } },
+      },
     });
     if (!event) throw new NotFoundException("Event not found");
     return event;
