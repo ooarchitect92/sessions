@@ -363,6 +363,153 @@ export class CalendarIntegrationsService {
     return intervals;
   }
 
+  async syncProviderEvent(input: {
+    connection: {
+      id: string;
+      provider: CalendarProvider;
+      calendarId: string | null;
+      encryptedAccessToken: string;
+      encryptedRefreshToken: string | null;
+      tokenExpiresAt: Date | null;
+    };
+    action: 'CREATE' | 'UPDATE' | 'CANCEL';
+    providerEventId: string | null;
+    reservation: {
+      id: string;
+      name: string;
+      email: string;
+      startsAt: Date;
+      endsAt: Date;
+      timezone: string;
+      session: { title: string } | null;
+      bookingPage: { title: string; description: string | null };
+    };
+  }): Promise<{ providerEventId: string | null }> {
+    if (input.action === 'CANCEL' && !input.providerEventId) {
+      return { providerEventId: null };
+    }
+
+    const accessToken = await this.usableAccessToken(input.connection);
+    const eventBody = this.calendarEventBody(input.reservation);
+    const action =
+      input.action === 'UPDATE' && !input.providerEventId ? 'CREATE' : input.action;
+
+    if (input.connection.provider === CalendarProvider.GOOGLE) {
+      const calendarId = encodeURIComponent(input.connection.calendarId || 'primary');
+      if (action === 'CANCEL') {
+        const response = await fetch(
+          `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${encodeURIComponent(input.providerEventId!)}?sendUpdates=all`,
+          {
+            method: 'DELETE',
+            headers: { authorization: `Bearer ${accessToken}` },
+            signal: AbortSignal.timeout(15_000),
+          },
+        );
+        if (!response.ok && response.status !== 404) {
+          throw new Error(`Google Calendar event cancellation failed (${response.status})`);
+        }
+        return { providerEventId: input.providerEventId };
+      }
+
+      const endpoint =
+        action === 'CREATE'
+          ? `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events?sendUpdates=all`
+          : `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${encodeURIComponent(input.providerEventId!)}?sendUpdates=all`;
+      const response = await fetch(endpoint, {
+        method: action === 'CREATE' ? 'POST' : 'PATCH',
+        headers: {
+          authorization: `Bearer ${accessToken}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          summary: eventBody.title,
+          description: eventBody.description,
+          start: { dateTime: eventBody.startsAt, timeZone: 'UTC' },
+          end: { dateTime: eventBody.endsAt, timeZone: 'UTC' },
+          attendees: [{ email: eventBody.email, displayName: eventBody.name }],
+          extendedProperties: {
+            private: { sessionsReservationId: input.reservation.id },
+          },
+        }),
+        signal: AbortSignal.timeout(15_000),
+      });
+      const payload = (await response.json().catch(() => ({}))) as { id?: string; error?: unknown };
+      if (!response.ok || !payload.id) {
+        throw new Error(`Google Calendar event sync failed (${response.status})`);
+      }
+      return { providerEventId: payload.id };
+    }
+
+    if (action === 'CANCEL') {
+      const response = await fetch(
+        `https://graph.microsoft.com/v1.0/me/events/${encodeURIComponent(input.providerEventId!)}`,
+        {
+          method: 'DELETE',
+          headers: { authorization: `Bearer ${accessToken}` },
+          signal: AbortSignal.timeout(15_000),
+        },
+      );
+      if (!response.ok && response.status !== 404) {
+        throw new Error(`Microsoft Calendar event cancellation failed (${response.status})`);
+      }
+      return { providerEventId: input.providerEventId };
+    }
+
+    const endpoint =
+      action === 'CREATE'
+        ? 'https://graph.microsoft.com/v1.0/me/events'
+        : `https://graph.microsoft.com/v1.0/me/events/${encodeURIComponent(input.providerEventId!)}`;
+    const response = await fetch(endpoint, {
+      method: action === 'CREATE' ? 'POST' : 'PATCH',
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        subject: eventBody.title,
+        body: { contentType: 'text', content: eventBody.description },
+        start: { dateTime: eventBody.startsAt.replace(/Z$/, ''), timeZone: 'UTC' },
+        end: { dateTime: eventBody.endsAt.replace(/Z$/, ''), timeZone: 'UTC' },
+        attendees: [
+          {
+            emailAddress: { address: eventBody.email, name: eventBody.name },
+            type: 'required',
+          },
+        ],
+        ...(action === 'CREATE' ? { transactionId: input.reservation.id } : {}),
+      }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    const payload = (await response.json().catch(() => ({}))) as { id?: string };
+    if (!response.ok || (action === 'CREATE' && !payload.id)) {
+      throw new Error(`Microsoft Calendar event sync failed (${response.status})`);
+    }
+    return {
+      providerEventId:
+        action === 'CREATE' ? payload.id ?? null : input.providerEventId,
+    };
+  }
+
+  private calendarEventBody(reservation: {
+    name: string;
+    email: string;
+    startsAt: Date;
+    endsAt: Date;
+    session: { title: string } | null;
+    bookingPage: { title: string; description: string | null };
+  }) {
+    return {
+      title: reservation.session?.title || reservation.bookingPage.title,
+      description:
+        reservation.bookingPage.description ||
+        `Sessions booking with ${reservation.name}`,
+      name: reservation.name,
+      email: reservation.email,
+      startsAt: reservation.startsAt.toISOString(),
+      endsAt: reservation.endsAt.toISOString(),
+    };
+  }
+
   private async usableAccessToken(connection: {
     id: string;
     provider: CalendarProvider;
