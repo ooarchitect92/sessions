@@ -30,8 +30,11 @@ export class EmailWorker {
     this.running = true;
     try {
       const pending = await this.prisma.emailDelivery.findMany({
-        where: { status: EmailDeliveryStatus.PENDING },
-        orderBy: { createdAt: 'asc' },
+        where: {
+          status: EmailDeliveryStatus.PENDING,
+          scheduledFor: { lte: new Date() },
+        },
+        orderBy: [{ scheduledFor: 'asc' }, { createdAt: 'asc' }],
         take: this.config.get<number>('EMAIL_WORKER_BATCH_SIZE', 5),
       });
 
@@ -66,8 +69,28 @@ export class EmailWorker {
 
     const delivery = await this.prisma.emailDelivery.findUnique({
       where: { id: deliveryId },
+      include: {
+        bookingReservation: true,
+        eventRegistration: { include: { event: true } },
+      },
     });
     if (!delivery) return;
+
+    if (
+      delivery.bookingReservation &&
+      delivery.bookingReservation.status !== 'CONFIRMED'
+    ) {
+      await this.fail(delivery.id, 'suppressed:booking_not_confirmed');
+      return;
+    }
+    if (
+      delivery.eventRegistration &&
+      (delivery.eventRegistration.status !== 'REGISTERED' ||
+        delivery.eventRegistration.event.status === 'CANCELLED')
+    ) {
+      await this.fail(delivery.id, 'suppressed:event_registration_inactive');
+      return;
+    }
 
     const recipients = Array.isArray(delivery.recipients)
       ? delivery.recipients.filter(
