@@ -137,6 +137,44 @@ export class NotificationSchedulerService {
     );
   }
 
+  async cancelBookingLifecycleEmails(
+    transaction: Prisma.TransactionClient,
+    input: {
+      bookingPage: BookingPage;
+      reservation: BookingReservation;
+    },
+  ): Promise<void> {
+    const { bookingPage, reservation } = input;
+    if (!reservation.sessionId) return;
+
+    await transaction.emailDelivery.deleteMany({
+      where: {
+        bookingReservationId: reservation.id,
+        status: 'PENDING',
+        purpose: { in: ['BOOKING_REMINDER_24H', 'BOOKING_REMINDER_1H'] },
+      },
+    });
+
+    await transaction.emailDelivery.create({
+      data: {
+        organizationId: reservation.organizationId,
+        workspaceId: reservation.workspaceId,
+        sessionId: reservation.sessionId,
+        bookingReservationId: reservation.id,
+        requestedByUserId: bookingPage.createdById,
+        recipients: [reservation.email] as Prisma.InputJsonValue,
+        purpose: 'BOOKING_CANCELLED',
+        scheduledFor: new Date(),
+        subject: `Booking cancelled: ${bookingPage.title}`,
+        body: this.bookingBody(
+          bookingPage,
+          reservation,
+          'Your booking has been cancelled.',
+        ),
+      },
+    });
+  }
+
   async queueEventRegistrationEmails(
     transaction: Prisma.TransactionClient,
     input: {
