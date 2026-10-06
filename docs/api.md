@@ -253,3 +253,10 @@ Invitee reschedules update the linked session, queue Google/Microsoft calendar r
 Booking pages and events now use the same typed public-form contract. Supported field types are `TEXT`, `TEXTAREA`, `SELECT`, `CHECKBOX`, and `CONSENT`. Definitions require stable lowercase keys, labels, optional placeholders, required flags, and options only for select fields.
 
 The backend validates field definitions when booking pages/events are created or edited, rejects duplicate keys and malformed select definitions, and validates every public submission against the saved definition. Unknown answer keys, missing required values, unaccepted required consent, oversized text and invalid select choices are rejected before the reservation or registration transaction is committed.
+
+
+### Workspace branding
+
+Workspace owners/admins can persist a validated `settings.branding` object through the existing versioned workspace update endpoint. The supported public-branding fields are `brandName`, HTTPS `logoUrl`, six-digit `primaryColor` and `accentColor`, an allow-listed `fontFamily`, HTTPS `waitingRoomImageUrl`, and `hideSessionsBranding`.
+
+Public booking and event responses inherit this workspace branding. Event-level branding is normalized over the workspace defaults. The public website applies the brand name/logo, palette, font and optional hero image while keeping the underlying booking and registration workflows unchanged. Invalid persisted branding falls back to safe product defaults instead of breaking the public page.
