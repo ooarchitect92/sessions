@@ -245,7 +245,23 @@ export class BookingsService {
       return transaction.bookingReservation.findMany({
         where: { bookingPageId },
         orderBy: { startsAt: 'asc' },
-        include: { session: true },
+        include: {
+          session: true,
+          calendarEventSyncs: {
+            select: {
+              id: true,
+              provider: true,
+              action: true,
+              status: true,
+              providerEventId: true,
+              attempts: true,
+              syncedAt: true,
+              failureCode: true,
+              updatedAt: true,
+            },
+            orderBy: { provider: 'asc' },
+          },
+        },
       });
     });
   }
