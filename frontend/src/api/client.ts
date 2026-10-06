@@ -395,6 +395,17 @@ export interface BookingReservationRecord {
   createdAt: string;
   updatedAt: string;
   session: Session | null;
+  calendarEventSyncs?: Array<{
+    id: string;
+    provider: CalendarProvider;
+    action: 'CREATE' | 'UPDATE' | 'CANCEL';
+    status: 'PENDING' | 'PROCESSING' | 'SYNCED' | 'FAILED';
+    providerEventId: string | null;
+    attempts: number;
+    syncedAt: string | null;
+    failureCode: string | null;
+    updatedAt: string;
+  }>;
 }
 
 export interface CalendarInvitePayload {
