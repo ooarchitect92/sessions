@@ -1,5 +1,10 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { publicApi } from './public-api';
+import {
+  PublicCustomFields,
+  type PublicFormAnswers,
+  type PublicFormField,
+} from './PublicCustomFields';
 
 interface PublicBookingPage {
   id: string;
@@ -10,7 +15,7 @@ interface PublicBookingPage {
   timezone: string;
   minimumNoticeMinutes: number;
   availabilityRules: Array<Record<string, unknown>>;
-  intakeFields: Array<Record<string, unknown>>;
+  intakeFields: PublicFormField[];
 }
 
 interface Slot {
@@ -56,6 +61,7 @@ export function PublicBookingPage({
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [reservation, setReservation] = useState<Reservation | null>(null);
+  const [answers, setAnswers] = useState<PublicFormAnswers>({});
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -107,7 +113,7 @@ export function PublicBookingPage({
             email,
             startsAt: selected.startsAt,
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            answers: {},
+            answers,
           }),
         },
       );
@@ -246,12 +252,13 @@ export function PublicBookingPage({
                     autoComplete="email"
                   />
                 </label>
-                {page.intakeFields.length > 0 ? (
-                  <div className="public-form-note">
-                    {page.intakeFields.length} additional intake fields are configured. Their
-                    dynamic renderer follows in the form-builder increment.
-                  </div>
-                ) : null}
+                <PublicCustomFields
+                  fields={page.intakeFields}
+                  answers={answers}
+                  onChange={(key, value) =>
+                    setAnswers((current) => ({ ...current, [key]: value }))
+                  }
+                />
                 {error ? <div className="public-error">{error}</div> : null}
                 <button disabled={submitting || !selected || !name.trim() || !email.trim()}>
                   {submitting ? 'Scheduling…' : 'Schedule meeting'}
