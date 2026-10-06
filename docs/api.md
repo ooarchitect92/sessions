@@ -246,3 +246,10 @@ A booking reservation now receives a cryptographically random opaque management 
 | `POST` | `/v1/public/{organizationSlug}/{workspaceSlug}/bookings/{bookingSlug}/reservations/{reservationId}/cancel?token=...` | cancel the booking and linked scheduled session |
 
 Invitee reschedules update the linked session, queue Google/Microsoft calendar reconciliation, replace pending reminder schedules, and emit the normal `booking.rescheduled` outbox event. Invitee cancellation cancels the linked session, queues provider-event cancellation, deletes future reminders, queues a cancellation notice, and emits `booking.cancelled`.
+
+
+### Dynamic public forms
+
+Booking pages and events now use the same typed public-form contract. Supported field types are `TEXT`, `TEXTAREA`, `SELECT`, `CHECKBOX`, and `CONSENT`. Definitions require stable lowercase keys, labels, optional placeholders, required flags, and options only for select fields.
+
+The backend validates field definitions when booking pages/events are created or edited, rejects duplicate keys and malformed select definitions, and validates every public submission against the saved definition. Unknown answer keys, missing required values, unaccepted required consent, oversized text and invalid select choices are rejected before the reservation or registration transaction is committed.
