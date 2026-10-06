@@ -5,6 +5,11 @@ import {
   type PublicFormAnswers,
   type PublicFormField,
 } from './PublicCustomFields';
+import {
+  PublicWordmark,
+  publicBrandStyle,
+  type PublicBranding,
+} from './PublicBranding';
 
 interface PublicEvent {
   id: string;
@@ -16,7 +21,7 @@ interface PublicEvent {
   timezone: string;
   capacity: number | null;
   registrationFields: PublicFormField[];
-  branding: Record<string, unknown>;
+  branding: PublicBranding;
   status: 'PUBLISHED' | 'LIVE';
   registrationCount: number;
 }
@@ -97,12 +102,12 @@ export function PublicEventPage({
     event.capacity === null ? null : Math.max(0, event.capacity - event.registrationCount);
 
   return (
-    <main className="public-flow-page event-flow-page">
+    <main
+      className="public-flow-page event-flow-page"
+      style={publicBrandStyle(event.branding)}
+    >
       <header className="public-flow-nav">
-        <a className="public-wordmark" href="/">
-          <span>S</span>
-          Sessions
-        </a>
+        <PublicWordmark branding={event.branding} />
         <span className="public-live-label">{event.status === 'LIVE' ? 'Live now' : 'Registration open'}</span>
       </header>
 
