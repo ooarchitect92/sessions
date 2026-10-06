@@ -312,7 +312,7 @@ export class BookingsService {
 
       const reservation = await transaction.bookingReservation.findFirst({
         where: { id: reservationId, bookingPageId },
-        include: { session: true },
+        include: { session: true, bookingPage: true },
       });
       if (!reservation) throw new NotFoundException('Booking reservation not found');
       if (reservation.status !== BookingStatus.CONFIRMED) {
@@ -501,16 +501,16 @@ export class BookingsService {
         eventType: 'booking.cancelled',
         payload: this.toJson(updated),
       });
-      const page = await transaction.bookingPage.findUniqueOrThrow({
-        where: { id: bookingPageId },
-        select: { createdById: true },
-      });
       await this.queueCalendarEventSyncs(transaction, {
         organizationId: principal.organizationId,
         workspaceId: principal.workspaceId,
-        userId: page.createdById,
+        userId: reservation.bookingPage.createdById,
         reservationId,
         action: CalendarSyncAction.CANCEL,
+      });
+      await this.notifications.cancelBookingLifecycleEmails(transaction, {
+        bookingPage: reservation.bookingPage,
+        reservation: updated,
       });
       return updated;
     });
