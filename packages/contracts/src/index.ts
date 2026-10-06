@@ -136,6 +136,23 @@ export const SessionSchema = z.object({
   updatedAt: z.iso.datetime(),
 });
 
+export const PublicFormFieldTypeSchema = z.enum([
+  'TEXT',
+  'TEXTAREA',
+  'SELECT',
+  'CHECKBOX',
+  'CONSENT',
+]);
+
+export const PublicFormFieldSchema = z.object({
+  key: z.string().trim().min(1).max(80).regex(/^[a-z][a-z0-9_]*$/),
+  label: z.string().trim().min(1).max(160),
+  type: PublicFormFieldTypeSchema,
+  required: z.boolean().default(false),
+  placeholder: z.string().trim().max(240).optional(),
+  options: z.array(z.string().trim().min(1).max(160)).max(50).default([]),
+});
+
 export const CreateEventSchema = z.object({
   slug: SlugSchema,
   title: z.string().trim().min(1).max(160),
@@ -144,7 +161,7 @@ export const CreateEventSchema = z.object({
   durationMinutes: z.number().int().min(5).max(1440),
   timezone: z.string().trim().min(1).max(100),
   capacity: z.number().int().positive().max(100000).nullable().optional(),
-  registrationFields: z.array(z.record(z.string(), z.unknown())).default([]),
+  registrationFields: z.array(PublicFormFieldSchema).max(50).default([]),
   branding: z.record(z.string(), z.unknown()).default({}),
 });
 
@@ -161,7 +178,7 @@ export const EventSchema = z.object({
   timezone: z.string(),
   capacity: z.number().int().nullable(),
   status: EventStatusSchema,
-  registrationFields: z.array(z.record(z.string(), z.unknown())),
+  registrationFields: z.array(PublicFormFieldSchema),
   branding: z.record(z.string(), z.unknown()),
   publishedAt: z.iso.datetime().nullable(),
   version: z.number().int().positive(),
@@ -191,7 +208,7 @@ export const CreateBookingPageSchema = z.object({
   bufferBeforeMinutes: z.number().int().min(0).max(1440).default(0),
   bufferAfterMinutes: z.number().int().min(0).max(1440).default(0),
   availabilityRules: z.array(AvailabilityRuleSchema).min(1),
-  intakeFields: z.array(z.record(z.string(), z.unknown())).default([]),
+  intakeFields: z.array(PublicFormFieldSchema).max(50).default([]),
 });
 
 export const BookingPageSchema = z.object({
@@ -207,7 +224,7 @@ export const BookingPageSchema = z.object({
   bufferBeforeMinutes: z.number().int(),
   bufferAfterMinutes: z.number().int(),
   availabilityRules: z.array(AvailabilityRuleSchema),
-  intakeFields: z.array(z.record(z.string(), z.unknown())),
+  intakeFields: z.array(PublicFormFieldSchema),
   active: z.boolean(),
   version: z.number().int().positive(),
   createdAt: z.iso.datetime(),
@@ -263,6 +280,8 @@ export type UpdateSessionInput = z.infer<typeof UpdateSessionSchema>;
 export type CreateAgendaItemInput = z.infer<typeof CreateAgendaItemSchema>;
 export type Session = z.infer<typeof SessionSchema>;
 export type EventStatus = z.infer<typeof EventStatusSchema>;
+export type PublicFormFieldType = z.infer<typeof PublicFormFieldTypeSchema>;
+export type PublicFormField = z.infer<typeof PublicFormFieldSchema>;
 export type CreateEventInput = z.infer<typeof CreateEventSchema>;
 export type Event = z.infer<typeof EventSchema>;
 export type RegisterForEventInput = z.infer<typeof RegisterForEventSchema>;
