@@ -24,6 +24,7 @@ interface Reservation {
   endsAt: string;
   status: 'CONFIRMED';
   session: { id: string; title: string } | null;
+  manageToken: string;
 }
 
 function calendarDate(value: Date): string {
@@ -159,6 +160,16 @@ export function PublicBookingPage({
                 }).format(new Date(reservation.startsAt))}
               </p>
               <small>The scheduled session and reservation were created atomically.</small>
+              <a
+                className="public-secondary-link"
+                href={`/book/${encodeURIComponent(organizationSlug)}/${encodeURIComponent(
+                  workspaceSlug,
+                )}/${encodeURIComponent(bookingSlug)}/manage/${encodeURIComponent(
+                  reservation.id,
+                )}?token=${encodeURIComponent(reservation.manageToken)}`}
+              >
+                Manage or reschedule booking
+              </a>
             </div>
           </section>
         ) : (
