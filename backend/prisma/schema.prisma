@@ -603,6 +603,8 @@ model BookingReservation {
   answers        Json          @default("{}")
   status         BookingStatus @default(CONFIRMED)
   version        Int           @default(1)
+  manageTokenHash String?      @map("manage_token_hash") @db.VarChar(64)
+  manageTokenExpiresAt DateTime? @map("manage_token_expires_at") @db.Timestamptz(6)
   rescheduledAt  DateTime?     @map("rescheduled_at") @db.Timestamptz(6)
   cancelledAt    DateTime?     @map("cancelled_at") @db.Timestamptz(6)
   createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -617,6 +619,7 @@ model BookingReservation {
   @@unique([bookingPageId, startsAt])
   @@index([organizationId, workspaceId, startsAt])
   @@index([bookingPageId, status, startsAt])
+  @@index([manageTokenExpiresAt])
   @@map("booking_reservations")
 }
 
