@@ -70,6 +70,73 @@ export class NotificationSchedulerService {
     );
   }
 
+  async rescheduleBookingLifecycleEmails(
+    transaction: Prisma.TransactionClient,
+    input: {
+      bookingPage: BookingPage;
+      reservation: BookingReservation;
+    },
+  ): Promise<void> {
+    const { bookingPage, reservation } = input;
+    if (!reservation.sessionId || reservation.status !== BookingStatus.CONFIRMED) return;
+
+    await transaction.emailDelivery.deleteMany({
+      where: {
+        bookingReservationId: reservation.id,
+        status: 'PENDING',
+        purpose: { in: ['BOOKING_REMINDER_24H', 'BOOKING_REMINDER_1H'] },
+      },
+    });
+
+    const base = {
+      organizationId: reservation.organizationId,
+      workspaceId: reservation.workspaceId,
+      sessionId: reservation.sessionId,
+      bookingReservationId: reservation.id,
+      requestedByUserId: bookingPage.createdById,
+      recipients: [reservation.email] as Prisma.InputJsonValue,
+    };
+
+    await transaction.emailDelivery.create({
+      data: {
+        ...base,
+        purpose: 'BOOKING_RESCHEDULED',
+        scheduledFor: new Date(),
+        subject: `Booking rescheduled: ${bookingPage.title}`,
+        body: this.bookingBody(
+          bookingPage,
+          reservation,
+          'Your booking has been rescheduled.',
+        ),
+      },
+    });
+
+    await this.queueReminder(
+      transaction,
+      base,
+      'BOOKING_REMINDER_24H',
+      new Date(reservation.startsAt.getTime() - 24 * 60 * 60 * 1000),
+      `Reminder: ${bookingPage.title} is tomorrow`,
+      this.bookingBody(
+        bookingPage,
+        reservation,
+        'Reminder: your booking starts in about 24 hours.',
+      ),
+    );
+    await this.queueReminder(
+      transaction,
+      base,
+      'BOOKING_REMINDER_1H',
+      new Date(reservation.startsAt.getTime() - 60 * 60 * 1000),
+      `Reminder: ${bookingPage.title} starts soon`,
+      this.bookingBody(
+        bookingPage,
+        reservation,
+        'Reminder: your booking starts in about 1 hour.',
+      ),
+    );
+  }
+
   async queueEventRegistrationEmails(
     transaction: Prisma.TransactionClient,
     input: {
