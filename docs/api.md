@@ -233,3 +233,16 @@ Confirmed bookings now create durable calendar synchronization records for every
 ### Booking and event notification scheduling
 
 Public booking reservations and confirmed event registrations now create email-delivery records inside the same database transaction as the source record. The notification pipeline queues immediate confirmations plus 24-hour and 1-hour reminders when those reminder times are still in the future. Waitlisted event registrations receive a waitlist notice instead of reminders. Booking reschedules replace pending reminders and queue a reschedule notice. The email worker only claims rows whose `scheduled_for` time is due and suppresses reminders when their booking or event registration is no longer active.
+
+
+### Invitee booking self-service
+
+A booking reservation now receives a cryptographically random opaque management token at creation. Only the SHA-256 digest is persisted, together with an expiry timestamp; the plaintext token is returned once to the public booking client. The management API deliberately returns 404 for invalid, expired, or mismatched tokens.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/v1/public/{organizationSlug}/{workspaceSlug}/bookings/{bookingSlug}/reservations/{reservationId}/manage?token=...` | view the safe booking-management projection |
+| `POST` | `/v1/public/{organizationSlug}/{workspaceSlug}/bookings/{bookingSlug}/reservations/{reservationId}/reschedule?token=...` | move a confirmed booking after checking internal and connected-calendar conflicts |
+| `POST` | `/v1/public/{organizationSlug}/{workspaceSlug}/bookings/{bookingSlug}/reservations/{reservationId}/cancel?token=...` | cancel the booking and linked scheduled session |
+
+Invitee reschedules update the linked session, queue Google/Microsoft calendar reconciliation, replace pending reminder schedules, and emit the normal `booking.rescheduled` outbox event. Invitee cancellation cancels the linked session, queues provider-event cancellation, deletes future reminders, queues a cancellation notice, and emits `booking.cancelled`.
