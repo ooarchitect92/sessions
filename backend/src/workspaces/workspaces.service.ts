@@ -16,6 +16,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { AuditService } from '../audit/audit.service';
 import { SecurityService } from '../auth/security.service';
 import { normalizeWorkspaceBranding } from '../common/branding/workspace-branding';
+import { normalizeWorkspaceEmailTemplates } from '../common/notifications/workspace-email-templates';
 import {
   ADMIN_ROLES,
   hasAnyRole,
@@ -226,6 +227,13 @@ export class WorkspacesService {
             ...input.settings,
             ...(Object.prototype.hasOwnProperty.call(input.settings, 'branding')
               ? { branding: normalizeWorkspaceBranding(input.settings.branding) }
+              : {}),
+            ...(Object.prototype.hasOwnProperty.call(input.settings, 'emailTemplates')
+              ? {
+                  emailTemplates: normalizeWorkspaceEmailTemplates(
+                    input.settings.emailTemplates,
+                  ),
+                }
               : {}),
           };
 
