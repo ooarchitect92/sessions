@@ -181,9 +181,9 @@ export function EventsPage() {
                             ? {
                                 ...candidate,
                                 label: event.target.value,
-                                key:
-                                  toSlug(event.target.value).replace(/-/g, '_') ||
-                                  `question_${index + 1}`,
+                                key: `field_${index + 1}_${toSlug(event.target.value)
+                                  .replace(/-/g, '_')
+                                  .slice(0, 60) || 'question'}`,
                               }
                             : candidate,
                         ),
