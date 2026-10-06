@@ -33,3 +33,14 @@ Status meanings:
 | Mobile and desktop applications   | Planned     | deferred until responsive web and media reliability are proven |
 
 No provider-dependent workflow is marked production-ready until credentials, failure handling, reconciliation, observability, load testing and operational recovery have been exercised outside the local development stack.
+
+
+### Workspace public branding increment
+- owner/admin workspace settings now include a public-brand identity editor with live preview
+- validated brand name, HTTPS logo, primary/accent colors, allow-listed fonts and waiting-room hero image
+- optional removal of Sessions attribution on public booking/event pages
+- booking and event public APIs now expose normalized workspace branding
+- event-level branding safely layers over workspace defaults
+- public booking/event pages consume theme variables without changing scheduling or registration behavior
+- unsafe URL/color/font values are rejected server-side, with focused unit coverage
+- custom-domain DNS/TLS provisioning and email-template branding remain separate infrastructure increments
