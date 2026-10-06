@@ -19,6 +19,11 @@ import { createHash, randomUUID } from 'node:crypto';
 import { AuditService } from '../audit/audit.service';
 import { SecurityService } from '../auth/security.service';
 import { HOST_ROLES, hasAnyRole, type Principal } from '../common/auth/principal';
+import {
+  assertPublicFormFields,
+  validatePublicFormAnswers,
+} from '../common/forms/public-form-validation';
+import type { PublicFormFieldDto } from '../common/forms/public-form-field.dto';
 import { TenantDatabaseService } from '../database/tenant-database.service';
 import { WorkerPrismaService } from '../database/worker-prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
@@ -65,6 +70,7 @@ export class BookingsService {
     this.assertHost(principal);
     this.assertTimeZone(input.timezone);
     this.assertAvailabilityRules(input.availabilityRules);
+    assertPublicFormFields(input.intakeFields);
     const requestHash = createHash('sha256')
       .update(JSON.stringify({ operation: 'booking.create', input }))
       .digest('hex');
@@ -170,6 +176,9 @@ export class BookingsService {
     if (input.timezone !== undefined) this.assertTimeZone(input.timezone);
     if (input.availabilityRules !== undefined) {
       this.assertAvailabilityRules(input.availabilityRules);
+    }
+    if (input.intakeFields !== undefined) {
+      assertPublicFormFields(input.intakeFields);
     }
 
     return this.database.run(principal, async (transaction) => {
@@ -575,6 +584,10 @@ export class BookingsService {
   ) {
     this.assertTimeZone(input.timezone);
     const page = await this.findPublicPage(organizationSlug, workspaceSlug, bookingSlug);
+    const normalizedAnswers = validatePublicFormAnswers(
+      page.intakeFields as unknown as PublicFormFieldDto[],
+      input.answers,
+    );
     const requested = new Date(input.startsAt);
     const requestedParts = this.getZonedParts(requested, page.timezone);
     const localDate = this.formatCalendarDate(requestedParts);
@@ -637,7 +650,7 @@ export class BookingsService {
           startsAt: requested,
           endsAt,
           timezone: input.timezone,
-          answers: input.answers as Prisma.InputJsonValue,
+          answers: normalizedAnswers as Prisma.InputJsonValue,
           manageTokenHash: manageToken.tokenHash,
           manageTokenExpiresAt: new Date(endsAt.getTime() + 30 * 24 * 60 * 60 * 1000),
         },
