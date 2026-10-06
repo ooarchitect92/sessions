@@ -194,6 +194,8 @@ model Organization {
   transcriptSegments  TranscriptSegment[]
   memorySummaries     MemorySummary[]
   emailDeliveries     EmailDelivery[]
+  bookingEmailDeliveries EmailDelivery[] @relation("BookingEmailDeliveries")
+  registrationEmailDeliveries EmailDelivery[] @relation("RegistrationEmailDeliveries")
   webhookSubscriptions WebhookSubscription[]
   webhookDeliveries   WebhookDelivery[]
   apiKeys             ApiKey[]
@@ -501,6 +503,7 @@ model EventRegistration {
   organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   workspace      Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   event          Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  emailDeliveries EmailDelivery[]    @relation("RegistrationEmailDeliveries")
 
   @@unique([eventId, email])
   @@index([organizationId, workspaceId, eventId])
@@ -611,6 +614,7 @@ model BookingReservation {
   bookingPage    BookingPage   @relation(fields: [bookingPageId], references: [id], onDelete: Cascade)
   session        Session?      @relation(fields: [sessionId], references: [id], onDelete: SetNull)
   calendarEventSyncs CalendarEventSync[]
+  emailDeliveries EmailDelivery[] @relation("BookingEmailDeliveries")
 
   @@unique([bookingPageId, startsAt])
   @@index([organizationId, workspaceId, startsAt])
@@ -802,11 +806,15 @@ model MemorySummary {
 }
 
 model EmailDelivery {
-  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId    String              @map("organization_id") @db.Uuid
-  workspaceId       String              @map("workspace_id") @db.Uuid
-  sessionId         String              @map("session_id") @db.Uuid
-  memorySummaryId   String?             @map("memory_summary_id") @db.Uuid
+  id                    String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId        String              @map("organization_id") @db.Uuid
+  workspaceId           String              @map("workspace_id") @db.Uuid
+  sessionId             String              @map("session_id") @db.Uuid
+  memorySummaryId       String?             @map("memory_summary_id") @db.Uuid
+  bookingReservationId  String?             @map("booking_reservation_id") @db.Uuid
+  eventRegistrationId   String?             @map("event_registration_id") @db.Uuid
+  purpose               String              @default("FOLLOW_UP") @db.VarChar(80)
+  scheduledFor          DateTime             @default(now()) @map("scheduled_for") @db.Timestamptz(6)
   requestedByUserId String              @map("requested_by_user_id") @db.Uuid
   status            EmailDeliveryStatus @default(PENDING)
   provider          String?             @db.VarChar(100)
@@ -822,12 +830,16 @@ model EmailDelivery {
   organization      Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   workspace         Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   session           Session             @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  memorySummary     MemorySummary?      @relation(fields: [memorySummaryId], references: [id], onDelete: SetNull)
-  requestedBy       User                @relation("EmailDeliveryRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+  memorySummary       MemorySummary?       @relation(fields: [memorySummaryId], references: [id], onDelete: SetNull)
+  bookingReservation  BookingReservation?  @relation("BookingEmailDeliveries", fields: [bookingReservationId], references: [id], onDelete: Cascade)
+  eventRegistration   EventRegistration?   @relation("RegistrationEmailDeliveries", fields: [eventRegistrationId], references: [id], onDelete: Cascade)
+  requestedBy         User                 @relation("EmailDeliveryRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
 
-  @@index([organizationId, workspaceId, status, createdAt])
+  @@index([organizationId, workspaceId, status, scheduledFor])
   @@index([sessionId, createdAt])
   @@index([memorySummaryId])
+  @@index([bookingReservationId, purpose, scheduledFor])
+  @@index([eventRegistrationId, purpose, scheduledFor])
   @@map("email_deliveries")
 }
 
