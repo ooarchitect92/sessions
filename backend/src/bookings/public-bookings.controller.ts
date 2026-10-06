@@ -4,6 +4,7 @@ import { Public } from '../common/auth/public.decorator';
 import { BookingsService } from './bookings.service';
 import { ListSlotsQuery } from './dto/list-slots.query';
 import { ReserveBookingDto } from './dto/reserve-booking.dto';
+import { RescheduleReservationDto } from './dto/reschedule-reservation.dto';
 
 @ApiTags('public-bookings')
 @Public()
@@ -33,6 +34,59 @@ export class PublicBookingsController {
       bookingSlug,
       query.dateFrom,
       query.dateTo,
+    );
+  }
+
+  @Get(':bookingSlug/reservations/:reservationId/manage')
+  getManagedReservation(
+    @Param('organizationSlug') organizationSlug: string,
+    @Param('workspaceSlug') workspaceSlug: string,
+    @Param('bookingSlug') bookingSlug: string,
+    @Param('reservationId') reservationId: string,
+    @Query('token') token: string,
+  ) {
+    return this.bookings.getPublicReservationManagement(
+      organizationSlug,
+      workspaceSlug,
+      bookingSlug,
+      reservationId,
+      token,
+    );
+  }
+
+  @Post(':bookingSlug/reservations/:reservationId/reschedule')
+  rescheduleManagedReservation(
+    @Param('organizationSlug') organizationSlug: string,
+    @Param('workspaceSlug') workspaceSlug: string,
+    @Param('bookingSlug') bookingSlug: string,
+    @Param('reservationId') reservationId: string,
+    @Query('token') token: string,
+    @Body() body: RescheduleReservationDto,
+  ) {
+    return this.bookings.reschedulePublicReservation(
+      organizationSlug,
+      workspaceSlug,
+      bookingSlug,
+      reservationId,
+      token,
+      body,
+    );
+  }
+
+  @Post(':bookingSlug/reservations/:reservationId/cancel')
+  cancelManagedReservation(
+    @Param('organizationSlug') organizationSlug: string,
+    @Param('workspaceSlug') workspaceSlug: string,
+    @Param('bookingSlug') bookingSlug: string,
+    @Param('reservationId') reservationId: string,
+    @Query('token') token: string,
+  ) {
+    return this.bookings.cancelPublicReservation(
+      organizationSlug,
+      workspaceSlug,
+      bookingSlug,
+      reservationId,
+      token,
     );
   }
 
