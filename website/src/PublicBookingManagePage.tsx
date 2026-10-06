@@ -156,7 +156,11 @@ export function PublicBookingManagePage({
     return <ManageState title="Loading your booking…" />;
   }
   if (!reservation) {
-    return <ManageState title="Booking link unavailable" message={error ?? undefined} />;
+    return error ? (
+      <ManageState title="Booking link unavailable" message={error} />
+    ) : (
+      <ManageState title="Booking link unavailable" />
+    );
   }
 
   return (
