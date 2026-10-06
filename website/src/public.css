@@ -436,3 +436,34 @@
     padding: 20px;
   }
 }
+
+.public-action-card > button {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 12px;
+  border: 0;
+  border-radius: 12px;
+  background: #183f38;
+  color: #fff;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.public-action-card > button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.public-action-card > .public-danger-button {
+  border: 1px solid #e5b8af;
+  background: #fff4f1;
+  color: #963f32;
+}
+
+.public-action-card > small {
+  display: block;
+  margin-top: 16px;
+  color: #78837f;
+  font-size: 10px;
+  line-height: 1.6;
+}
