@@ -17,6 +17,7 @@ import {
 } from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
 import { AuditService } from '../audit/audit.service';
+import { SecurityService } from '../auth/security.service';
 import { HOST_ROLES, hasAnyRole, type Principal } from '../common/auth/principal';
 import { TenantDatabaseService } from '../database/tenant-database.service';
 import { WorkerPrismaService } from '../database/worker-prisma.service';
@@ -53,6 +54,7 @@ export class BookingsService {
     private readonly calendarInvite: CalendarInviteService,
     private readonly calendars: CalendarIntegrationsService,
     private readonly notifications: NotificationSchedulerService,
+    private readonly security: SecurityService,
   ) {}
 
   async create(
@@ -611,8 +613,11 @@ export class BookingsService {
           livekitRoomName: `session-${sessionId}`,
         },
       });
+      const reservationId = randomUUID();
+      const manageToken = this.security.createOpaqueToken(reservationId);
       const reservation = await transaction.bookingReservation.create({
         data: {
+          id: reservationId,
           organizationId: page.organizationId,
           workspaceId: page.workspaceId,
           bookingPageId: page.id,
@@ -623,6 +628,8 @@ export class BookingsService {
           endsAt,
           timezone: input.timezone,
           answers: input.answers as Prisma.InputJsonValue,
+          manageTokenHash: manageToken.tokenHash,
+          manageTokenExpiresAt: new Date(endsAt.getTime() + 30 * 24 * 60 * 60 * 1000),
         },
         include: { session: true },
       });
@@ -647,8 +654,322 @@ export class BookingsService {
         bookingPage: page,
         reservation,
       });
-      return reservation;
+      return {
+        ...reservation,
+        manageToken: manageToken.token,
+      };
     });
+  }
+
+  async getPublicReservationManagement(
+    organizationSlug: string,
+    workspaceSlug: string,
+    bookingSlug: string,
+    reservationId: string,
+    token: string,
+  ) {
+    const { reservation } = await this.resolveManagedReservation(
+      organizationSlug,
+      workspaceSlug,
+      bookingSlug,
+      reservationId,
+      token,
+    );
+    return this.publicReservationShape(reservation);
+  }
+
+  async reschedulePublicReservation(
+    organizationSlug: string,
+    workspaceSlug: string,
+    bookingSlug: string,
+    reservationId: string,
+    token: string,
+    input: RescheduleReservationDto,
+  ) {
+    this.assertTimeZone(input.timezone);
+    const managed = await this.resolveManagedReservation(
+      organizationSlug,
+      workspaceSlug,
+      bookingSlug,
+      reservationId,
+      token,
+    );
+    const page = managed.page;
+    const current = managed.reservation;
+    if (current.status !== BookingStatus.CONFIRMED) {
+      throw new ConflictException('Only confirmed reservations can be rescheduled');
+    }
+
+    const requested = new Date(input.startsAt);
+    if (Number.isNaN(requested.getTime())) {
+      throw new BadRequestException('startsAt must be a valid ISO timestamp');
+    }
+    const requestedParts = this.getZonedParts(requested, page.timezone);
+    const localDate = this.formatCalendarDate(requestedParts);
+    const dayRange = this.validateDateRange(localDate, localDate);
+    const externalBusy = await this.calendars.getBusyIntervalsForUser({
+      workspaceId: page.workspaceId,
+      userId: page.createdById,
+      startsAt: dayRange.start,
+      endsAt: dayRange.endExclusive,
+    });
+
+    return this.publicDatabase.$transaction(async (transaction) => {
+      await transaction.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${reservationId}, 0))`;
+      const reservation = await transaction.bookingReservation.findFirst({
+        where: { id: reservationId, bookingPageId: page.id },
+        include: { session: true },
+      });
+      if (!reservation) throw new NotFoundException('Booking reservation not found');
+      this.assertManageToken(reservation, reservationId, token);
+      if (reservation.status !== BookingStatus.CONFIRMED) {
+        throw new ConflictException('Only confirmed reservations can be rescheduled');
+      }
+
+      const reservations = await transaction.bookingReservation.findMany({
+        where: {
+          bookingPageId: page.id,
+          id: { not: reservationId },
+          status: BookingStatus.CONFIRMED,
+          startsAt: { lt: new Date(requested.getTime() + 24 * 60 * 60 * 1000) },
+          endsAt: { gt: new Date(requested.getTime() - 24 * 60 * 60 * 1000) },
+        },
+        select: { startsAt: true, endsAt: true },
+      });
+      const slots = this.generateSlots(page, localDate, localDate, [
+        ...reservations,
+        ...externalBusy,
+      ]);
+      const selected = slots.find((slot) => slot.startsAt === requested.toISOString());
+      if (!selected) {
+        throw new ConflictException('The selected slot is no longer available');
+      }
+
+      const endsAt = new Date(selected.endsAt);
+      if (
+        reservation.sessionId &&
+        reservation.session &&
+        reservation.session.status !== SessionStatus.DRAFT &&
+        reservation.session.status !== SessionStatus.SCHEDULED
+      ) {
+        throw new ConflictException('The linked session can no longer be rescheduled');
+      }
+
+      const updatedCount = await transaction.bookingReservation.updateMany({
+        where: {
+          id: reservationId,
+          bookingPageId: page.id,
+          version: reservation.version,
+          status: BookingStatus.CONFIRMED,
+        },
+        data: {
+          startsAt: requested,
+          endsAt,
+          timezone: input.timezone,
+          rescheduledAt: new Date(),
+          manageTokenExpiresAt: new Date(endsAt.getTime() + 30 * 24 * 60 * 60 * 1000),
+          version: { increment: 1 },
+        },
+      });
+      if (updatedCount.count === 0) {
+        throw new ConflictException('The reservation changed while rescheduling');
+      }
+
+      if (reservation.sessionId && reservation.session) {
+        await transaction.session.update({
+          where: { id: reservation.sessionId },
+          data: {
+            startsAt: requested,
+            durationMinutes: page.durationMinutes,
+            timezone: page.timezone,
+            version: { increment: 1 },
+          },
+        });
+      }
+
+      const updated = await transaction.bookingReservation.findUniqueOrThrow({
+        where: { id: reservationId },
+        include: { bookingPage: true, session: true },
+      });
+      await this.outbox.enqueue(
+        transaction,
+        { organizationId: page.organizationId, workspaceId: page.workspaceId },
+        {
+          aggregateType: 'booking_reservation',
+          aggregateId: reservationId,
+          eventType: 'booking.rescheduled',
+          payload: this.toJson(updated),
+        },
+      );
+      await this.queueCalendarEventSyncs(transaction, {
+        organizationId: page.organizationId,
+        workspaceId: page.workspaceId,
+        userId: page.createdById,
+        reservationId,
+        action: CalendarSyncAction.UPDATE,
+      });
+      await this.notifications.rescheduleBookingLifecycleEmails(transaction, {
+        bookingPage: updated.bookingPage,
+        reservation: updated,
+      });
+      return this.publicReservationShape(updated);
+    });
+  }
+
+  async cancelPublicReservation(
+    organizationSlug: string,
+    workspaceSlug: string,
+    bookingSlug: string,
+    reservationId: string,
+    token: string,
+  ) {
+    const managed = await this.resolveManagedReservation(
+      organizationSlug,
+      workspaceSlug,
+      bookingSlug,
+      reservationId,
+      token,
+    );
+    const page = managed.page;
+
+    return this.publicDatabase.$transaction(async (transaction) => {
+      await transaction.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${reservationId}, 0))`;
+      const reservation = await transaction.bookingReservation.findFirst({
+        where: { id: reservationId, bookingPageId: page.id },
+        include: { session: true },
+      });
+      if (!reservation) throw new NotFoundException('Booking reservation not found');
+      this.assertManageToken(reservation, reservationId, token);
+      if (reservation.status === BookingStatus.CANCELLED) {
+        return this.publicReservationShape(reservation);
+      }
+      if (reservation.status !== BookingStatus.CONFIRMED) {
+        throw new ConflictException('Only confirmed reservations can be cancelled');
+      }
+
+      const result = await transaction.bookingReservation.updateMany({
+        where: {
+          id: reservationId,
+          bookingPageId: page.id,
+          version: reservation.version,
+          status: BookingStatus.CONFIRMED,
+        },
+        data: {
+          status: BookingStatus.CANCELLED,
+          cancelledAt: new Date(),
+          version: { increment: 1 },
+        },
+      });
+      if (result.count === 0) {
+        throw new ConflictException('The reservation changed while cancelling');
+      }
+
+      if (
+        reservation.sessionId &&
+        reservation.session &&
+        (reservation.session.status === SessionStatus.DRAFT ||
+          reservation.session.status === SessionStatus.SCHEDULED)
+      ) {
+        await transaction.session.update({
+          where: { id: reservation.sessionId },
+          data: {
+            status: SessionStatus.CANCELLED,
+            version: { increment: 1 },
+          },
+        });
+      }
+
+      const updated = await transaction.bookingReservation.findUniqueOrThrow({
+        where: { id: reservationId },
+        include: { bookingPage: true, session: true },
+      });
+      await this.outbox.enqueue(
+        transaction,
+        { organizationId: page.organizationId, workspaceId: page.workspaceId },
+        {
+          aggregateType: 'booking_reservation',
+          aggregateId: reservationId,
+          eventType: 'booking.cancelled',
+          payload: this.toJson(updated),
+        },
+      );
+      await this.queueCalendarEventSyncs(transaction, {
+        organizationId: page.organizationId,
+        workspaceId: page.workspaceId,
+        userId: page.createdById,
+        reservationId,
+        action: CalendarSyncAction.CANCEL,
+      });
+      await this.notifications.cancelBookingLifecycleEmails(transaction, {
+        bookingPage: updated.bookingPage,
+        reservation: updated,
+      });
+      return this.publicReservationShape(updated);
+    });
+  }
+
+  private async resolveManagedReservation(
+    organizationSlug: string,
+    workspaceSlug: string,
+    bookingSlug: string,
+    reservationId: string,
+    token: string,
+  ) {
+    const page = await this.findPublicPage(organizationSlug, workspaceSlug, bookingSlug);
+    const reservation = await this.publicDatabase.bookingReservation.findFirst({
+      where: { id: reservationId, bookingPageId: page.id },
+      include: { session: true },
+    });
+    if (!reservation) throw new NotFoundException('Booking reservation not found');
+    this.assertManageToken(reservation, reservationId, token);
+    return { page, reservation };
+  }
+
+  private assertManageToken(
+    reservation: {
+      manageTokenHash: string | null;
+      manageTokenExpiresAt: Date | null;
+    },
+    reservationId: string,
+    token: string,
+  ): void {
+    const parsed = this.security.parseOpaqueToken(token);
+    if (
+      !parsed ||
+      parsed.id !== reservationId ||
+      !reservation.manageTokenHash ||
+      !reservation.manageTokenExpiresAt ||
+      reservation.manageTokenExpiresAt <= new Date() ||
+      !this.security.verifyTokenDigest(parsed.secret, reservation.manageTokenHash)
+    ) {
+      throw new NotFoundException('Booking reservation not found');
+    }
+  }
+
+  private publicReservationShape(reservation: {
+    id: string;
+    startsAt: Date;
+    endsAt: Date;
+    timezone: string;
+    status: BookingStatus;
+    version: number;
+    rescheduledAt: Date | null;
+    cancelledAt: Date | null;
+    session?: { id: string; title: string } | null;
+  }) {
+    return {
+      id: reservation.id,
+      startsAt: reservation.startsAt,
+      endsAt: reservation.endsAt,
+      timezone: reservation.timezone,
+      status: reservation.status,
+      version: reservation.version,
+      rescheduledAt: reservation.rescheduledAt,
+      cancelledAt: reservation.cancelledAt,
+      session: reservation.session
+        ? { id: reservation.session.id, title: reservation.session.title }
+        : null,
+    };
   }
 
   private async queueCalendarEventSyncs(
