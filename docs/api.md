@@ -260,3 +260,10 @@ The backend validates field definitions when booking pages/events are created or
 Workspace owners/admins can persist a validated `settings.branding` object through the existing versioned workspace update endpoint. The supported public-branding fields are `brandName`, HTTPS `logoUrl`, six-digit `primaryColor` and `accentColor`, an allow-listed `fontFamily`, HTTPS `waitingRoomImageUrl`, and `hideSessionsBranding`.
 
 Public booking and event responses inherit this workspace branding. Event-level branding is normalized over the workspace defaults. The public website applies the brand name/logo, palette, font and optional hero image while keeping the underlying booking and registration workflows unchanged. Invalid persisted branding falls back to safe product defaults instead of breaking the public page.
+
+
+### Workspace email templates
+
+Workspace owners/admins can customize booking and event lifecycle notifications through the existing versioned workspace settings endpoint using `settings.emailTemplates`. Supported template purposes are booking confirmation, reschedule, cancellation, 24-hour/1-hour booking reminders, event confirmation, event waitlist and 24-hour/1-hour event reminders.
+
+Each template contains a subject and plain-text body, with an optional global signature. Supported placeholders are `{{name}}`, `{{title}}`, `{{starts_at}}`, `{{ends_at}}`, `{{timezone}}`, `{{brand_name}}` and `{{status_message}}`. Unknown placeholders and unknown purposes are rejected server-side. Templates are resolved when the delivery row is created, so queued messages preserve the exact rendered content even if workspace settings change later.
