@@ -143,7 +143,7 @@ export function BookingsPage() {
         <div className="feature-state-card">
           <span>Implemented vertical slice</span>
           <strong>Availability → slot → session</strong>
-          <small>Google and Microsoft calendar busy-time adapters are the next conflict source to add.</small>
+          <small>Google and Microsoft calendars now contribute busy-time conflicts and booking event synchronization.</small>
         </div>
       </section>
 
@@ -234,6 +234,25 @@ export function BookingsPage() {
                         {' · '}
                         {reservation.timezone}
                       </small>
+                      {reservation.calendarEventSyncs?.length ? (
+                        <div className="booking-calendar-syncs">
+                          {reservation.calendarEventSyncs.map((sync) => (
+                            <span
+                              key={sync.id}
+                              className={
+                                sync.status === 'SYNCED'
+                                  ? 'state-chip enabled'
+                                  : sync.status === 'FAILED'
+                                    ? 'state-chip error'
+                                    : 'state-chip'
+                              }
+                              title={sync.failureCode || undefined}
+                            >
+                              {sync.provider.toLowerCase()} · {sync.status.toLowerCase()}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
                     <div className="booking-reservation-actions">
                       <button
