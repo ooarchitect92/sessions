@@ -83,13 +83,20 @@ export class EmailWorker {
       await this.fail(delivery.id, 'suppressed:booking_not_confirmed');
       return;
     }
-    if (
-      delivery.eventRegistration &&
-      (delivery.eventRegistration.status !== 'REGISTERED' ||
-        delivery.eventRegistration.event.status === 'CANCELLED')
-    ) {
-      await this.fail(delivery.id, 'suppressed:event_registration_inactive');
-      return;
+    if (delivery.eventRegistration) {
+      const isWaitlistNotice =
+        delivery.purpose === 'EVENT_WAITLIST' &&
+        delivery.eventRegistration.status === 'WAITLISTED';
+      const isActiveRegistration =
+        delivery.eventRegistration.status === 'REGISTERED' ||
+        delivery.eventRegistration.status === 'ATTENDED';
+      if (
+        delivery.eventRegistration.event.status === 'CANCELLED' ||
+        (!isWaitlistNotice && !isActiveRegistration)
+      ) {
+        await this.fail(delivery.id, 'suppressed:event_registration_inactive');
+        return;
+      }
     }
 
     const recipients = Array.isArray(delivery.recipients)
