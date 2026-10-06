@@ -22,6 +22,7 @@ import { TenantDatabaseService } from '../database/tenant-database.service';
 import { WorkerPrismaService } from '../database/worker-prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { CalendarIntegrationsService } from '../integrations/calendar-integrations.service';
+import { NotificationSchedulerService } from '../notifications/notification-scheduler.service';
 import {
   AvailabilityRuleDto,
   CreateBookingPageDto,
@@ -51,6 +52,7 @@ export class BookingsService {
     private readonly outbox: OutboxService,
     private readonly calendarInvite: CalendarInviteService,
     private readonly calendars: CalendarIntegrationsService,
+    private readonly notifications: NotificationSchedulerService,
   ) {}
 
   async create(
@@ -409,6 +411,10 @@ export class BookingsService {
         reservationId,
         action: CalendarSyncAction.UPDATE,
       });
+      await this.notifications.rescheduleBookingLifecycleEmails(transaction, {
+        bookingPage: updated.bookingPage,
+        reservation: updated,
+      });
       return updated;
     });
   }
@@ -636,6 +642,10 @@ export class BookingsService {
         userId: page.createdById,
         reservationId: reservation.id,
         action: CalendarSyncAction.CREATE,
+      });
+      await this.notifications.queueBookingLifecycleEmails(transaction, {
+        bookingPage: page,
+        reservation,
       });
       return reservation;
     });
