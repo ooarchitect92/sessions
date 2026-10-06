@@ -4,6 +4,7 @@ import {
   IsInt,
   IsISO8601,
   IsOptional,
+  IsObject,
   IsString,
   Length,
   Matches,
@@ -60,5 +61,6 @@ export class UpdateEventDto {
   registrationFields?: PublicFormFieldDto[];
 
   @IsOptional()
+  @IsObject()
   branding?: Record<string, unknown>;
 }
