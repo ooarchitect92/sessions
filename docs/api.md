@@ -223,3 +223,8 @@ LiveKit egress lifecycle changes are performed by the bounded recording worker. 
 | `DELETE` | `/v1/calendar-integrations/{provider}` | disconnect the current user's calendar provider |
 
 Connected Google and Microsoft calendars are queried for external busy intervals during public slot discovery and again before a booking reservation is committed. Access tokens are refreshed from encrypted refresh tokens when near expiry.
+
+
+### Booking calendar reconciliation
+
+Confirmed bookings now create durable calendar synchronization records for every enabled Google or Microsoft calendar connection owned by the booking-page host. Creation, reschedule and cancellation queue `CREATE`, `UPDATE` or `CANCEL` operations inside the same database transaction as the booking change. A background worker performs provider API writes with bounded exponential retry, persists provider event IDs, and emits `calendar.event.synced` or `calendar.event.sync_failed` outbox events.
