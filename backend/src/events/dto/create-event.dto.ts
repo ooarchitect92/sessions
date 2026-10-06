@@ -4,6 +4,7 @@ import {
   IsInt,
   IsISO8601,
   IsOptional,
+  IsObject,
   IsString,
   Length,
   Matches,
@@ -53,5 +54,6 @@ export class CreateEventDto {
   @Type(() => PublicFormFieldDto)
   registrationFields: PublicFormFieldDto[] = [];
 
+  @IsObject()
   branding: Record<string, unknown> = {};
 }
