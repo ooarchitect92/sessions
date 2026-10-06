@@ -23,6 +23,7 @@ import {
   assertPublicFormFields,
   validatePublicFormAnswers,
 } from '../common/forms/public-form-validation';
+import { publicWorkspaceBranding } from '../common/branding/workspace-branding';
 import type { PublicFormFieldDto } from '../common/forms/public-form-field.dto';
 import { TenantDatabaseService } from '../database/tenant-database.service';
 import { WorkerPrismaService } from '../database/worker-prisma.service';
@@ -1070,12 +1071,19 @@ export class BookingsService {
     if (!workspace) throw new NotFoundException('Booking page not found');
     const page = await this.publicDatabase.bookingPage.findFirst({
       where: { workspaceId: workspace.id, slug: bookingSlug, active: true },
+      include: {
+        workspace: {
+          select: { name: true, settings: true },
+        },
+      },
     });
     if (!page) throw new NotFoundException('Booking page not found');
     return page;
   }
 
-  private publicShape(page: BookingPage) {
+  private publicShape(
+    page: BookingPage & { workspace?: { name: string; settings: Prisma.JsonValue } },
+  ) {
     return {
       id: page.id,
       slug: page.slug,
@@ -1086,6 +1094,9 @@ export class BookingsService {
       minimumNoticeMinutes: page.minimumNoticeMinutes,
       availabilityRules: page.availabilityRules,
       intakeFields: page.intakeFields,
+      branding: page.workspace
+        ? publicWorkspaceBranding(page.workspace.settings, page.workspace.name)
+        : publicWorkspaceBranding({}, 'Sessions'),
     };
   }
 
