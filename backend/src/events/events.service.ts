@@ -25,6 +25,7 @@ import {
   assertPublicFormFields,
   validatePublicFormAnswers,
 } from "../common/forms/public-form-validation";
+import { publicWorkspaceBranding } from "../common/branding/workspace-branding";
 import type { PublicFormFieldDto } from "../common/forms/public-form-field.dto";
 import { TenantDatabaseService } from "../database/tenant-database.service";
 import { WorkerPrismaService } from "../database/worker-prisma.service";
@@ -146,7 +147,10 @@ export class EventsService {
     return this.database.run(principal, (transaction) =>
       transaction.event.findMany({
         orderBy: [{ startsAt: "asc" }, { createdAt: "desc" }],
-        include: { _count: { select: { registrations: true } } },
+        include: {
+        workspace: { select: { name: true, settings: true } },
+        _count: { select: { registrations: true } },
+      },
       }),
     );
   }
@@ -435,7 +439,10 @@ export class EventsService {
       timezone: event.timezone,
       capacity: event.capacity,
       registrationFields: event.registrationFields,
-      branding: event.branding,
+      branding: {
+        ...publicWorkspaceBranding(event.workspace.settings, event.workspace.name),
+        ...(event.branding as Record<string, unknown>),
+      },
       status: event.status,
       registrationCount: event._count.registrations,
     };
