@@ -15,6 +15,52 @@ type SettingsTab = (typeof TABS)[number];
 const MEMBER_ROLES: WorkspaceRole[] = ['ADMIN', 'HOST', 'MEMBER', 'ANALYST', 'GUEST'];
 const ALL_ROLES: WorkspaceRole[] = ['OWNER', ...MEMBER_ROLES];
 
+interface WorkspaceBrandingSettings {
+  brandName: string;
+  logoUrl: string;
+  primaryColor: string;
+  accentColor: string;
+  fontFamily: string;
+  waitingRoomImageUrl: string;
+  hideSessionsBranding: boolean;
+}
+
+const DEFAULT_WORKSPACE_BRANDING: WorkspaceBrandingSettings = {
+  brandName: '',
+  logoUrl: '',
+  primaryColor: '#183f38',
+  accentColor: '#d9efe7',
+  fontFamily: 'Inter',
+  waitingRoomImageUrl: '',
+  hideSessionsBranding: false,
+};
+
+function brandingFromSettings(settings: Record<string, unknown>): WorkspaceBrandingSettings {
+  const value =
+    settings.branding && typeof settings.branding === 'object' && !Array.isArray(settings.branding)
+      ? (settings.branding as Record<string, unknown>)
+      : {};
+  return {
+    brandName: typeof value.brandName === 'string' ? value.brandName : '',
+    logoUrl: typeof value.logoUrl === 'string' ? value.logoUrl : '',
+    primaryColor:
+      typeof value.primaryColor === 'string'
+        ? value.primaryColor
+        : DEFAULT_WORKSPACE_BRANDING.primaryColor,
+    accentColor:
+      typeof value.accentColor === 'string'
+        ? value.accentColor
+        : DEFAULT_WORKSPACE_BRANDING.accentColor,
+    fontFamily:
+      typeof value.fontFamily === 'string'
+        ? value.fontFamily
+        : DEFAULT_WORKSPACE_BRANDING.fontFamily,
+    waitingRoomImageUrl:
+      typeof value.waitingRoomImageUrl === 'string' ? value.waitingRoomImageUrl : '',
+    hideSessionsBranding: value.hideSessionsBranding === true,
+  };
+}
+
 function toSlug(value: string): string {
   return value
     .toLowerCase()
@@ -105,6 +151,9 @@ function WorkspaceProfile() {
   const [slug, setSlug] = useState('');
   const [timezone, setTimezone] = useState('UTC');
   const [recordingConsentRequired, setRecordingConsentRequired] = useState(true);
+  const [branding, setBranding] = useState<WorkspaceBrandingSettings>(
+    DEFAULT_WORKSPACE_BRANDING,
+  );
   const canManage = ['OWNER', 'ADMIN'].includes(workspace.data?.currentRole ?? 'GUEST');
 
   useEffect(() => {
@@ -115,6 +164,7 @@ function WorkspaceProfile() {
     setRecordingConsentRequired(
       workspace.data.settings.recordingConsentRequired !== false,
     );
+    setBranding(brandingFromSettings(workspace.data.settings));
   }, [workspace.data]);
 
   const update = useMutation({
@@ -124,7 +174,18 @@ function WorkspaceProfile() {
         name,
         slug,
         timezone,
-        settings: { recordingConsentRequired },
+        settings: {
+          recordingConsentRequired,
+          branding: {
+            brandName: branding.brandName.trim() || null,
+            logoUrl: branding.logoUrl.trim() || null,
+            primaryColor: branding.primaryColor,
+            accentColor: branding.accentColor,
+            fontFamily: branding.fontFamily,
+            waitingRoomImageUrl: branding.waitingRoomImageUrl.trim() || null,
+            hideSessionsBranding: branding.hideSessionsBranding,
+          },
+        },
       });
     },
     onSuccess: async () => {
@@ -190,6 +251,147 @@ function WorkspaceProfile() {
               />
             </label>
           </div>
+          <div className="settings-branding-section">
+            <div className="settings-section-heading">
+              <div>
+                <span className="eyebrow">Public identity</span>
+                <h3>Branding</h3>
+                <p>
+                  Apply your workspace identity to public booking and event pages without changing
+                  the core product workflow.
+                </p>
+              </div>
+              <div
+                className="settings-brand-preview"
+                style={{
+                  background: branding.accentColor,
+                  borderColor: branding.primaryColor,
+                }}
+              >
+                <span style={{ background: branding.primaryColor }}>
+                  {(branding.brandName || name || 'S').slice(0, 1).toUpperCase()}
+                </span>
+                <strong>{branding.brandName || name || 'Workspace'}</strong>
+              </div>
+            </div>
+            <div className="settings-form-grid">
+              <label>
+                Brand name
+                <input
+                  disabled={!canManage}
+                  maxLength={160}
+                  value={branding.brandName}
+                  onChange={(event) =>
+                    setBranding((current) => ({
+                      ...current,
+                      brandName: event.target.value,
+                    }))
+                  }
+                  placeholder={name || 'Your brand'}
+                />
+              </label>
+              <label>
+                Logo URL (HTTPS)
+                <input
+                  disabled={!canManage}
+                  type="url"
+                  value={branding.logoUrl}
+                  onChange={(event) =>
+                    setBranding((current) => ({
+                      ...current,
+                      logoUrl: event.target.value,
+                    }))
+                  }
+                  placeholder="https://cdn.example.com/logo.svg"
+                />
+              </label>
+              <label>
+                Primary color
+                <input
+                  disabled={!canManage}
+                  type="color"
+                  value={branding.primaryColor}
+                  onChange={(event) =>
+                    setBranding((current) => ({
+                      ...current,
+                      primaryColor: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label>
+                Accent color
+                <input
+                  disabled={!canManage}
+                  type="color"
+                  value={branding.accentColor}
+                  onChange={(event) =>
+                    setBranding((current) => ({
+                      ...current,
+                      accentColor: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label>
+                Font family
+                <select
+                  disabled={!canManage}
+                  value={branding.fontFamily}
+                  onChange={(event) =>
+                    setBranding((current) => ({
+                      ...current,
+                      fontFamily: event.target.value,
+                    }))
+                  }
+                >
+                  <option value="Inter">Inter</option>
+                  <option value="Arial">Arial</option>
+                  <option value="Helvetica">Helvetica</option>
+                  <option value="Georgia">Georgia</option>
+                  <option value="Times New Roman">Times New Roman</option>
+                  <option value="Verdana">Verdana</option>
+                  <option value="Trebuchet MS">Trebuchet MS</option>
+                  <option value="system-ui">System UI</option>
+                </select>
+              </label>
+              <label>
+                Waiting-room image URL (HTTPS)
+                <input
+                  disabled={!canManage}
+                  type="url"
+                  value={branding.waitingRoomImageUrl}
+                  onChange={(event) =>
+                    setBranding((current) => ({
+                      ...current,
+                      waitingRoomImageUrl: event.target.value,
+                    }))
+                  }
+                  placeholder="https://cdn.example.com/cover.jpg"
+                />
+              </label>
+            </div>
+            <label className="settings-toggle-row">
+              <input
+                disabled={!canManage}
+                type="checkbox"
+                checked={branding.hideSessionsBranding}
+                onChange={(event) =>
+                  setBranding((current) => ({
+                    ...current,
+                    hideSessionsBranding: event.target.checked,
+                  }))
+                }
+              />
+              <span>
+                <strong>Hide Sessions attribution on public pages</strong>
+                <small>
+                  When enabled, public booking and event pages show only the workspace brand.
+                </small>
+              </span>
+            </label>
+          </div>
+
           <label className="settings-toggle-row">
             <input
               disabled={!canManage}
