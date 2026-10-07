@@ -296,6 +296,7 @@ model Session {
   transcript           Transcript?
   memorySummary        MemorySummary?
   chatMessages         ChatMessage[]
+  chatReactions        ChatReaction[]
   polls                Poll[]
   questions            Question[]
 
