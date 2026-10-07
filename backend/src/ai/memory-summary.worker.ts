@@ -61,6 +61,7 @@ export class MemorySummaryWorker {
       const transcript = summary.session.transcript;
       if (!transcript?.fullText) continue;
 
+      const sourceTranscriptVersion = transcript.version;
       const claimed = await this.prisma.memorySummary.updateMany({
         where: { id: summary.id, status: ArtifactStatus.PENDING },
         data: {
@@ -68,6 +69,7 @@ export class MemorySummaryWorker {
           provider: this.provider.providerName(),
           failureCode: null,
           completedAt: null,
+          sourceTranscriptVersion,
           version: { increment: 1 },
         },
       });
@@ -80,8 +82,37 @@ export class MemorySummaryWorker {
         });
 
         await this.prisma.$transaction(async (transaction) => {
-          await transaction.memorySummary.update({
-            where: { id: summary.id },
+          const currentTranscript = await transaction.transcript.findUnique({
+            where: { id: transcript.id },
+            select: { version: true },
+          });
+          if (
+            !currentTranscript ||
+            currentTranscript.version !== sourceTranscriptVersion
+          ) {
+            await transaction.memorySummary.updateMany({
+              where: {
+                id: summary.id,
+                status: ArtifactStatus.PROCESSING,
+                sourceTranscriptVersion,
+              },
+              data: {
+                status: ArtifactStatus.PENDING,
+                sourceTranscriptVersion: null,
+                completedAt: null,
+                failureCode: null,
+                version: { increment: 1 },
+              },
+            });
+            return;
+          }
+
+          const written = await transaction.memorySummary.updateMany({
+            where: {
+              id: summary.id,
+              status: ArtifactStatus.PROCESSING,
+              sourceTranscriptVersion,
+            },
             data: {
               status: ArtifactStatus.READY,
               provider: result.provider,
@@ -95,6 +126,8 @@ export class MemorySummaryWorker {
               version: { increment: 1 },
             },
           });
+          if (written.count === 0) return;
+
           await this.outbox.enqueue(
             transaction,
             {

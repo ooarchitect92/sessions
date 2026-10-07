@@ -206,6 +206,7 @@ model Organization {
   recordingConsents   RecordingConsent[]
   transcripts         Transcript[]
   transcriptSegments  TranscriptSegment[]
+  transcriptRevisions TranscriptRevision[]
   memorySummaries     MemorySummary[]
   chatMessages        ChatMessage[]
   chatReactions       ChatReaction[]
@@ -257,6 +258,7 @@ model Workspace {
   recordingConsents   RecordingConsent[]
   transcripts         Transcript[]
   transcriptSegments  TranscriptSegment[]
+  transcriptRevisions TranscriptRevision[]
   memorySummaries     MemorySummary[]
   chatMessages        ChatMessage[]
   chatReactions       ChatReaction[]
@@ -322,6 +324,7 @@ model User {
   sentInvitations         WorkspaceInvitation[]    @relation("InvitationSender")
   acceptedInvitations     WorkspaceInvitation[]    @relation("InvitationAcceptor")
   recordingConsents       RecordingConsent[]
+  transcriptRevisions      TranscriptRevision[]     @relation("TranscriptRevisionEditor")
   attendanceIntervals      AttendanceInterval[]
   engagementEvents         EngagementEvent[]
   calendarConnections      CalendarConnection[]
@@ -836,6 +839,7 @@ model Transcript {
   session        Session             @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   recording      Recording?          @relation(fields: [recordingId], references: [id], onDelete: SetNull)
   segments       TranscriptSegment[]
+  revisions      TranscriptRevision[]
 
   @@index([organizationId, workspaceId, status])
   @@map("transcripts")
@@ -861,6 +865,29 @@ model TranscriptSegment {
   @@map("transcript_segments")
 }
 
+model TranscriptRevision {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  workspaceId    String       @map("workspace_id") @db.Uuid
+  transcriptId   String       @map("transcript_id") @db.Uuid
+  editorUserId   String       @map("editor_user_id") @db.Uuid
+  revisionNumber Int          @map("revision_number")
+  language       String?      @db.VarChar(32)
+  fullText       String?      @map("full_text") @db.Text
+  segments       Json         @default("[]")
+  reason         String?      @db.VarChar(500)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  transcript     Transcript   @relation(fields: [transcriptId], references: [id], onDelete: Cascade)
+  editor         User         @relation("TranscriptRevisionEditor", fields: [editorUserId], references: [id], onDelete: Restrict)
+
+  @@unique([transcriptId, revisionNumber])
+  @@index([organizationId, workspaceId, transcriptId, createdAt])
+  @@index([editorUserId, createdAt])
+  @@map("transcript_revisions")
+}
+
 model MemorySummary {
   id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   organizationId String         @map("organization_id") @db.Uuid
@@ -875,6 +902,7 @@ model MemorySummary {
   citations      Json           @default("[]")
   completedAt    DateTime?      @map("completed_at") @db.Timestamptz(6)
   failureCode    String?        @map("failure_code") @db.VarChar(160)
+  sourceTranscriptVersion Int?   @map("source_transcript_version")
   version        Int            @default(1)
   createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
