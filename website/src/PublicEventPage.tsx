@@ -16,7 +16,20 @@ interface PublicEvent {
   timezone: string;
   capacity: number | null;
   registrationFields: DynamicFieldDefinition[];
-  branding: Record<string, unknown>;
+  branding: {
+    primaryColor?: string;
+    accentColor?: string;
+    eyebrow?: string;
+    heroHeadline?: string;
+    heroSubheadline?: string;
+    heroImageUrl?: string;
+    aboutHeading?: string;
+    aboutBody?: string;
+    ctaLabel?: string;
+    showPresenters?: boolean;
+    showEventFacts?: boolean;
+    sectionOrder?: Array<'ABOUT' | 'PRESENTERS' | 'DETAILS'>;
+  };
   status: 'PUBLISHED' | 'LIVE';
   registrationCount: number;
   presenters: Array<{
@@ -115,70 +128,125 @@ export function PublicEventPage({
         <span className="public-live-label">{event.status === 'LIVE' ? 'Live now' : 'Registration open'}</span>
       </header>
 
-      <div className="public-event-layout">
+      <div
+        className="public-event-layout public-event-themed"
+        style={
+          {
+            '--event-primary': event.branding.primaryColor ?? '#183f38',
+            '--event-accent': event.branding.accentColor ?? '#dcefe8',
+          } as React.CSSProperties
+        }
+      >
         <section className="public-event-story">
-          <span className="public-kicker">Interactive event</span>
-          <h1>{event.title}</h1>
-          <p className="public-event-description">
-            {event.description ?? 'Join a focused, interactive webinar with a shared agenda, live questions, and collaborative participation.'}
-          </p>
-          {event.presenters.length ? (
-            <section className="public-presenter-section">
-              <span className="public-kicker">Presenter team</span>
-              <div className="public-presenter-grid">
-                {event.presenters.map((presenter) => (
-                  <article key={presenter.id}>
-                    {presenter.avatarUrl ? (
-                      <img src={presenter.avatarUrl} alt="" />
-                    ) : (
-                      <span className="public-presenter-avatar">
-                        {presenter.name.charAt(0).toUpperCase()}
-                      </span>
-                    )}
-                    <div>
-                      <strong>{presenter.name}</strong>
-                      <small>
-                        {presenter.title ??
-                          (presenter.role === 'CO_HOST'
-                            ? 'Co-host'
-                            : presenter.role.charAt(0) +
-                              presenter.role.slice(1).toLowerCase())}
-                      </small>
-                      {presenter.bio ? <p>{presenter.bio}</p> : null}
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
-          ) : null}
-          <div className="public-event-facts">
-            <article>
-              <span>Date and time</span>
-              <strong>
-                {new Intl.DateTimeFormat(undefined, {
-                  dateStyle: 'full',
-                  timeStyle: 'short',
-                }).format(new Date(event.startsAt))}
-              </strong>
-              <small>{event.timezone}</small>
-            </article>
-            <article>
-              <span>Duration</span>
-              <strong>{event.durationMinutes} minutes</strong>
-              <small>Agenda-led experience</small>
-            </article>
-            <article>
-              <span>Availability</span>
-              <strong>
-                {remaining === null
-                  ? 'Open capacity'
-                  : remaining > 0
-                    ? `${remaining} places left`
-                    : 'Waitlist available'}
-              </strong>
-              <small>{event.registrationCount} people registered</small>
-            </article>
+          <div className="public-event-hero">
+            <div>
+              <span className="public-kicker">
+                {event.branding.eyebrow || 'Interactive event'}
+              </span>
+              <h1>{event.branding.heroHeadline || event.title}</h1>
+              <p className="public-event-description">
+                {event.branding.heroSubheadline ??
+                  event.description ??
+                  'Join a focused, interactive webinar with a shared agenda, live questions, and collaborative participation.'}
+              </p>
+            </div>
+            {event.branding.heroImageUrl ? (
+              <img
+                className="public-event-hero-image"
+                src={event.branding.heroImageUrl}
+                alt=""
+              />
+            ) : null}
           </div>
+
+          {(event.branding.sectionOrder ?? [
+            'ABOUT',
+            'PRESENTERS',
+            'DETAILS',
+          ]).map((section) => {
+            if (section === 'ABOUT') {
+              const body =
+                event.branding.aboutBody ?? event.description ?? null;
+              if (!body) return null;
+              return (
+                <section className="public-about-section" key={section}>
+                  <span className="public-kicker">About</span>
+                  <h2>{event.branding.aboutHeading || 'About this event'}</h2>
+                  <p>{body}</p>
+                </section>
+              );
+            }
+
+            if (section === 'PRESENTERS') {
+              if (
+                event.branding.showPresenters === false ||
+                event.presenters.length === 0
+              ) {
+                return null;
+              }
+              return (
+                <section className="public-presenter-section" key={section}>
+                  <span className="public-kicker">Presenter team</span>
+                  <div className="public-presenter-grid">
+                    {event.presenters.map((presenter) => (
+                      <article key={presenter.id}>
+                        {presenter.avatarUrl ? (
+                          <img src={presenter.avatarUrl} alt="" />
+                        ) : (
+                          <span className="public-presenter-avatar">
+                            {presenter.name.charAt(0).toUpperCase()}
+                          </span>
+                        )}
+                        <div>
+                          <strong>{presenter.name}</strong>
+                          <small>
+                            {presenter.title ??
+                              (presenter.role === 'CO_HOST'
+                                ? 'Co-host'
+                                : presenter.role.charAt(0) +
+                                  presenter.role.slice(1).toLowerCase())}
+                          </small>
+                          {presenter.bio ? <p>{presenter.bio}</p> : null}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              );
+            }
+
+            if (event.branding.showEventFacts === false) return null;
+            return (
+              <div className="public-event-facts" key={section}>
+                <article>
+                  <span>Date and time</span>
+                  <strong>
+                    {new Intl.DateTimeFormat(undefined, {
+                      dateStyle: 'full',
+                      timeStyle: 'short',
+                    }).format(new Date(event.startsAt))}
+                  </strong>
+                  <small>{event.timezone}</small>
+                </article>
+                <article>
+                  <span>Duration</span>
+                  <strong>{event.durationMinutes} minutes</strong>
+                  <small>Agenda-led experience</small>
+                </article>
+                <article>
+                  <span>Availability</span>
+                  <strong>
+                    {remaining === null
+                      ? 'Open capacity'
+                      : remaining > 0
+                        ? `${remaining} places left`
+                        : 'Waitlist available'}
+                  </strong>
+                  <small>{event.registrationCount} people registered</small>
+                </article>
+              </div>
+            );
+          })}
         </section>
 
         <aside className="public-action-card">
@@ -235,7 +303,9 @@ export function PublicEventPage({
                     !dynamicAnswersComplete(event.registrationFields, answers)
                   }
                 >
-                  {submitting ? 'Registering…' : 'Register now'}
+                  {submitting
+                    ? 'Registering…'
+                    : event.branding.ctaLabel || 'Register now'}
                 </button>
               </form>
             </>
