@@ -82,7 +82,7 @@ export function BookingsPage() {
         <div className="feature-state-card">
           <span>Implemented vertical slice</span>
           <strong>Availability → slot → session</strong>
-          <small>Google and Microsoft calendar busy-time adapters are the next conflict source to add.</small>
+          <small>Google and Microsoft busy-time conflicts are included; provider event write-back and reconciliation remain release gates.</small>
         </div>
       </section>
 
