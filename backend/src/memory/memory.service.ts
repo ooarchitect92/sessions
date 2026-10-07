@@ -18,6 +18,7 @@ import { RealtimeEventsService } from '../infrastructure/realtime-events.service
 import { OutboxService } from '../outbox/outbox.service';
 import { ListMemoryQuery } from './dto/list-memory.query';
 import { UpdateMemorySummaryDto } from './dto/update-memory-summary.dto';
+import { UpdateTranscriptDto } from './dto/update-transcript.dto';
 
 @Injectable()
 export class MemoryService {
@@ -158,6 +159,389 @@ export class MemoryService {
     });
   }
 
+
+  async listTranscriptRevisions(principal: Principal, sessionId: string) {
+    this.assertHost(principal);
+    return this.database.run(principal, async (transaction) => {
+      const transcript = await transaction.transcript.findUnique({
+        where: { sessionId },
+        select: { id: true },
+      });
+      if (!transcript) throw new NotFoundException('Transcript not found');
+      return transaction.transcriptRevision.findMany({
+        where: { transcriptId: transcript.id },
+        include: {
+          editor: {
+            select: { id: true, displayName: true, email: true },
+          },
+        },
+        orderBy: { revisionNumber: 'desc' },
+      });
+    });
+  }
+
+  async updateTranscript(
+    principal: Principal,
+    sessionId: string,
+    expectedVersion: number,
+    input: UpdateTranscriptDto,
+  ) {
+    this.assertHost(principal);
+    if (input.language === undefined && input.segments === undefined) {
+      throw new BadRequestException(
+        'Provide a language tag or corrected transcript segments',
+      );
+    }
+    if (input.segments !== undefined) {
+      if (input.segments.length === 0) {
+        throw new BadRequestException('A ready transcript must contain at least one segment');
+      }
+      for (let index = 0; index < input.segments.length; index += 1) {
+        const segment = input.segments[index];
+        if (!segment) continue;
+        if (segment.endMs < segment.startMs) {
+          throw new BadRequestException(
+            `Segment ${index + 1} ends before it starts`,
+          );
+        }
+        if (
+          index > 0 &&
+          input.segments[index - 1] &&
+          segment.startMs < input.segments[index - 1]!.startMs
+        ) {
+          throw new BadRequestException(
+            'Transcript segments must be ordered by start time',
+          );
+        }
+      }
+    }
+
+    const result = await this.database.run(principal, async (transaction) => {
+      const transcript = await transaction.transcript.findUnique({
+        where: { sessionId },
+        include: { segments: { orderBy: { position: 'asc' } } },
+      });
+      if (!transcript) throw new NotFoundException('Transcript not found');
+      if (transcript.status !== ArtifactStatus.READY) {
+        throw new BadRequestException('Only ready transcripts can be corrected');
+      }
+
+      const updated = await transaction.transcript.updateMany({
+        where: { id: transcript.id, version: expectedVersion },
+        data: {
+          ...(input.language !== undefined
+            ? { language: input.language.trim() }
+            : {}),
+          ...(input.segments !== undefined
+            ? {
+                fullText: input.segments
+                  .map((segment) => segment.text.trim())
+                  .filter(Boolean)
+                  .join('\n'),
+              }
+            : {}),
+          version: { increment: 1 },
+        },
+      });
+      if (updated.count === 0) {
+        throw new ConflictException(
+          'Transcript changed since it was loaded. Refresh and retry.',
+        );
+      }
+
+      const latestRevision = await transaction.transcriptRevision.aggregate({
+        where: { transcriptId: transcript.id },
+        _max: { revisionNumber: true },
+      });
+      await transaction.transcriptRevision.create({
+        data: {
+          organizationId: principal.organizationId,
+          workspaceId: principal.workspaceId,
+          transcriptId: transcript.id,
+          editorUserId: principal.userId,
+          revisionNumber: (latestRevision._max.revisionNumber ?? 0) + 1,
+          language: transcript.language,
+          fullText: transcript.fullText,
+          segments: this.toJson(
+            transcript.segments.map((segment) => ({
+              startMs: segment.startMs,
+              endMs: segment.endMs,
+              speakerLabel: segment.speakerLabel,
+              text: segment.text,
+            })),
+          ),
+          reason: input.reason?.trim() || null,
+        },
+      });
+
+      if (input.segments !== undefined) {
+        await transaction.transcriptSegment.deleteMany({
+          where: { transcriptId: transcript.id },
+        });
+        await transaction.transcriptSegment.createMany({
+          data: input.segments.map((segment, position) => ({
+            organizationId: principal.organizationId,
+            workspaceId: principal.workspaceId,
+            transcriptId: transcript.id,
+            position,
+            startMs: segment.startMs,
+            endMs: segment.endMs,
+            speakerLabel: segment.speakerLabel?.trim() || null,
+            text: segment.text.trim(),
+          })),
+        });
+      }
+
+      const summary = await transaction.memorySummary.findUnique({
+        where: { sessionId },
+      });
+      if (summary) {
+        await transaction.memorySummary.update({
+          where: { id: summary.id },
+          data: {
+            status: ArtifactStatus.PENDING,
+            failureCode: null,
+            completedAt: null,
+            version: { increment: 1 },
+          },
+        });
+        await this.outbox.enqueue(transaction, principal, {
+          aggregateType: 'memory_summary',
+          aggregateId: summary.id,
+          eventType: 'memory.summary.requested',
+          payload: {
+            memorySummaryId: summary.id,
+            sessionId,
+            reason: 'transcript_corrected',
+          },
+        });
+      }
+
+      const value = await transaction.transcript.findUniqueOrThrow({
+        where: { id: transcript.id },
+        include: { segments: { orderBy: { position: 'asc' } } },
+      });
+      await this.audit.record(transaction, principal, {
+        action: 'transcript.corrected',
+        resourceType: 'transcript',
+        resourceId: transcript.id,
+        metadata: {
+          sessionId,
+          version: value.version,
+          languageChanged: input.language !== undefined,
+          segmentsChanged: input.segments !== undefined,
+          reason: input.reason?.trim() || null,
+        },
+      });
+      await this.outbox.enqueue(transaction, principal, {
+        aggregateType: 'transcript',
+        aggregateId: transcript.id,
+        eventType: 'transcript.corrected',
+        payload: {
+          transcriptId: transcript.id,
+          sessionId,
+          version: value.version,
+          language: value.language,
+          segmentCount: value.segments.length,
+        },
+      });
+      return value;
+    });
+
+    this.realtime.publishSessionEvent({
+      sessionId,
+      eventName: 'memory.updated',
+      payload: {
+        sessionId,
+        artifact: 'transcript',
+        status: result.status,
+        version: result.version,
+      },
+    });
+    return result;
+  }
+
+  async restoreTranscriptRevision(
+    principal: Principal,
+    sessionId: string,
+    revisionId: string,
+    expectedVersion: number,
+  ) {
+    this.assertHost(principal);
+    const result = await this.database.run(principal, async (transaction) => {
+      const transcript = await transaction.transcript.findUnique({
+        where: { sessionId },
+        include: { segments: { orderBy: { position: 'asc' } } },
+      });
+      if (!transcript) throw new NotFoundException('Transcript not found');
+      if (transcript.status !== ArtifactStatus.READY) {
+        throw new BadRequestException('Only ready transcripts can restore revisions');
+      }
+      const revision = await transaction.transcriptRevision.findFirst({
+        where: { id: revisionId, transcriptId: transcript.id },
+      });
+      if (!revision) throw new NotFoundException('Transcript revision not found');
+
+      const rawSegments = Array.isArray(revision.segments)
+        ? revision.segments
+        : [];
+      const restoredSegments = rawSegments
+        .map((value) => {
+          if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+          const entry = value as Record<string, unknown>;
+          if (
+            typeof entry.startMs !== 'number' ||
+            typeof entry.endMs !== 'number' ||
+            typeof entry.text !== 'string'
+          ) {
+            return null;
+          }
+          return {
+            startMs: entry.startMs,
+            endMs: entry.endMs,
+            speakerLabel:
+              typeof entry.speakerLabel === 'string' ? entry.speakerLabel : null,
+            text: entry.text,
+          };
+        })
+        .filter(
+          (
+            segment,
+          ): segment is {
+            startMs: number;
+            endMs: number;
+            speakerLabel: string | null;
+            text: string;
+          } => segment !== null,
+        );
+      if (restoredSegments.length === 0) {
+        throw new BadRequestException('The selected revision has no restorable segments');
+      }
+
+      const updated = await transaction.transcript.updateMany({
+        where: { id: transcript.id, version: expectedVersion },
+        data: {
+          language: revision.language,
+          fullText:
+            revision.fullText ??
+            restoredSegments.map((segment) => segment.text).join('\n'),
+          version: { increment: 1 },
+        },
+      });
+      if (updated.count === 0) {
+        throw new ConflictException(
+          'Transcript changed since it was loaded. Refresh and retry.',
+        );
+      }
+
+      const latestRevision = await transaction.transcriptRevision.aggregate({
+        where: { transcriptId: transcript.id },
+        _max: { revisionNumber: true },
+      });
+      await transaction.transcriptRevision.create({
+        data: {
+          organizationId: principal.organizationId,
+          workspaceId: principal.workspaceId,
+          transcriptId: transcript.id,
+          editorUserId: principal.userId,
+          revisionNumber: (latestRevision._max.revisionNumber ?? 0) + 1,
+          language: transcript.language,
+          fullText: transcript.fullText,
+          segments: this.toJson(
+            transcript.segments.map((segment) => ({
+              startMs: segment.startMs,
+              endMs: segment.endMs,
+              speakerLabel: segment.speakerLabel,
+              text: segment.text,
+            })),
+          ),
+          reason: `Restore before revision ${revision.revisionNumber}`,
+        },
+      });
+
+      await transaction.transcriptSegment.deleteMany({
+        where: { transcriptId: transcript.id },
+      });
+      await transaction.transcriptSegment.createMany({
+        data: restoredSegments.map((segment, position) => ({
+          organizationId: principal.organizationId,
+          workspaceId: principal.workspaceId,
+          transcriptId: transcript.id,
+          position,
+          startMs: segment.startMs,
+          endMs: segment.endMs,
+          speakerLabel: segment.speakerLabel,
+          text: segment.text,
+        })),
+      });
+
+      const summary = await transaction.memorySummary.findUnique({
+        where: { sessionId },
+      });
+      if (summary) {
+        await transaction.memorySummary.update({
+          where: { id: summary.id },
+          data: {
+            status: ArtifactStatus.PENDING,
+            failureCode: null,
+            completedAt: null,
+            version: { increment: 1 },
+          },
+        });
+        await this.outbox.enqueue(transaction, principal, {
+          aggregateType: 'memory_summary',
+          aggregateId: summary.id,
+          eventType: 'memory.summary.requested',
+          payload: {
+            memorySummaryId: summary.id,
+            sessionId,
+            reason: 'transcript_revision_restored',
+          },
+        });
+      }
+
+      const value = await transaction.transcript.findUniqueOrThrow({
+        where: { id: transcript.id },
+        include: { segments: { orderBy: { position: 'asc' } } },
+      });
+      await this.audit.record(transaction, principal, {
+        action: 'transcript.revision_restored',
+        resourceType: 'transcript',
+        resourceId: transcript.id,
+        metadata: {
+          sessionId,
+          restoredRevisionId: revision.id,
+          restoredRevisionNumber: revision.revisionNumber,
+          version: value.version,
+        },
+      });
+      await this.outbox.enqueue(transaction, principal, {
+        aggregateType: 'transcript',
+        aggregateId: transcript.id,
+        eventType: 'transcript.revision_restored',
+        payload: {
+          transcriptId: transcript.id,
+          sessionId,
+          revisionId: revision.id,
+          revisionNumber: revision.revisionNumber,
+          version: value.version,
+        },
+      });
+      return value;
+    });
+
+    this.realtime.publishSessionEvent({
+      sessionId,
+      eventName: 'memory.updated',
+      payload: {
+        sessionId,
+        artifact: 'transcript',
+        status: result.status,
+        version: result.version,
+      },
+    });
+    return result;
+  }
 
   async updateSummary(
     principal: Principal,
