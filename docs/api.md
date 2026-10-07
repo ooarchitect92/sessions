@@ -276,3 +276,21 @@ Events now maintain a tenant-scoped presenter team with the roles `ORGANIZER`, `
 Presenter records contain a public profile (name, title, bio, avatar) plus a private email identity used to resolve authenticated workspace users when possible. Public event responses expose only the safe profile fields and role; presenter email addresses and user IDs are not exposed.
 
 For webinar media tokens, organizers/hosts/co-hosts receive moderation privileges, speakers may publish camera/microphone media, and ordinary webinar attendees remain subscribe/data-only. Workspace host privileges continue to work as an administrative override.
+
+
+### Public webinar attendee admission
+
+Confirmed event registrations receive a one-time-visible opaque admission token and a branded public join URL. Only the token digest and expiry are stored in the registration row.
+
+`POST /v1/public/{organizationSlug}/{workspaceSlug}/events/{eventSlug}/admission`
+
+Request body:
+
+```json
+{
+  "registrationId": "uuid",
+  "admissionToken": "<opaque registration token>"
+}
+```
+
+The endpoint validates the public event route, registration state, token digest and expiry, and webinar admission window. It then marks first admission as attended/checked-in and returns a short-lived LiveKit credential. Attendee media grants are subscribe-only: no camera/microphone publishing and no room-admin permission. Admission currently opens 30 minutes before the scheduled event and closes one hour after the scheduled end.
