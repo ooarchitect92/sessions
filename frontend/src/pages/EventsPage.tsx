@@ -58,6 +58,7 @@ export function EventsPage() {
     mutationFn: (event: EventRecord) => api.cancelEvent(event.id, event.version),
     onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['events'] }),
   });
+  const landingEvent = events.data?.find((event) => event.id === landingEventId);
 
   const updateTitle = (value: string) => {
     setTitle(value);
@@ -164,10 +165,10 @@ export function EventsPage() {
               <EventPresenterManager eventId={presenterEventId} />
             </div>
           ) : null}
-          {landingEventId ? (
+          {landingEvent ? (
             <div className="landing-builder-panel">
               <EventLandingPageBuilder
-                event={events.data?.find((item) => item.id === landingEventId)!}
+                event={landingEvent}
                 onClose={() => setLandingEventId(null)}
               />
             </div>
