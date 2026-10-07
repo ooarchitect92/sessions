@@ -265,3 +265,15 @@ Each event has one protected `ORGANIZER` created with the event. Hosts may add `
 ### Webinar landing-page composition
 
 Event `branding` is a validated, non-HTML visual configuration used by the public event site and the organizer preview. Hosts can configure scoped primary/accent colors, hero copy, an HTTPS hero image, about copy, registration CTA text, presenter/details visibility, and the order of the About / Presenters / Details sections. The public renderer treats all copy as text (no raw HTML injection) and applies colors through page-scoped CSS variables.
+
+
+### Event reminder templates and delivery reconciliation
+
+Published events use two tenant-scoped reminder templates: `EVENT_REMINDER_24H` and `EVENT_REMINDER_1H`. Hosts can edit subject/body text, enable or disable either reminder, and use only the allow-listed variables `{{event_title}}`, `{{attendee_name}}`, `{{event_time}}`, and `{{event_timezone}}`.
+
+- `GET /v1/notifications/events/{eventId}/templates` lists the two event templates.
+- `PATCH /v1/notifications/events/{eventId}/templates/{kind}` updates a template using `If-Match` optimistic versioning.
+- `GET /v1/notifications/events/{eventId}/deliveries` returns the durable attendee delivery ledger.
+- `POST /v1/notifications/events/deliveries/{deliveryId}/retry` requeues a failed/dead-letter delivery.
+
+The reminder worker materializes deliveries only for registered attendees whose registration existed before the reminder instant, snapshots rendered subject/body text, recovers stale claims, cancels stale deliveries after event/registration/template changes, refreshes pending snapshots when templates change, retries provider failures with exponential backoff, and records delivered/dead-letter outbox events.
