@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { OutboxModule } from '../outbox/outbox.module';
 import { BookingReminderWorker } from './booking-reminder.worker';
 import { EmailDeliveryProvider } from './email-delivery.provider';
+import { EventReminderWorker } from './event-reminder.worker';
 import { NotificationsController } from './notifications.controller';
 import { NotificationsService } from './notifications.service';
 
@@ -12,6 +13,7 @@ import { NotificationsService } from './notifications.service';
     NotificationsService,
     EmailDeliveryProvider,
     BookingReminderWorker,
+    EventReminderWorker,
   ],
 })
 export class NotificationsModule {}
