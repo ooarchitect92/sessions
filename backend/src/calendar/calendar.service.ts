@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -327,6 +328,7 @@ export class CalendarService {
     });
 
     const intervals: BusyInterval[] = [];
+    let syncFailed = false;
     for (const connection of connections) {
       try {
         const ready = await this.ensureAccessToken(connection);
@@ -348,6 +350,7 @@ export class CalendarService {
           },
         });
       } catch (error: unknown) {
+        syncFailed = true;
         await this.workerDatabase.calendarConnection.update({
           where: { id: connection.id },
           data: {
@@ -359,6 +362,12 @@ export class CalendarService {
           },
         });
       }
+    }
+
+    if (syncFailed) {
+      throw new ServiceUnavailableException(
+        'Connected calendar availability could not be verified. Try again shortly.',
+      );
     }
 
     return intervals;
