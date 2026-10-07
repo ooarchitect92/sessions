@@ -126,6 +126,22 @@ enum BreakoutStatus {
   CLOSED
 }
 
+enum UploadStatus {
+  AWAITING_UPLOAD
+  PENDING_SCAN
+  SCANNING
+  READY
+  REJECTED
+  FAILED
+  DELETED
+}
+
+enum UploadPurpose {
+  SESSION_RESOURCE
+  AGENDA_RESOURCE
+  EVENT_RESOURCE
+}
+
 model Organization {
   id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name                String                @db.VarChar(160)
@@ -152,6 +168,7 @@ model Organization {
   breakoutRooms      BreakoutRoom[]
   breakoutAssignments BreakoutAssignment[]
   breakoutAnnouncements BreakoutAnnouncement[]
+  uploads             UploadAsset[]
   polls               Poll[]
   pollOptions         PollOption[]
   pollAnswers         PollAnswer[]
@@ -194,6 +211,7 @@ model Workspace {
   breakoutRooms       BreakoutRoom[]
   breakoutAssignments BreakoutAssignment[]
   breakoutAnnouncements BreakoutAnnouncement[]
+  uploads             UploadAsset[]
   polls               Poll[]
   pollOptions         PollOption[]
   pollAnswers         PollAnswer[]
@@ -231,6 +249,7 @@ model User {
   whiteboardOperations    WhiteboardOperation[]
   breakoutAssignments     BreakoutAssignment[]
   breakoutAnnouncements   BreakoutAnnouncement[]
+  uploads                  UploadAsset[]
   createdPolls            Poll[]                   @relation("PollCreator")
   submittedQuestions      Question[]               @relation("QuestionAuthor")
   authSessions            AuthSession[]
@@ -321,6 +340,7 @@ model Session {
   breakoutRooms        BreakoutRoom[]
   breakoutAssignments  BreakoutAssignment[]
   breakoutAnnouncements BreakoutAnnouncement[]
+  uploads              UploadAsset[]
   polls                Poll[]
   questions            Question[]
 
@@ -726,6 +746,37 @@ model BreakoutAnnouncement {
 
   @@index([organizationId, workspaceId, sessionId, createdAt])
   @@map("breakout_announcements")
+}
+
+model UploadAsset {
+  id                String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId    String        @map("organization_id") @db.Uuid
+  workspaceId       String        @map("workspace_id") @db.Uuid
+  sessionId         String?       @map("session_id") @db.Uuid
+  createdById       String        @map("created_by_id") @db.Uuid
+  purpose           UploadPurpose
+  status            UploadStatus  @default(AWAITING_UPLOAD)
+  originalFilename  String        @map("original_filename") @db.VarChar(255)
+  mimeType          String        @map("mime_type") @db.VarChar(160)
+  expectedSizeBytes Int           @map("expected_size_bytes")
+  actualSizeBytes   Int?          @map("actual_size_bytes")
+  objectKey         String        @unique @map("object_key") @db.Text
+  checksumSha256    String?       @map("checksum_sha256") @db.VarChar(64)
+  scanProvider      String?       @map("scan_provider") @db.VarChar(80)
+  scanResult        String?       @map("scan_result") @db.VarChar(160)
+  scanRequestedAt   DateTime?     @map("scan_requested_at") @db.Timestamptz(6)
+  scannedAt         DateTime?     @map("scanned_at") @db.Timestamptz(6)
+  expiresAt         DateTime      @map("expires_at") @db.Timestamptz(6)
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization      Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace         Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  session           Session?      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  createdBy         User          @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, workspaceId, status, createdAt])
+  @@index([sessionId, status, createdAt])
+  @@map("upload_assets")
 }
 
 model Poll {
