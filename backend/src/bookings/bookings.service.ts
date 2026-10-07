@@ -16,6 +16,11 @@ import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypt
 import { AuditService } from '../audit/audit.service';
 import { CalendarService } from '../calendar/calendar.service';
 import { HOST_ROLES, hasAnyRole, type Principal } from '../common/auth/principal';
+import {
+  assertDynamicFormDefinition,
+  type DynamicFormField,
+  validateDynamicFormAnswers,
+} from '../common/forms/dynamic-form';
 import { TenantDatabaseService } from '../database/tenant-database.service';
 import { WorkerPrismaService } from '../database/worker-prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
@@ -58,6 +63,7 @@ export class BookingsService {
     this.assertHost(principal);
     this.assertTimeZone(input.timezone);
     this.assertAvailabilityRules(input.availabilityRules);
+    assertDynamicFormDefinition(input.intakeFields);
     const requestHash = createHash('sha256')
       .update(JSON.stringify({ operation: 'booking.create', input }))
       .digest('hex');
@@ -163,6 +169,9 @@ export class BookingsService {
     if (input.timezone !== undefined) this.assertTimeZone(input.timezone);
     if (input.availabilityRules !== undefined) {
       this.assertAvailabilityRules(input.availabilityRules);
+    }
+    if (input.intakeFields !== undefined) {
+      assertDynamicFormDefinition(input.intakeFields);
     }
 
     return this.database.run(principal, async (transaction) => {
@@ -303,6 +312,10 @@ export class BookingsService {
     const requested = new Date(input.startsAt);
     const managementToken = randomBytes(32).toString('hex');
     const managementTokenHash = this.hashManagementToken(managementToken);
+    const answers = validateDynamicFormAnswers(
+      page.intakeFields as unknown as DynamicFormField[],
+      input.answers,
+    );
     const requestedParts = this.getZonedParts(requested, page.timezone);
     const localDate = this.formatCalendarDate(requestedParts);
     const busyWindowStart = this.localDateTimeToUtc(
@@ -370,7 +383,7 @@ export class BookingsService {
           startsAt: requested,
           endsAt,
           timezone: input.timezone,
-          answers: input.answers as Prisma.InputJsonValue,
+          answers: answers as Prisma.InputJsonValue,
           managementTokenHash,
         },
         include: { session: true },
