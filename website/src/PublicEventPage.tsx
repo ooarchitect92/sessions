@@ -24,6 +24,15 @@ interface PublicEvent {
   branding: PublicBranding;
   status: 'PUBLISHED' | 'LIVE';
   registrationCount: number;
+  presenters: Array<{
+    id: string;
+    role: 'ORGANIZER' | 'HOST' | 'CO_HOST' | 'SPEAKER';
+    name: string;
+    title: string | null;
+    bio: string | null;
+    avatarUrl: string | null;
+    position: number;
+  }>;
 }
 
 interface Registration {
@@ -118,6 +127,32 @@ export function PublicEventPage({
           <p className="public-event-description">
             {event.description ?? 'Join a focused, interactive webinar with a shared agenda, live questions, and collaborative participation.'}
           </p>
+          {event.presenters.length > 0 ? (
+            <section className="public-presenter-section">
+              <span className="public-kicker">Meet the presenters</span>
+              <div className="public-presenter-grid">
+                {event.presenters.map((presenter) => (
+                  <article className="public-presenter-card" key={presenter.id}>
+                    {presenter.avatarUrl ? (
+                      <img alt="" src={presenter.avatarUrl} />
+                    ) : (
+                      <span className="public-presenter-avatar">
+                        {presenter.name.slice(0, 1).toUpperCase()}
+                      </span>
+                    )}
+                    <div>
+                      <strong>{presenter.name}</strong>
+                      <span>
+                        {presenter.title ||
+                          presenter.role.toLowerCase().replace('_', '-')}
+                      </span>
+                      {presenter.bio ? <p>{presenter.bio}</p> : null}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          ) : null}
           <div className="public-event-facts">
             <article>
               <span>Date and time</span>
