@@ -1,4 +1,6 @@
 import {
+  BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -15,6 +17,7 @@ import { TenantDatabaseService } from '../database/tenant-database.service';
 import { RealtimeEventsService } from '../infrastructure/realtime-events.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { ListMemoryQuery } from './dto/list-memory.query';
+import { UpdateMemorySummaryDto } from './dto/update-memory-summary.dto';
 
 @Injectable()
 export class MemoryService {
@@ -153,6 +156,102 @@ export class MemoryService {
       if (!transcript) throw new NotFoundException('Transcript not found');
       return transcript;
     });
+  }
+
+
+  async updateSummary(
+    principal: Principal,
+    sessionId: string,
+    expectedVersion: number,
+    input: UpdateMemorySummaryDto,
+  ) {
+    this.assertHost(principal);
+    if (
+      input.summaryText === undefined &&
+      input.decisions === undefined &&
+      input.actionItems === undefined &&
+      input.citations === undefined
+    ) {
+      throw new BadRequestException('At least one summary field must be provided');
+    }
+
+    const result = await this.database.run(principal, async (transaction) => {
+      const summary = await transaction.memorySummary.findUnique({
+        where: { sessionId },
+      });
+      if (!summary) throw new NotFoundException('Memory summary not found');
+      if (summary.status !== ArtifactStatus.READY) {
+        throw new BadRequestException(
+          'Only ready summaries can be reviewed and edited',
+        );
+      }
+
+      const updated = await transaction.memorySummary.updateMany({
+        where: { id: summary.id, version: expectedVersion },
+        data: {
+          ...(input.summaryText !== undefined
+            ? { summaryText: input.summaryText.trim() }
+            : {}),
+          ...(input.decisions !== undefined
+            ? { decisions: input.decisions as Prisma.InputJsonValue }
+            : {}),
+          ...(input.actionItems !== undefined
+            ? { actionItems: input.actionItems as Prisma.InputJsonValue }
+            : {}),
+          ...(input.citations !== undefined
+            ? { citations: input.citations as Prisma.InputJsonValue }
+            : {}),
+          version: { increment: 1 },
+        },
+      });
+      if (updated.count === 0) {
+        throw new ConflictException(
+          'Memory summary changed since it was loaded. Refresh and retry.',
+        );
+      }
+
+      const value = await transaction.memorySummary.findUniqueOrThrow({
+        where: { id: summary.id },
+      });
+      await this.audit.record(transaction, principal, {
+        action: 'memory.summary.reviewed',
+        resourceType: 'memory_summary',
+        resourceId: summary.id,
+        metadata: {
+          sessionId,
+          version: value.version,
+          changedFields: [
+            input.summaryText !== undefined ? 'summaryText' : null,
+            input.decisions !== undefined ? 'decisions' : null,
+            input.actionItems !== undefined ? 'actionItems' : null,
+            input.citations !== undefined ? 'citations' : null,
+          ].filter((field): field is string => field !== null),
+        },
+      });
+      await this.outbox.enqueue(transaction, principal, {
+        aggregateType: 'memory_summary',
+        aggregateId: summary.id,
+        eventType: 'memory.summary.reviewed',
+        payload: {
+          memorySummaryId: summary.id,
+          sessionId,
+          version: value.version,
+        },
+      });
+      return value;
+    });
+
+    this.realtime.publishSessionEvent({
+      sessionId,
+      eventName: 'memory.updated',
+      payload: {
+        sessionId,
+        artifact: 'summary',
+        status: result.status,
+        version: result.version,
+      },
+    });
+    return result;
   }
 
   async retryFailed(principal: Principal, sessionId: string) {
