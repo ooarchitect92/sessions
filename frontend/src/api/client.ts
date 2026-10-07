@@ -300,16 +300,26 @@ export interface MemoryDetail extends SessionDetail {
   questions: QuestionRecord[];
 }
 
+export interface ChatReactionRecord {
+  id: string;
+  userId: string;
+  emoji: string;
+  createdAt: string;
+}
+
 export interface ChatMessageRecord {
   id: string;
   sessionId: string;
   authorUserId: string;
+  recipientUserId: string | null;
   channel: ChatChannel;
   body: string;
   editedAt: string | null;
   deletedAt: string | null;
   createdAt: string;
   author: { displayName: string; avatarUrl: string | null };
+  recipient: { id: string; displayName: string; avatarUrl: string | null } | null;
+  reactions: ChatReactionRecord[];
 }
 
 export interface PollOptionRecord {
@@ -867,11 +877,22 @@ export const api = {
 
   createChat(
     sessionId: string,
-    input: { channel: ChatChannel; body: string },
+    input: { channel: ChatChannel; body: string; recipientUserId?: string },
   ): Promise<ChatMessageRecord> {
     return request<ChatMessageRecord>(`/sessions/${sessionId}/chat-messages`, {
       method: "POST",
       body: JSON.stringify(input),
+    });
+  },
+
+  toggleChatReaction(
+    sessionId: string,
+    messageId: string,
+    emoji: string,
+  ): Promise<{ sessionId: string; messageId: string; reactions: ChatReactionRecord[] }> {
+    return request(`/sessions/${sessionId}/chat-messages/${messageId}/reactions`, {
+      method: "POST",
+      body: JSON.stringify({ emoji }),
     });
   },
 

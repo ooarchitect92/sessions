@@ -8,6 +8,7 @@ import { CreatePollDto } from './dto/create-poll.dto';
 import { CreateQuestionDto } from './dto/create-question.dto';
 import { ModerateQuestionDto } from './dto/moderate-question.dto';
 import { SubmitPollAnswerDto } from './dto/submit-poll-answer.dto';
+import { ToggleChatReactionDto } from './dto/toggle-chat-reaction.dto';
 
 @ApiTags('collaboration')
 @ApiBearerAuth()
@@ -30,6 +31,21 @@ export class CollaborationController {
     @Body() body: CreateChatMessageDto,
   ) {
     return this.collaboration.createChat(principal, sessionId, body);
+  }
+
+  @Post('chat-messages/:messageId/reactions')
+  toggleChatReaction(
+    @CurrentPrincipal() principal: Principal,
+    @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
+    @Param('messageId', new ParseUUIDPipe({ version: '4' })) messageId: string,
+    @Body() body: ToggleChatReactionDto,
+  ) {
+    return this.collaboration.toggleChatReaction(
+      principal,
+      sessionId,
+      messageId,
+      body,
+    );
   }
 
   @Get('polls')

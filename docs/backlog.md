@@ -23,7 +23,7 @@
 - [x] persistent public and host chat
 - [x] poll creation, launch, answer, results and close lifecycle
 - [x] moderated Q&A with voting and answers
-- [ ] reactions and private direct-message channels
+- [x] reactions and private direct-message channels with targeted realtime delivery
 - [ ] whiteboard integration, snapshots and operation compaction
 - [ ] breakout assignment, media-room transition and host broadcast
 - [x] HTTPS agenda content blocks, provider normalization and sandboxed embed resolver

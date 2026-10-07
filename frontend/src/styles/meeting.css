@@ -332,3 +332,55 @@
   line-height: 1.7;
   font-size: 11px;
 }
+
+
+.chat-audience-controls {
+  display: grid;
+  gap: 7px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.chat-audience-controls select {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 9px;
+  padding: 0 9px;
+  background: #192825;
+  color: #dce7e3;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.chat-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.chat-reactions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 25px;
+  padding: 2px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.035);
+  color: #aebfba;
+  font-size: 11px;
+}
+
+.chat-reactions button.active {
+  border-color: #3d7669;
+  background: rgba(61, 118, 105, 0.2);
+}
+
+.chat-reactions button span {
+  color: #8fa39e;
+  font-size: 8px;
+  font-weight: 800;
+}

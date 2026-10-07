@@ -65,6 +65,7 @@ export class RealtimeGateway
   private readonly logger = new Logger(RealtimeGateway.name);
   private agendaSubscription?: Subscription;
   private sessionEventSubscription?: Subscription;
+  private userEventSubscription?: Subscription;
 
   @WebSocketServer()
   server!: Server;
@@ -92,11 +93,19 @@ export class RealtimeGateway
           .to(this.roomName(event.sessionId))
           .emit(event.eventName, event.payload);
       });
+    this.userEventSubscription = this.realtimeEvents.userEvents$.subscribe(
+      (event) => {
+        for (const userId of new Set(event.userIds)) {
+          server.to(this.userRoomName(userId)).emit(event.eventName, event.payload);
+        }
+      },
+    );
   }
 
   onModuleDestroy(): void {
     this.agendaSubscription?.unsubscribe();
     this.sessionEventSubscription?.unsubscribe();
+    this.userEventSubscription?.unsubscribe();
   }
 
   async handleConnection(client: AuthenticatedSocket): Promise<void> {
@@ -112,6 +121,7 @@ export class RealtimeGateway
       const parsed = principalSchema.parse(claims) as AccessTokenClaims;
       client.data.principal = await this.auth.resolvePrincipalFromClaims(parsed);
       client.data.sessionIds = new Set<string>();
+      await client.join(this.userRoomName(client.data.principal.userId));
     } catch {
       client.emit("authorization.error", {
         message: "Invalid or expired access token",
@@ -181,5 +191,9 @@ export class RealtimeGateway
 
   private roomName(sessionId: string): string {
     return `session:${sessionId}`;
+  }
+
+  private userRoomName(userId: string): string {
+    return `user:${userId}`;
   }
 }

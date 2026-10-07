@@ -35,9 +35,11 @@ export function useSessionRealtime(sessionId: string): void {
       socket.on('participant.left', () => {
         void queryClient.invalidateQueries({ queryKey: ['session-presence', sessionId] });
       });
-      socket.on('chat.message.created', () => {
-        void queryClient.invalidateQueries({ queryKey: ['chat', sessionId] });
-      });
+      for (const eventName of ['chat.message.created', 'chat.reaction.updated']) {
+        socket.on(eventName, () => {
+          void queryClient.invalidateQueries({ queryKey: ['chat', sessionId] });
+        });
+      }
       for (const eventName of [
         'poll.created',
         'poll.launched',

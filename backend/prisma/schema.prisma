@@ -96,6 +96,7 @@ enum RecordingConsentDecision {
 enum ChatChannel {
   EVERYONE
   HOSTS
+  DIRECT
 }
 
 enum PollType {
@@ -139,6 +140,7 @@ model Organization {
   transcriptSegments  TranscriptSegment[]
   memorySummaries     MemorySummary[]
   chatMessages        ChatMessage[]
+  chatReactions       ChatReaction[]
   polls               Poll[]
   pollOptions         PollOption[]
   pollAnswers         PollAnswer[]
@@ -175,6 +177,7 @@ model Workspace {
   transcriptSegments  TranscriptSegment[]
   memorySummaries     MemorySummary[]
   chatMessages        ChatMessage[]
+  chatReactions       ChatReaction[]
   polls               Poll[]
   pollOptions         PollOption[]
   pollAnswers         PollAnswer[]
@@ -207,6 +210,8 @@ model User {
   createdEvents           Event[]                  @relation("EventCreator")
   createdBookingPages     BookingPage[]            @relation("BookingPageCreator")
   chatMessages            ChatMessage[]            @relation("ChatMessageAuthor")
+  receivedChatMessages    ChatMessage[]            @relation("ChatMessageRecipient")
+  chatReactions           ChatReaction[]
   createdPolls            Poll[]                   @relation("PollCreator")
   submittedQuestions      Question[]               @relation("QuestionAuthor")
   authSessions            AuthSession[]
@@ -291,6 +296,7 @@ model Session {
   transcript           Transcript?
   memorySummary        MemorySummary?
   chatMessages         ChatMessage[]
+  chatReactions        ChatReaction[]
   polls                Poll[]
   questions            Question[]
 
@@ -561,6 +567,7 @@ model ChatMessage {
   workspaceId    String      @map("workspace_id") @db.Uuid
   sessionId      String      @map("session_id") @db.Uuid
   authorUserId   String      @map("author_user_id") @db.Uuid
+  recipientUserId String?     @map("recipient_user_id") @db.Uuid
   channel        ChatChannel @default(EVERYONE)
   body           String      @db.Text
   editedAt       DateTime?   @map("edited_at") @db.Timestamptz(6)
@@ -570,9 +577,32 @@ model ChatMessage {
   workspace      Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   session        Session      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   author         User         @relation("ChatMessageAuthor", fields: [authorUserId], references: [id], onDelete: Restrict)
+  recipient      User?        @relation("ChatMessageRecipient", fields: [recipientUserId], references: [id], onDelete: Restrict)
+  reactions      ChatReaction[]
 
   @@index([organizationId, workspaceId, sessionId, createdAt])
+  @@index([sessionId, recipientUserId, createdAt])
   @@map("chat_messages")
+}
+
+model ChatReaction {
+  id             String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String      @map("organization_id") @db.Uuid
+  workspaceId    String      @map("workspace_id") @db.Uuid
+  sessionId      String      @map("session_id") @db.Uuid
+  messageId      String      @map("message_id") @db.Uuid
+  userId         String      @map("user_id") @db.Uuid
+  emoji          String      @db.VarChar(32)
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  session        Session      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  message        ChatMessage  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+  @@index([organizationId, workspaceId, sessionId, createdAt])
+  @@map("chat_reactions")
 }
 
 model Poll {
