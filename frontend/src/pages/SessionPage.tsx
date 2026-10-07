@@ -19,6 +19,10 @@ export function SessionPage() {
   const queryClient = useQueryClient();
   const [media, setMedia] = useState<MediaToken | null>(null);
   const [agendaEditorOpen, setAgendaEditorOpen] = useState(false);
+  const [agendaAiPrompt, setAgendaAiPrompt] = useState('');
+  const [agendaDraft, setAgendaDraft] = useState<Awaited<
+    ReturnType<typeof api.generateAgendaDraft>
+  > | null>(null);
   const [agendaTitle, setAgendaTitle] = useState('');
   const [agendaDuration, setAgendaDuration] = useState(10);
   const [agendaType, setAgendaType] = useState<
@@ -83,6 +87,23 @@ export function SessionPage() {
   const activate = useMutation({
     mutationFn: (agendaItemId: string) => api.activateAgendaItem(sessionId, agendaItemId),
     onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+    },
+  });
+
+  const generateAgendaDraft = useMutation({
+    mutationFn: () => api.generateAgendaDraft(sessionId, agendaAiPrompt),
+    onSuccess: (draft) => setAgendaDraft(draft),
+  });
+
+  const applyAgendaDraft = useMutation({
+    mutationFn: (mode: 'APPEND' | 'REPLACE') => {
+      if (!agendaDraft) throw new Error('Generate an agenda draft first');
+      return api.applyAgendaDraft(sessionId, agendaDraft.items, mode);
+    },
+    onSuccess: async () => {
+      setAgendaDraft(null);
+      setAgendaAiPrompt('');
       await queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
     },
   });
@@ -248,7 +269,86 @@ export function SessionPage() {
             <span>{current.agendaItems.length} items</span>
           </div>
           {agendaEditorOpen ? (
-            <form className="agenda-inline-form" onSubmit={submitAgendaItem}>
+            <div className="agenda-editor-stack">
+              <section className="agenda-ai-draft">
+                <div className="agenda-ai-heading">
+                  <div>
+                    <span className="eyebrow">AI copilot</span>
+                    <strong>Draft an agenda for review</strong>
+                  </div>
+                  <span className="review-pill">Review required</span>
+                </div>
+                <textarea
+                  value={agendaAiPrompt}
+                  onChange={(event) => setAgendaAiPrompt(event.target.value)}
+                  maxLength={2000}
+                  placeholder="Optional guidance, e.g. focus on onboarding blockers and leave 10 minutes for Q&A."
+                />
+                <button
+                  type="button"
+                  className="button secondary full-width"
+                  onClick={() => generateAgendaDraft.mutate()}
+                  disabled={generateAgendaDraft.isPending}
+                >
+                  {generateAgendaDraft.isPending ? 'Generating…' : 'Generate AI draft'}
+                </button>
+                {generateAgendaDraft.error ? (
+                  <div className="error-banner">{generateAgendaDraft.error.message}</div>
+                ) : null}
+                {agendaDraft ? (
+                  <div className="agenda-draft-review">
+                    <div className="agenda-draft-meta">
+                      <span>
+                        {agendaDraft.items.length} suggested items · {agendaDraft.provider}
+                      </span>
+                      <small>Nothing is added until you approve it.</small>
+                    </div>
+                    <ol>
+                      {agendaDraft.items.map((item, index) => (
+                        <li key={`${index}-${item.title}`}>
+                          <strong>{item.title}</strong>
+                          <span>
+                            {Math.round(item.durationSeconds / 60)} min ·{' '}
+                            {item.type.toLowerCase().replace('_', ' ')}
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+                    <div className="agenda-draft-actions">
+                      <button
+                        type="button"
+                        className="button secondary"
+                        onClick={() => applyAgendaDraft.mutate('APPEND')}
+                        disabled={applyAgendaDraft.isPending}
+                      >
+                        Append draft
+                      </button>
+                      <button
+                        type="button"
+                        className="button primary"
+                        onClick={() => {
+                          if (
+                            current.agendaItems.length === 0 ||
+                            window.confirm(
+                              'Replace the current agenda with this reviewed AI draft?',
+                            )
+                          ) {
+                            applyAgendaDraft.mutate('REPLACE');
+                          }
+                        }}
+                        disabled={applyAgendaDraft.isPending}
+                      >
+                        Replace agenda
+                      </button>
+                    </div>
+                    {applyAgendaDraft.error ? (
+                      <div className="error-banner">{applyAgendaDraft.error.message}</div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </section>
+
+              <form className="agenda-inline-form" onSubmit={submitAgendaItem}>
               <label>
                 Agenda item
                 <input
@@ -298,7 +398,8 @@ export function SessionPage() {
               >
                 {createAgendaItem.isPending ? 'Adding…' : 'Add agenda item'}
               </button>
-            </form>
+              </form>
+            </div>
           ) : null}
           {current.agendaItems.length === 0 ? (
             <div className="rail-empty">
