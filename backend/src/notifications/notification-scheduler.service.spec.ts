@@ -92,6 +92,8 @@ function registration(
     email: 'grace@example.com',
     answers: {},
     status,
+    admissionTokenHash: null,
+    admissionTokenExpiresAt: null,
     registeredAt: new Date(),
     checkedInAt: null,
     updatedAt: new Date(),
