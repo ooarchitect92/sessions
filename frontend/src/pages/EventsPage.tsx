@@ -5,6 +5,7 @@ import { api, type EventRecord } from '../api/client';
 import { DynamicFormBuilder } from '../components/DynamicFormBuilder';
 import { EventLandingPageBuilder } from '../components/EventLandingPageBuilder';
 import { EventPresenterManager } from '../components/EventPresenterManager';
+import { EventReminderManager } from '../components/EventReminderManager';
 
 function toSlug(value: string): string {
   return value
@@ -38,6 +39,7 @@ export function EventsPage() {
   const [registrationFields, setRegistrationFields] = useState<DynamicFormField[]>([]);
   const [presenterEventId, setPresenterEventId] = useState<string | null>(null);
   const [landingEventId, setLandingEventId] = useState<string | null>(null);
+  const [reminderEventId, setReminderEventId] = useState<string | null>(null);
 
   const events = useQuery({ queryKey: ['events'], queryFn: () => api.listEvents() });
   const create = useMutation({
@@ -129,6 +131,7 @@ export function EventsPage() {
                     type="button"
                     onClick={() => {
                       setLandingEventId(null);
+                      setReminderEventId(null);
                       setPresenterEventId((current) =>
                         current === event.id ? null : event.id,
                       );
@@ -142,6 +145,7 @@ export function EventsPage() {
                       type="button"
                       onClick={() => {
                         setPresenterEventId(null);
+                        setReminderEventId(null);
                         setLandingEventId((current) =>
                           current === event.id ? null : event.id,
                         );
@@ -150,6 +154,19 @@ export function EventsPage() {
                       {landingEventId === event.id ? 'Hide builder' : 'Landing page'}
                     </button>
                   ) : null}
+                  <button
+                    className="button secondary"
+                    type="button"
+                    onClick={() => {
+                      setPresenterEventId(null);
+                      setLandingEventId(null);
+                      setReminderEventId((current) =>
+                        current === event.id ? null : event.id,
+                      );
+                    }}
+                  >
+                    {reminderEventId === event.id ? 'Hide reminders' : 'Reminders'}
+                  </button>
                   {event.status === 'DRAFT' ? (
                     <button className="button primary" onClick={() => publish.mutate(event)} disabled={publish.isPending}>Publish</button>
                   ) : null}
@@ -170,6 +187,14 @@ export function EventsPage() {
               <EventLandingPageBuilder
                 event={landingEvent}
                 onClose={() => setLandingEventId(null)}
+              />
+            </div>
+          ) : null}
+          {reminderEventId ? (
+            <div className="event-reminder-manager-panel">
+              <EventReminderManager
+                eventId={reminderEventId}
+                onClose={() => setReminderEventId(null)}
               />
             </div>
           ) : null}
