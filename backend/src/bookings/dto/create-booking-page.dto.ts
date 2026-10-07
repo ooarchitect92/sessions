@@ -4,7 +4,6 @@ import {
   ArrayMinSize,
   IsArray,
   IsInt,
-  IsObject,
   IsOptional,
   IsString,
   Length,
@@ -13,6 +12,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
+import { DynamicFormFieldDto } from '../../common/forms/dynamic-form';
 
 export class AvailabilityRuleDto {
   @IsInt()
@@ -77,6 +77,7 @@ export class CreateBookingPageDto {
 
   @IsArray()
   @ArrayMaxSize(50)
-  @IsObject({ each: true })
-  intakeFields: Record<string, unknown>[] = [];
+  @ValidateNested({ each: true })
+  @Type(() => DynamicFormFieldDto)
+  intakeFields: DynamicFormFieldDto[] = [];
 }
