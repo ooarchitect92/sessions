@@ -38,6 +38,9 @@ interface PublicEvent {
 interface Registration {
   id: string;
   status: 'REGISTERED' | 'WAITLISTED';
+  admissionToken?: string;
+  joinUrl?: string;
+  admissionTokenExpiresAt?: string;
 }
 
 export function PublicEventPage({
@@ -196,6 +199,11 @@ export function PublicEventPage({
                 The registration has been stored. Reminder delivery and calendar attachment
                 generation are handled by the notification workflow when configured.
               </p>
+              {registration.joinUrl ? (
+                <a className="public-primary-link" href={registration.joinUrl}>
+                  Join webinar
+                </a>
+              ) : null}
             </div>
           ) : (
             <>
