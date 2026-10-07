@@ -6,10 +6,9 @@ ALTER TABLE "booking_reservations"
   ADD COLUMN "version" INTEGER NOT NULL DEFAULT 1;
 
 UPDATE "booking_reservations"
-SET "management_token_hash" = encode(
-  digest(gen_random_uuid()::text || ':' || "id"::text, 'sha256'),
-  'hex'
-)
+SET "management_token_hash" =
+  md5(gen_random_uuid()::text || ':' || "id"::text || ':a') ||
+  md5(gen_random_uuid()::text || ':' || "id"::text || ':b')
 WHERE "management_token_hash" IS NULL;
 
 ALTER TABLE "booking_reservations"
