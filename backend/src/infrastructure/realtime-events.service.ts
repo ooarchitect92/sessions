@@ -27,6 +27,8 @@ export interface SessionRealtimeEvent {
     | 'question.updated'
     | 'question.votes.updated'
     | 'whiteboard.operation.appended'
+    | 'breakouts.updated'
+    | 'breakouts.announcement'
     | 'memory.updated';
   payload: unknown;
 }
