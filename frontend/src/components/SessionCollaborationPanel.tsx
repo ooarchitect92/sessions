@@ -8,9 +8,23 @@ export function SessionCollaborationPanel({ sessionId }: { sessionId: string }) 
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<PanelTab>('people');
   const [chatBody, setChatBody] = useState('');
+  const [chatAudience, setChatAudience] = useState<'EVERYONE' | 'HOSTS' | 'DIRECT'>('EVERYONE');
+  const [chatRecipientUserId, setChatRecipientUserId] = useState('');
   const [pollQuestion, setPollQuestion] = useState('');
   const [pollOptions, setPollOptions] = useState('Yes\nNo');
   const [questionBody, setQuestionBody] = useState('');
+
+  const auth = useQuery({
+    queryKey: ['auth-me'],
+    queryFn: () => api.authMe(),
+    staleTime: 60_000,
+  });
+  const members = useQuery({
+    queryKey: ['workspace-members'],
+    queryFn: () => api.listWorkspaceMembers(),
+    enabled: tab === 'chat',
+    staleTime: 60_000,
+  });
 
   const chat = useQuery({
     queryKey: ['chat', sessionId],
@@ -29,12 +43,26 @@ export function SessionCollaborationPanel({ sessionId }: { sessionId: string }) 
   });
 
   const sendChat = useMutation({
-    mutationFn: () => api.createChat(sessionId, { channel: 'EVERYONE', body: chatBody }),
+    mutationFn: () =>
+      api.createChat(sessionId, {
+        channel: chatAudience,
+        body: chatBody,
+        ...(chatAudience === 'DIRECT' && chatRecipientUserId
+          ? { recipientUserId: chatRecipientUserId }
+          : {}),
+      }),
     onSuccess: async () => {
       setChatBody('');
       await queryClient.invalidateQueries({ queryKey: ['chat', sessionId] });
     },
   });
+  const toggleReaction = useMutation({
+    mutationFn: ({ messageId, emoji }: { messageId: string; emoji: string }) =>
+      api.toggleChatReaction(sessionId, messageId, emoji),
+    onSuccess: async () =>
+      queryClient.invalidateQueries({ queryKey: ['chat', sessionId] }),
+  });
+
   const createPoll = useMutation({
     mutationFn: () =>
       api.createPoll(sessionId, {
@@ -111,14 +139,124 @@ export function SessionCollaborationPanel({ sessionId }: { sessionId: string }) 
 
       {tab === 'chat' ? (
         <div className="collaboration-column">
+          <div className="chat-audience-controls">
+            <select
+              value={chatAudience}
+              onChange={(event) => {
+                const value = event.target.value as typeof chatAudience;
+                setChatAudience(value);
+                if (value !== 'DIRECT') setChatRecipientUserId('');
+              }}
+            >
+              <option value="EVERYONE">Everyone</option>
+              {auth.data?.principal.roles.some((role) =>
+                ['OWNER', 'ADMIN', 'HOST'].includes(role),
+              ) ? (
+                <option value="HOSTS">Hosts only</option>
+              ) : null}
+              <option value="DIRECT">Direct message</option>
+            </select>
+            {chatAudience === 'DIRECT' ? (
+              <select
+                value={chatRecipientUserId}
+                onChange={(event) => setChatRecipientUserId(event.target.value)}
+                required
+              >
+                <option value="">Choose recipient</option>
+                {members.data
+                  ?.filter((member) => member.user.id !== auth.data?.principal.userId)
+                  .map((member) => (
+                    <option key={member.user.id} value={member.user.id}>
+                      {member.user.displayName}
+                    </option>
+                  ))}
+              </select>
+            ) : null}
+          </div>
+
           <div className="collaboration-scroll message-list">
             {chat.isLoading ? <p className="side-muted">Loading chat…</p> : null}
-            {chat.data?.map((message) => (
-              <article className="chat-message" key={message.id}><div><strong>{message.author.displayName}</strong><span>{new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(new Date(message.createdAt))}</span></div><p>{message.body}</p></article>
-            ))}
+            {chat.data?.map((message) => {
+              const reactionCounts = message.reactions.reduce<Record<string, number>>(
+                (counts, reaction) => ({
+                  ...counts,
+                  [reaction.emoji]: (counts[reaction.emoji] ?? 0) + 1,
+                }),
+                {},
+              );
+              const directLabel =
+                message.channel === 'DIRECT'
+                  ? `Direct · ${message.recipient?.displayName ?? 'participant'}`
+                  : message.channel === 'HOSTS'
+                    ? 'Hosts only'
+                    : null;
+              return (
+                <article className="chat-message" key={message.id}>
+                  <div>
+                    <strong>{message.author.displayName}</strong>
+                    <span>
+                      {directLabel ? `${directLabel} · ` : ''}
+                      {new Intl.DateTimeFormat(undefined, {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                      }).format(new Date(message.createdAt))}
+                    </span>
+                  </div>
+                  <p>{message.body}</p>
+                  <div className="chat-reactions" aria-label="Message reactions">
+                    {['👍', '❤️', '😂', '🎉', '👏', '👀'].map((emoji) => {
+                      const active = message.reactions.some(
+                        (reaction) =>
+                          reaction.userId === auth.data?.principal.userId &&
+                          reaction.emoji === emoji,
+                      );
+                      return (
+                        <button
+                          type="button"
+                          className={active ? 'active' : ''}
+                          key={emoji}
+                          disabled={toggleReaction.isPending}
+                          onClick={() =>
+                            toggleReaction.mutate({ messageId: message.id, emoji })
+                          }
+                          aria-label={`React with ${emoji}`}
+                        >
+                          {emoji}
+                          {reactionCounts[emoji] ? (
+                            <span>{reactionCounts[emoji]}</span>
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </article>
+              );
+            })}
             {chat.data?.length === 0 ? <p className="side-muted">No messages yet.</p> : null}
           </div>
-          <form className="side-composer" onSubmit={submitChat}><textarea value={chatBody} onChange={(event) => setChatBody(event.target.value)} maxLength={5000} placeholder="Message everyone" /><button disabled={sendChat.isPending || !chatBody.trim()}>Send</button></form>
+          <form className="side-composer" onSubmit={submitChat}>
+            <textarea
+              value={chatBody}
+              onChange={(event) => setChatBody(event.target.value)}
+              maxLength={5000}
+              placeholder={
+                chatAudience === 'DIRECT'
+                  ? 'Private message'
+                  : chatAudience === 'HOSTS'
+                    ? 'Message hosts'
+                    : 'Message everyone'
+              }
+            />
+            <button
+              disabled={
+                sendChat.isPending ||
+                !chatBody.trim() ||
+                (chatAudience === 'DIRECT' && !chatRecipientUserId)
+              }
+            >
+              Send
+            </button>
+          </form>
         </div>
       ) : null}
 
