@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import {
+  EventPresenterRole,
   EventStatus,
   Prisma,
   RegistrationStatus,
@@ -30,8 +31,10 @@ import { TenantDatabaseService } from "../database/tenant-database.service";
 import { WorkerPrismaService } from "../database/worker-prisma.service";
 import { OutboxService } from "../outbox/outbox.service";
 import { CreateEventDto } from "./dto/create-event.dto";
+import { CreateEventPresenterDto } from "./dto/create-event-presenter.dto";
 import { RegisterEventDto } from "./dto/register-event.dto";
 import { UpdateEventDto } from "./dto/update-event.dto";
+import { UpdateEventPresenterDto } from "./dto/update-event-presenter.dto";
 
 const PUBLIC_EVENT_STATUSES: EventStatus[] = [
   EventStatus.PUBLISHED,
@@ -112,6 +115,19 @@ export class EventsService {
           branding: input.branding as Prisma.InputJsonValue,
         },
       });
+      await transaction.eventPresenter.create({
+        data: {
+          organizationId: principal.organizationId,
+          workspaceId: principal.workspaceId,
+          eventId: event.id,
+          userId: principal.userId,
+          role: EventPresenterRole.ORGANIZER,
+          name: principal.displayName,
+          email: principal.email.toLowerCase(),
+          position: 0,
+          isPublic: true,
+        },
+      });
       const response = this.toJson(event);
       await this.audit.record(transaction, principal, {
         action: "event.created",
@@ -144,7 +160,10 @@ export class EventsService {
     return this.database.run(principal, (transaction) =>
       transaction.event.findMany({
         orderBy: [{ startsAt: "asc" }, { createdAt: "desc" }],
-        include: { _count: { select: { registrations: true } } },
+        include: {
+        presenters: { orderBy: { position: "asc" } },
+        _count: { select: { registrations: true } },
+      },
       }),
     );
   }
@@ -155,6 +174,7 @@ export class EventsService {
         where: { id },
         include: {
           session: true,
+          presenters: { orderBy: { position: "asc" } },
           _count: { select: { registrations: true } },
         },
       });
@@ -375,6 +395,215 @@ export class EventsService {
     });
   }
 
+  async listPresenters(principal: Principal, eventId: string) {
+    this.assertHost(principal);
+    return this.database.run(principal, async (transaction) => {
+      const event = await transaction.event.findUnique({
+        where: { id: eventId },
+        select: { id: true },
+      });
+      if (!event) throw new NotFoundException("Event not found");
+      return transaction.eventPresenter.findMany({
+        where: { eventId },
+        orderBy: { position: "asc" },
+      });
+    });
+  }
+
+  async createPresenter(
+    principal: Principal,
+    eventId: string,
+    input: CreateEventPresenterDto,
+  ) {
+    this.assertHost(principal);
+    if (input.role === EventPresenterRole.ORGANIZER) {
+      throw new BadRequestException("An event has one protected organizer");
+    }
+    return this.database.run(principal, async (transaction) => {
+      const event = await transaction.event.findUnique({
+        where: { id: eventId },
+        select: { id: true, status: true },
+      });
+      if (!event) throw new NotFoundException("Event not found");
+      if (TERMINAL_EVENT_STATUSES.includes(event.status)) {
+        throw new ConflictException("Presenters cannot be changed for a terminal event");
+      }
+      const email = input.email.toLowerCase();
+      const duplicate = await transaction.eventPresenter.findUnique({
+        where: { eventId_email: { eventId, email } },
+        select: { id: true },
+      });
+      if (duplicate) {
+        throw new ConflictException("This presenter is already on the event");
+      }
+      const member = await transaction.workspaceMembership.findFirst({
+        where: {
+          workspaceId: principal.workspaceId,
+          user: { email },
+        },
+        select: { userId: true },
+      });
+      const aggregate = await transaction.eventPresenter.aggregate({
+        where: { eventId },
+        _max: { position: true },
+      });
+      const presenter = await transaction.eventPresenter.create({
+        data: {
+          organizationId: principal.organizationId,
+          workspaceId: principal.workspaceId,
+          eventId,
+          userId: member?.userId ?? null,
+          role: input.role,
+          name: input.name.trim(),
+          email,
+          title: input.title?.trim() || null,
+          bio: input.bio?.trim() || null,
+          avatarUrl: input.avatarUrl ?? null,
+          isPublic: input.isPublic ?? true,
+          position: (aggregate._max.position ?? -1) + 1,
+        },
+      });
+      await this.audit.record(transaction, principal, {
+        action: "event.presenter.created",
+        resourceType: "event_presenter",
+        resourceId: presenter.id,
+        metadata: { eventId, role: presenter.role },
+      });
+      await this.outbox.enqueue(transaction, principal, {
+        aggregateType: "event_presenter",
+        aggregateId: presenter.id,
+        eventType: "event.presenter.created",
+        payload: this.toJson({ eventId, presenter }),
+      });
+      return presenter;
+    });
+  }
+
+  async updatePresenter(
+    principal: Principal,
+    eventId: string,
+    presenterId: string,
+    input: UpdateEventPresenterDto,
+  ) {
+    this.assertHost(principal);
+    return this.database.run(principal, async (transaction) => {
+      const presenter = await transaction.eventPresenter.findFirst({
+        where: { id: presenterId, eventId },
+      });
+      if (!presenter) throw new NotFoundException("Presenter not found");
+      if (
+        presenter.role === EventPresenterRole.ORGANIZER &&
+        input.role !== undefined &&
+        input.role !== EventPresenterRole.ORGANIZER
+      ) {
+        throw new ConflictException("The protected organizer role cannot be changed");
+      }
+      const updated = await transaction.eventPresenter.update({
+        where: { id: presenterId },
+        data: {
+          ...(input.role !== undefined ? { role: input.role } : {}),
+          ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+          ...(input.title !== undefined
+            ? { title: input.title?.trim() || null }
+            : {}),
+          ...(input.bio !== undefined ? { bio: input.bio?.trim() || null } : {}),
+          ...(input.avatarUrl !== undefined
+            ? { avatarUrl: input.avatarUrl ?? null }
+            : {}),
+          ...(input.isPublic !== undefined ? { isPublic: input.isPublic } : {}),
+        },
+      });
+      await this.audit.record(transaction, principal, {
+        action: "event.presenter.updated",
+        resourceType: "event_presenter",
+        resourceId: presenterId,
+        metadata: { eventId, role: updated.role },
+      });
+      await this.outbox.enqueue(transaction, principal, {
+        aggregateType: "event_presenter",
+        aggregateId: presenterId,
+        eventType: "event.presenter.updated",
+        payload: this.toJson({ eventId, presenter: updated }),
+      });
+      return updated;
+    });
+  }
+
+  async deletePresenter(
+    principal: Principal,
+    eventId: string,
+    presenterId: string,
+  ) {
+    this.assertHost(principal);
+    return this.database.run(principal, async (transaction) => {
+      const presenter = await transaction.eventPresenter.findFirst({
+        where: { id: presenterId, eventId },
+      });
+      if (!presenter) throw new NotFoundException("Presenter not found");
+      if (presenter.role === EventPresenterRole.ORGANIZER) {
+        throw new ConflictException("The protected organizer cannot be removed");
+      }
+      await transaction.eventPresenter.delete({ where: { id: presenterId } });
+      await this.audit.record(transaction, principal, {
+        action: "event.presenter.deleted",
+        resourceType: "event_presenter",
+        resourceId: presenterId,
+        metadata: { eventId, role: presenter.role },
+      });
+      await this.outbox.enqueue(transaction, principal, {
+        aggregateType: "event_presenter",
+        aggregateId: presenterId,
+        eventType: "event.presenter.deleted",
+        payload: this.toJson({ eventId, presenterId, role: presenter.role }),
+      });
+      return { id: presenterId, deleted: true };
+    });
+  }
+
+  async getWebinarMediaPermissions(
+    principal: Principal,
+    sessionId: string,
+  ): Promise<{ applies: boolean; canPublish: boolean; roomAdmin: boolean; presenterRole: EventPresenterRole | null }> {
+    return this.database.run(principal, async (transaction) => {
+      const event = await transaction.event.findUnique({
+        where: { sessionId },
+        select: { id: true },
+      });
+      if (!event) {
+        return {
+          applies: false,
+          canPublish: false,
+          roomAdmin: false,
+          presenterRole: null,
+        };
+      }
+      const presenter = await transaction.eventPresenter.findFirst({
+        where: {
+          eventId: event.id,
+          OR: [
+            { userId: principal.userId },
+            { email: principal.email.toLowerCase() },
+          ],
+        },
+        select: { role: true },
+      });
+      const role = presenter?.role ?? null;
+      return {
+        applies: true,
+        canPublish:
+          role === EventPresenterRole.ORGANIZER ||
+          role === EventPresenterRole.HOST ||
+          role === EventPresenterRole.CO_HOST ||
+          role === EventPresenterRole.SPEAKER,
+        roomAdmin:
+          role === EventPresenterRole.ORGANIZER ||
+          role === EventPresenterRole.HOST ||
+          role === EventPresenterRole.CO_HOST,
+        presenterRole: role,
+      };
+    });
+  }
+
   async updateRegistrationStatus(
     principal: Principal,
     eventId: string,
@@ -436,6 +665,17 @@ export class EventsService {
       branding: event.branding,
       status: event.status,
       registrationCount: event._count.registrations,
+      presenters: event.presenters
+        .filter((presenter) => presenter.isPublic)
+        .map((presenter) => ({
+          id: presenter.id,
+          role: presenter.role,
+          name: presenter.name,
+          title: presenter.title,
+          bio: presenter.bio,
+          avatarUrl: presenter.avatarUrl,
+          position: presenter.position,
+        })),
     };
   }
 
