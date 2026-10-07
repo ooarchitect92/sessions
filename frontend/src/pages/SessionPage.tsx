@@ -27,6 +27,8 @@ export function SessionPage() {
   > | null>(null);
   const [agendaTitle, setAgendaTitle] = useState('');
   const [agendaContentUrl, setAgendaContentUrl] = useState('');
+  const [agendaUploadFile, setAgendaUploadFile] = useState<File | null>(null);
+  const [agendaUploadProgress, setAgendaUploadProgress] = useState('');
   const [agendaDuration, setAgendaDuration] = useState(10);
   const [stageMode, setStageMode] = useState<'media' | 'content'>('media');
   const [agendaType, setAgendaType] = useState<
@@ -117,23 +119,60 @@ export function SessionPage() {
   });
 
   const createAgendaItem = useMutation({
-    mutationFn: () =>
-      api.createAgendaItem(sessionId, {
+    mutationFn: async () => {
+      let content: Record<string, unknown> = agendaContentUrl.trim()
+        ? { url: agendaContentUrl.trim() }
+        : {};
+
+      if (agendaUploadFile) {
+        setAgendaUploadProgress('Preparing secure upload…');
+        const prepared = await api.createUpload({
+          filename: agendaUploadFile.name,
+          mimeType: agendaUploadFile.type || 'application/octet-stream',
+          sizeBytes: agendaUploadFile.size,
+          purpose: 'AGENDA_RESOURCE',
+          sessionId,
+        });
+
+        setAgendaUploadProgress('Uploading to quarantine…');
+        const response = await fetch(prepared.upload.url, {
+          method: prepared.upload.method,
+          body: agendaUploadFile,
+          headers: agendaUploadFile.type
+            ? { 'content-type': agendaUploadFile.type }
+            : undefined,
+        });
+        if (!response.ok) {
+          throw new Error(`Secure upload failed with status ${response.status}`);
+        }
+
+        setAgendaUploadProgress('Submitting file for malware scan…');
+        await api.completeUpload(prepared.asset.id);
+        content = {
+          uploadId: prepared.asset.id,
+          filename: agendaUploadFile.name,
+          mimeType: agendaUploadFile.type || 'application/octet-stream',
+        };
+      }
+
+      return api.createAgendaItem(sessionId, {
         title: agendaTitle,
         durationSeconds: agendaDuration * 60,
         type: agendaType,
-        content: agendaContentUrl.trim()
-          ? { url: agendaContentUrl.trim() }
-          : {},
-      }),
+        content,
+      });
+    },
     onSuccess: async () => {
       setAgendaTitle('');
       setAgendaContentUrl('');
+      setAgendaUploadFile(null);
+      setAgendaUploadProgress('');
       setAgendaDuration(10);
       setAgendaType('TEXT');
       setAgendaEditorOpen(false);
       await queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
     },
+    onError: () => setAgendaUploadProgress(''),
   });
 
   const submitAgendaItem = (event: FormEvent) => {
@@ -164,8 +203,10 @@ export function SessionPage() {
   const hasEmbedContent =
     Boolean(activeAgendaItem) &&
     ['WEBSITE', 'VIDEO', 'PRESENTATION'].includes(activeAgendaItem?.type ?? '') &&
-    typeof activeAgendaItem?.content.url === 'string' &&
-    activeAgendaItem.content.url.trim().length > 0;
+    ((typeof activeAgendaItem?.content.url === 'string' &&
+      activeAgendaItem.content.url.trim().length > 0) ||
+      (typeof activeAgendaItem?.content.uploadId === 'string' &&
+        activeAgendaItem.content.uploadId.trim().length > 0));
   const hasWhiteboard = activeAgendaItem?.type === 'WHITEBOARD';
   const hasSharedStage = hasEmbedContent || hasWhiteboard;
   const canStart = ['DRAFT', 'SCHEDULED'].includes(current.status);
@@ -385,13 +426,40 @@ export function SessionPage() {
                   HTTPS content URL
                   <input
                     type="url"
-                    required
+                    required={agendaType === 'WEBSITE' || !agendaUploadFile}
                     maxLength={2048}
                     value={agendaContentUrl}
                     onChange={(event) => setAgendaContentUrl(event.target.value)}
                     placeholder="https://..."
                   />
                 </label>
+              ) : null}
+              {['VIDEO', 'PRESENTATION'].includes(agendaType) ? (
+                <label>
+                  Or upload a file securely
+                  <input
+                    type="file"
+                    onChange={(event) => {
+                      const next = event.target.files?.[0] ?? null;
+                      setAgendaUploadFile(next);
+                      if (next) setAgendaContentUrl('');
+                    }}
+                    accept={
+                      agendaType === 'VIDEO'
+                        ? 'video/*,audio/*'
+                        : 'application/pdf,image/*,.ppt,.pptx,.doc,.docx,.xls,.xlsx'
+                    }
+                  />
+                  {agendaUploadFile ? (
+                    <small>
+                      {agendaUploadFile.name} ·{' '}
+                      {(agendaUploadFile.size / (1024 * 1024)).toFixed(1)} MB
+                    </small>
+                  ) : null}
+                </label>
+              ) : null}
+              {agendaUploadProgress ? (
+                <div className="agenda-upload-progress">{agendaUploadProgress}</div>
               ) : null}
               <div className="agenda-form-grid">
                 <label>
@@ -427,7 +495,14 @@ export function SessionPage() {
               ) : null}
               <button
                 className="button primary full-width"
-                disabled={createAgendaItem.isPending || !agendaTitle.trim()}
+                disabled={
+                  createAgendaItem.isPending ||
+                  !agendaTitle.trim() ||
+                  (agendaType === 'WEBSITE' && !agendaContentUrl.trim()) ||
+                  (['VIDEO', 'PRESENTATION'].includes(agendaType) &&
+                    !agendaContentUrl.trim() &&
+                    !agendaUploadFile)
+                }
               >
                 {createAgendaItem.isPending ? 'Adding…' : 'Add agenda item'}
               </button>
