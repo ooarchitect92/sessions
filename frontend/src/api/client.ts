@@ -148,6 +148,20 @@ export interface AgendaItem {
   updatedAt: string;
 }
 
+export interface AgendaDraftItem {
+  title: string;
+  durationSeconds: number;
+  type: AgendaItemType;
+  content: Record<string, unknown>;
+}
+
+export interface AgendaDraft {
+  sessionId: string;
+  provider: string;
+  model: string | null;
+  items: AgendaDraftItem[];
+}
+
 export interface SessionDetail extends Session {
   livekitRoomName: string;
   agendaItems: AgendaItem[];
@@ -222,6 +236,22 @@ export interface TranscriptRecord {
   }>;
 }
 
+export interface SummaryDecision {
+  text: string;
+}
+
+export interface SummaryActionItem {
+  text: string;
+  owner?: string | null;
+  dueDate?: string | null;
+}
+
+export interface SummaryCitation {
+  quote: string;
+  startMs?: number | null;
+  endMs?: number | null;
+}
+
 export interface MemorySummaryRecord {
   id: string;
   sessionId: string;
@@ -229,10 +259,11 @@ export interface MemorySummaryRecord {
   provider: string | null;
   model: string | null;
   summaryText: string | null;
-  decisions: unknown[];
-  actionItems: unknown[];
-  citations: unknown[];
+  decisions: SummaryDecision[];
+  actionItems: SummaryActionItem[];
+  citations: SummaryCitation[];
   failureCode: string | null;
+  version: number;
 }
 
 export interface MemoryListItem extends Session {
@@ -635,6 +666,24 @@ export const api = {
     });
   },
 
+  generateAgendaDraft(sessionId: string, prompt?: string): Promise<AgendaDraft> {
+    return request<AgendaDraft>(`/sessions/${sessionId}/agenda-items/generate-draft`, {
+      method: "POST",
+      body: JSON.stringify(prompt?.trim() ? { prompt: prompt.trim() } : {}),
+    });
+  },
+
+  applyAgendaDraft(
+    sessionId: string,
+    items: AgendaDraftItem[],
+    mode: "APPEND" | "REPLACE",
+  ): Promise<AgendaItem[]> {
+    return request<AgendaItem[]>(`/sessions/${sessionId}/agenda-items/apply-draft`, {
+      method: "POST",
+      body: JSON.stringify({ items, mode }),
+    });
+  },
+
   activateAgendaItem(sessionId: string, agendaItemId: string) {
     return request<{
       sessionId: string;
@@ -757,6 +806,23 @@ export const api = {
 
   getMemory(sessionId: string): Promise<MemoryDetail> {
     return request<MemoryDetail>(`/memory/${sessionId}`);
+  },
+
+  updateMemorySummary(
+    sessionId: string,
+    version: number,
+    input: {
+      summaryText?: string;
+      decisions?: SummaryDecision[];
+      actionItems?: SummaryActionItem[];
+      citations?: SummaryCitation[];
+    },
+  ): Promise<MemorySummaryRecord> {
+    return request<MemorySummaryRecord>(`/memory/${sessionId}/summary`, {
+      method: "PATCH",
+      headers: { "if-match": String(version) },
+      body: JSON.stringify(input),
+    });
   },
 
   retryMemory(
