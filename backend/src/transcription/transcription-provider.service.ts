@@ -71,9 +71,11 @@ export class TranscriptionProviderService {
     const model = this.config.get<string>('STT_OPENAI_MODEL', 'whisper-1');
 
     const form = new FormData();
+    const mediaBytes = new Uint8Array(request.media.byteLength);
+    mediaBytes.set(request.media);
     form.append(
       'file',
-      new Blob([request.media], { type: request.mimeType }),
+      new Blob([mediaBytes.buffer], { type: request.mimeType }),
       request.filename,
     );
     form.append('model', model);
