@@ -322,6 +322,44 @@ export interface ChatMessageRecord {
   reactions: ChatReactionRecord[];
 }
 
+export type WhiteboardOperationKind =
+  | 'STROKE_ADD'
+  | 'SHAPE_ADD'
+  | 'NOTE_ADD'
+  | 'TEXT_ADD'
+  | 'OBJECT_REMOVE'
+  | 'CLEAR';
+
+export interface WhiteboardObjectRecord {
+  id: string;
+  type: 'stroke' | 'shape' | 'note' | 'text';
+  [key: string]: unknown;
+}
+
+export interface WhiteboardOperationRecord {
+  id: string;
+  sessionId: string;
+  whiteboardId: string;
+  actorUserId: string;
+  clientOperationId: string;
+  sequence: number;
+  kind: WhiteboardOperationKind;
+  payload: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface WhiteboardState {
+  sessionId: string;
+  boardId: string | null;
+  version: number;
+  snapshotSequence: number;
+  snapshot: {
+    objects: Record<string, WhiteboardObjectRecord>;
+    recentOperationIds: string[];
+  };
+  operations: WhiteboardOperationRecord[];
+}
+
 export interface PollOptionRecord {
   id: string;
   position: number;
@@ -893,6 +931,29 @@ export const api = {
     return request(`/sessions/${sessionId}/chat-messages/${messageId}/reactions`, {
       method: "POST",
       body: JSON.stringify({ emoji }),
+    });
+  },
+
+  getWhiteboard(sessionId: string): Promise<WhiteboardState> {
+    return request<WhiteboardState>(`/sessions/${sessionId}/whiteboard`);
+  },
+
+  appendWhiteboardOperation(
+    sessionId: string,
+    input: {
+      clientOperationId: string;
+      kind: WhiteboardOperationKind;
+      payload: Record<string, unknown>;
+    },
+  ): Promise<{
+    operation: WhiteboardOperationRecord | null;
+    boardVersion: number;
+    compacted: boolean;
+    deduplicated: boolean;
+  }> {
+    return request(`/sessions/${sessionId}/whiteboard/operations`, {
+      method: 'POST',
+      body: JSON.stringify(input),
     });
   },
 
