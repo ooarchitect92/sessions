@@ -411,7 +411,7 @@ export class EventsService {
     eventId: string,
     registrationId: string,
     status: RegistrationStatus,
-  ): Promise<EventRegistration> {
+  ) {
     this.assertHost(principal);
     return this.database.run(principal, async (transaction) => {
       const registration = await transaction.eventRegistration.findFirst({
@@ -438,7 +438,7 @@ export class EventsService {
         aggregateType: "event_registration",
         aggregateId: registrationId,
         eventType: "event.registration.updated",
-        payload: this.toJson(updated),
+        payload: this.toJson(this.registrationProjection(updated)),
       });
       return this.registrationProjection(updated);
     });
@@ -746,7 +746,7 @@ export class EventsService {
       await this.notifications.queueEventRegistrationEmails(transaction, {
         event,
         registration,
-        joinUrl: joinUrl ?? undefined,
+        ...(joinUrl ? { joinUrl } : {}),
       });
       return {
         ...this.registrationProjection(registration),
