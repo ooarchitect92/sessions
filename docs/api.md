@@ -267,3 +267,12 @@ Public booking and event responses inherit this workspace branding. Event-level 
 Workspace owners/admins can customize booking and event lifecycle notifications through the existing versioned workspace settings endpoint using `settings.emailTemplates`. Supported template purposes are booking confirmation, reschedule, cancellation, 24-hour/1-hour booking reminders, event confirmation, event waitlist and 24-hour/1-hour event reminders.
 
 Each template contains a subject and plain-text body, with an optional global signature. Supported placeholders are `{{name}}`, `{{title}}`, `{{starts_at}}`, `{{ends_at}}`, `{{timezone}}`, `{{brand_name}}` and `{{status_message}}`. Unknown placeholders and unknown purposes are rejected server-side. Templates are resolved when the delivery row is created, so queued messages preserve the exact rendered content even if workspace settings change later.
+
+
+### Webinar presenter roles
+
+Events now maintain a tenant-scoped presenter team with the roles `ORGANIZER`, `HOST`, `CO_HOST`, and `SPEAKER`. Event creation automatically binds the creator as the non-removable organizer. Hosts can add, update, reorder, or remove other presenters through `/v1/events/{eventId}/presenters`.
+
+Presenter records contain a public profile (name, title, bio, avatar) plus a private email identity used to resolve authenticated workspace users when possible. Public event responses expose only the safe profile fields and role; presenter email addresses and user IDs are not exposed.
+
+For webinar media tokens, organizers/hosts/co-hosts receive moderation privileges, speakers may publish camera/microphone media, and ordinary webinar attendees remain subscribe/data-only. Workspace host privileges continue to work as an administrative override.
