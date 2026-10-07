@@ -1470,3 +1470,144 @@
     flex-direction: column;
   }
 }
+
+
+.event-analytics-manager-panel {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.event-analytics-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.event-analytics-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.event-analytics-heading h3 {
+  margin: 4px 0 0;
+  font-size: 17px;
+}
+
+.event-analytics-heading p {
+  max-width: 760px;
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.event-analytics-metrics,
+.event-engagement-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.event-analytics-metrics article,
+.event-engagement-grid article {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #faf9f6;
+}
+
+.event-analytics-metrics span,
+.event-engagement-grid span {
+  display: block;
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.event-analytics-metrics strong,
+.event-engagement-grid strong {
+  display: block;
+  margin-top: 5px;
+  color: var(--ink);
+  font-size: 17px;
+}
+
+.event-analytics-section {
+  display: grid;
+  gap: 10px;
+}
+
+.event-analytics-section-heading strong,
+.event-analytics-section-heading small {
+  display: block;
+}
+
+.event-analytics-section-heading strong {
+  font-size: 11px;
+}
+
+.event-analytics-section-heading small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.event-attendance-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.event-attendance-table {
+  width: 100%;
+  min-width: 840px;
+  border-collapse: collapse;
+  background: #fff;
+}
+
+.event-attendance-table th,
+.event-attendance-table td {
+  padding: 10px 11px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+  font-size: 9px;
+}
+
+.event-attendance-table th {
+  background: #f5f3ee;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.event-attendance-table td strong,
+.event-attendance-table td small {
+  display: block;
+}
+
+.event-attendance-table td small {
+  margin-top: 3px;
+  color: var(--muted);
+}
+
+@media (max-width: 840px) {
+  .event-analytics-heading {
+    flex-direction: column;
+  }
+
+  .event-analytics-metrics,
+  .event-engagement-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .event-analytics-metrics,
+  .event-engagement-grid {
+    grid-template-columns: 1fr;
+  }
+}
