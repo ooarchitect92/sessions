@@ -848,3 +848,141 @@
     flex-direction: column;
   }
 }
+
+
+.presenter-manager-panel {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.presenter-manager {
+  display: grid;
+  gap: 14px;
+}
+
+.presenter-manager-heading,
+.presenter-row,
+.presenter-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.presenter-manager-heading,
+.presenter-row {
+  justify-content: space-between;
+}
+
+.presenter-manager-heading > div {
+  min-width: 0;
+}
+
+.presenter-manager-heading strong,
+.presenter-manager-heading small,
+.presenter-row strong,
+.presenter-row span,
+.presenter-row small {
+  display: block;
+}
+
+.presenter-manager-heading strong {
+  font-size: 13px;
+}
+
+.presenter-manager-heading small {
+  margin-top: 4px;
+  max-width: 640px;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.presenter-manager-heading > span {
+  min-width: 28px;
+  min-height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #eef2ef;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.presenter-list {
+  display: grid;
+  gap: 8px;
+}
+
+.presenter-row {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #f8f7f3;
+}
+
+.presenter-row > div:first-child {
+  min-width: 0;
+}
+
+.presenter-row strong {
+  font-size: 11px;
+}
+
+.presenter-row span,
+.presenter-row small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.presenter-row-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.presenter-row-actions select {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 8px;
+  background: #fff;
+}
+
+.presenter-public-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 750;
+}
+
+.presenter-add-form {
+  display: grid;
+  gap: 10px;
+  padding: 13px;
+  border: 1px dashed #cfd5d1;
+  border-radius: 13px;
+  background: #fbfaf7;
+}
+
+.presenter-add-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 750;
+}
+
+@media (max-width: 700px) {
+  .presenter-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .presenter-row-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
