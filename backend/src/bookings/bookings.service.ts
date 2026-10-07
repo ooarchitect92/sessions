@@ -386,9 +386,8 @@ export class BookingsService {
       }
       if (
         reservation.session &&
-        ![SessionStatus.DRAFT, SessionStatus.SCHEDULED].includes(
-          reservation.session.status,
-        )
+        reservation.session.status !== SessionStatus.DRAFT &&
+        reservation.session.status !== SessionStatus.SCHEDULED
       ) {
         throw new ConflictException(
           'This meeting can no longer be rescheduled',
@@ -498,9 +497,8 @@ export class BookingsService {
       }
       if (
         reservation.session &&
-        ![SessionStatus.DRAFT, SessionStatus.SCHEDULED].includes(
-          reservation.session.status,
-        )
+        reservation.session.status !== SessionStatus.DRAFT &&
+        reservation.session.status !== SessionStatus.SCHEDULED
       ) {
         throw new ConflictException('This meeting can no longer be cancelled');
       }
