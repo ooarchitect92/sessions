@@ -455,7 +455,9 @@ export interface TranscriptRecord {
   sessionId: string;
   status: ArtifactStatus;
   language: string | null;
+  provider?: string | null;
   fullText?: string | null;
+  version: number;
   completedAt: string | null;
   segments?: Array<{
     id: string;
@@ -463,6 +465,38 @@ export interface TranscriptRecord {
     startMs: number;
     endMs: number;
     speakerLabel: string | null;
+    text: string;
+  }>;
+}
+
+export interface TranscriptRevisionRecord {
+  id: string;
+  transcriptId: string;
+  revisionNumber: number;
+  language: string | null;
+  fullText: string | null;
+  segments: Array<{
+    startMs: number;
+    endMs: number;
+    speakerLabel: string | null;
+    text: string;
+  }>;
+  reason: string | null;
+  createdAt: string;
+  editor: {
+    id: string;
+    displayName: string;
+    email: string;
+  };
+}
+
+export interface TranscriptCorrectionInput {
+  language?: string;
+  reason?: string;
+  segments?: Array<{
+    startMs: number;
+    endMs: number;
+    speakerLabel?: string | null;
     text: string;
   }>;
 }
@@ -1336,6 +1370,38 @@ export const api = {
 
   getMemory(sessionId: string): Promise<MemoryDetail> {
     return request<MemoryDetail>(`/memory/${sessionId}`);
+  },
+
+  listTranscriptRevisions(sessionId: string): Promise<TranscriptRevisionRecord[]> {
+    return request<TranscriptRevisionRecord[]>(
+      `/memory/${sessionId}/transcript/revisions`,
+    );
+  },
+
+  updateTranscript(
+    sessionId: string,
+    version: number,
+    input: TranscriptCorrectionInput,
+  ): Promise<TranscriptRecord> {
+    return request<TranscriptRecord>(`/memory/${sessionId}/transcript`, {
+      method: 'PATCH',
+      headers: { 'if-match': String(version) },
+      body: JSON.stringify(input),
+    });
+  },
+
+  restoreTranscriptRevision(
+    sessionId: string,
+    revisionId: string,
+    version: number,
+  ): Promise<TranscriptRecord> {
+    return request<TranscriptRecord>(
+      `/memory/${sessionId}/transcript/revisions/${revisionId}/restore`,
+      {
+        method: 'POST',
+        headers: { 'if-match': String(version) },
+      },
+    );
   },
 
   updateMemorySummary(
