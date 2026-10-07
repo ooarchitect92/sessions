@@ -1,6 +1,11 @@
 import { ConflictException, ForbiddenException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { BreakoutRoomStatus, SessionKind, SessionStatus } from '@prisma/client';
+import {
+  BreakoutRoomStatus,
+  EventPresenterRole,
+  SessionKind,
+  SessionStatus,
+} from '@prisma/client';
 import { AccessToken } from 'livekit-server-sdk';
 import {
   HOST_ROLES,
@@ -43,11 +48,22 @@ export class MediaService {
 
     await this.recordings.assertConsentAndPrepare(principal, session);
 
+    const webinarRole =
+      session.kind === SessionKind.WEBINAR
+        ? await this.resolveWebinarRole(principal, sessionId)
+        : null;
+    const webinarCanModerate =
+      webinarRole === EventPresenterRole.ORGANIZER ||
+      webinarRole === EventPresenterRole.HOST ||
+      webinarRole === EventPresenterRole.CO_HOST;
+    const webinarCanPublish = webinarCanModerate || webinarRole === EventPresenterRole.SPEAKER;
     const canPublish =
-      isHost ||
-      (session.kind === SessionKind.MEETING &&
-        !principal.roles.includes('ANALYST') &&
-        !principal.roles.includes('GUEST'));
+      session.kind === SessionKind.WEBINAR
+        ? webinarCanPublish || isHost
+        : isHost ||
+          (!principal.roles.includes('ANALYST') &&
+            !principal.roles.includes('GUEST'));
+    const roomAdmin = isHost || webinarCanModerate;
     const expiresIn = this.config.getOrThrow<number>('LIVEKIT_TOKEN_TTL_SECONDS');
 
     const accessToken = new AccessToken(
@@ -62,13 +78,14 @@ export class MediaService {
           workspaceId: principal.workspaceId,
           sessionId,
           roles: principal.roles,
+          ...(webinarRole ? { webinarRole } : {}),
         }),
       },
     );
     accessToken.addGrant({
       room: session.livekitRoomName,
       roomJoin: true,
-      roomAdmin: isHost,
+      roomAdmin,
       canPublish,
       canSubscribe: true,
       canPublishData: true,
@@ -117,11 +134,22 @@ export class MediaService {
 
     await this.recordings.assertConsentAndPrepare(principal, session);
 
+    const webinarRole =
+      session.kind === SessionKind.WEBINAR
+        ? await this.resolveWebinarRole(principal, sessionId)
+        : null;
+    const webinarCanModerate =
+      webinarRole === EventPresenterRole.ORGANIZER ||
+      webinarRole === EventPresenterRole.HOST ||
+      webinarRole === EventPresenterRole.CO_HOST;
+    const webinarCanPublish = webinarCanModerate || webinarRole === EventPresenterRole.SPEAKER;
     const canPublish =
-      isHost ||
-      (session.kind === SessionKind.MEETING &&
-        !principal.roles.includes('ANALYST') &&
-        !principal.roles.includes('GUEST'));
+      session.kind === SessionKind.WEBINAR
+        ? webinarCanPublish || isHost
+        : isHost ||
+          (!principal.roles.includes('ANALYST') &&
+            !principal.roles.includes('GUEST'));
+    const roomAdmin = isHost || webinarCanModerate;
     const expiresIn = this.config.getOrThrow<number>('LIVEKIT_TOKEN_TTL_SECONDS');
     const accessToken = new AccessToken(
       this.config.getOrThrow<string>('LIVEKIT_API_KEY'),
@@ -136,13 +164,14 @@ export class MediaService {
           sessionId,
           breakoutRoomId,
           roles: principal.roles,
+          ...(webinarRole ? { webinarRole } : {}),
         }),
       },
     );
     accessToken.addGrant({
       room: breakout.livekitRoomName,
       roomJoin: true,
-      roomAdmin: isHost,
+      roomAdmin,
       canPublish,
       canSubscribe: true,
       canPublishData: true,
@@ -154,5 +183,29 @@ export class MediaService {
       expiresIn,
       expiresAt: new Date(Date.now() + expiresIn * 1000).toISOString(),
     };
+  }
+
+  private async resolveWebinarRole(
+    principal: Principal,
+    sessionId: string,
+  ): Promise<EventPresenterRole | null> {
+    return this.database.run(principal, async (transaction) => {
+      const event = await transaction.event.findUnique({
+        where: { sessionId },
+        select: { id: true },
+      });
+      if (!event) return null;
+      const presenter = await transaction.eventPresenter.findFirst({
+        where: {
+          eventId: event.id,
+          OR: [
+            { userId: principal.userId },
+            { email: principal.email.toLowerCase() },
+          ],
+        },
+        select: { role: true },
+      });
+      return presenter?.role ?? null;
+    });
   }
 }
