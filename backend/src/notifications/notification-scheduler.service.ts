@@ -297,9 +297,10 @@ export class NotificationSchedulerService {
     input: {
       event: Event;
       registration: EventRegistration;
+      joinUrl?: string;
     },
   ): Promise<void> {
-    const { event, registration } = input;
+    const { event, registration, joinUrl } = input;
     if (!event.sessionId) return;
     const templateContext = await this.templateContext(
       transaction,
@@ -332,6 +333,7 @@ export class NotificationSchedulerService {
           event,
           registration,
           'You are currently on the waitlist. We will keep your registration on record.',
+          '',
         ),
       );
       await transaction.emailDelivery.create({
@@ -357,6 +359,7 @@ export class NotificationSchedulerService {
           event,
           registration,
           'Your event registration is confirmed.',
+          joinUrl,
         ),
       },
       this.eventVariables(
@@ -364,6 +367,7 @@ export class NotificationSchedulerService {
         event,
         registration,
         'Your event registration is confirmed.',
+        joinUrl ?? '',
       ),
     );
     await transaction.emailDelivery.create({
@@ -385,6 +389,7 @@ export class NotificationSchedulerService {
               event,
               registration,
               'Reminder: the event starts in about 24 hours.',
+              joinUrl,
             ),
           },
           this.eventVariables(
@@ -392,6 +397,7 @@ export class NotificationSchedulerService {
             event,
             registration,
             'Reminder: the event starts in about 24 hours.',
+            joinUrl ?? '',
           ),
         );
     await this.queueReminder(
@@ -411,6 +417,7 @@ export class NotificationSchedulerService {
               event,
               registration,
               'Reminder: the event starts in about 1 hour.',
+              joinUrl,
             ),
           },
           this.eventVariables(
@@ -418,6 +425,7 @@ export class NotificationSchedulerService {
             event,
             registration,
             'Reminder: the event starts in about 1 hour.',
+            joinUrl ?? '',
           ),
         );
     await this.queueReminder(
@@ -479,6 +487,7 @@ export class NotificationSchedulerService {
     event: Event,
     registration: EventRegistration,
     statusMessage: string,
+    joinUrl: string,
   ): Record<string, string> {
     const endsAt = new Date(event.startsAt.getTime() + event.durationMinutes * 60_000);
     return {
@@ -489,6 +498,7 @@ export class NotificationSchedulerService {
       timezone: event.timezone,
       brand_name: brandName,
       status_message: statusMessage,
+      join_url: joinUrl,
     };
   }
 
@@ -543,6 +553,7 @@ export class NotificationSchedulerService {
     event: Event,
     registration: EventRegistration,
     intro: string,
+    joinUrl?: string,
   ): string {
     const endsAt = new Date(event.startsAt.getTime() + event.durationMinutes * 60_000);
     return [
@@ -554,6 +565,7 @@ export class NotificationSchedulerService {
       `Starts: ${this.formatInZone(event.startsAt, event.timezone)}`,
       `Ends: ${this.formatInZone(endsAt, event.timezone)}`,
       `Timezone: ${event.timezone}`,
+      ...(joinUrl ? ['', 'Join webinar:', joinUrl] : []),
     ].join('\n');
   }
 
