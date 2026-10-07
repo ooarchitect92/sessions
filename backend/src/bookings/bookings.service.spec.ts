@@ -18,6 +18,22 @@ interface AvailabilityHarness {
   ): Slot[];
   validateDateRange(dateFrom: string, dateTo: string): unknown;
   assertAvailabilityRules(rules: AvailabilityRuleDto[]): void;
+  hashManagementToken(token: string): string;
+  assertManagementToken(expectedHash: string, token: string): void;
+  buildIcs(
+    page: BookingPage,
+    reservation: {
+      id: string;
+      name: string;
+      email: string;
+      startsAt: Date;
+      endsAt: Date;
+      status: 'CONFIRMED';
+      version: number;
+      updatedAt: Date;
+      session: { id: string; title: string } | null;
+    },
+  ): string;
 }
 
 function createService(): AvailabilityHarness {
@@ -107,5 +123,48 @@ describe('booking availability', () => {
     expect(() => service.validateDateRange('2030-01-01', '2030-02-02')).toThrow(
       BadRequestException,
     );
+  });
+});
+
+
+describe('booking lifecycle security and calendar export', () => {
+  it('validates management tokens using a one-way hash', () => {
+    const service = createService();
+    const hash = service.hashManagementToken('a'.repeat(64));
+
+    expect(hash).toHaveLength(64);
+    expect(() =>
+      service.assertManagementToken(hash, 'a'.repeat(64)),
+    ).not.toThrow();
+    expect(() =>
+      service.assertManagementToken(hash, 'b'.repeat(64)),
+    ).toThrow();
+  });
+
+  it('produces an RFC5545 calendar event with stable UID and UTC dates', () => {
+    const service = createService();
+    const ics = service.buildIcs(page({ description: 'Discovery call agenda' }), {
+      id: '20000000-0000-4000-8000-000000000001',
+      name: 'Ada Lovelace',
+      email: 'ada@example.com',
+      startsAt: new Date('2030-01-07T09:00:00.000Z'),
+      endsAt: new Date('2030-01-07T09:30:00.000Z'),
+      status: 'CONFIRMED',
+      version: 2,
+      updatedAt: new Date('2030-01-01T10:00:00.000Z'),
+      session: {
+        id: '30000000-0000-4000-8000-000000000001',
+        title: 'Discovery call · Ada Lovelace',
+      },
+    });
+
+    expect(ics).toContain('BEGIN:VCALENDAR\r\n');
+    expect(ics).toContain(
+      'UID:20000000-0000-4000-8000-000000000001@sessions',
+    );
+    expect(ics).toContain('DTSTART:20300107T090000Z');
+    expect(ics).toContain('DTEND:20300107T093000Z');
+    expect(ics).toContain('SEQUENCE:1');
+    expect(ics).toContain('STATUS:CONFIRMED');
   });
 });

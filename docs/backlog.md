@@ -38,7 +38,8 @@
 - [x] IANA timezone availability engine
 - [x] lead time, buffers, overlap filtering and advisory-lock conflict control
 - [x] booking-page CRUD, public slot selection and atomic reservation/session creation
-- [ ] booking reschedule, cancellation, ICS and reminder delivery
+- [x] booking self-service reschedule, cancellation and ICS calendar invites
+- [ ] booking reminder delivery and reconciliation
 - [ ] Google and Microsoft calendar OAuth and busy-time synchronization
 - [x] webinar/event draft, publish and cancellation lifecycle
 - [x] public event page, registration, capacity and waitlist handling
