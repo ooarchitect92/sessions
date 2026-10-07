@@ -34,6 +34,12 @@ export const AgendaItemTypeSchema = z.enum([
 ]);
 
 export const EventStatusSchema = z.enum(['DRAFT', 'PUBLISHED', 'LIVE', 'ENDED', 'CANCELLED']);
+export const EventPresenterRoleSchema = z.enum([
+  'ORGANIZER',
+  'HOST',
+  'CO_HOST',
+  'SPEAKER',
+]);
 export const RegistrationStatusSchema = z.enum([
   'REGISTERED',
   'WAITLISTED',
@@ -151,6 +157,33 @@ export const PublicFormFieldSchema = z.object({
   required: z.boolean().default(false),
   placeholder: z.string().trim().max(240).optional(),
   options: z.array(z.string().trim().min(1).max(160)).max(50).default([]),
+});
+
+export const EventPresenterSchema = z.object({
+  id: z.uuid(),
+  organizationId: z.uuid(),
+  workspaceId: z.uuid(),
+  eventId: z.uuid(),
+  userId: z.uuid().nullable(),
+  role: EventPresenterRoleSchema,
+  name: z.string(),
+  email: z.email(),
+  title: z.string().nullable(),
+  bio: z.string().nullable(),
+  avatarUrl: z.string().nullable(),
+  position: z.number().int().nonnegative(),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+});
+
+export const CreateEventPresenterSchema = z.object({
+  role: EventPresenterRoleSchema.exclude(['ORGANIZER']),
+  name: z.string().trim().min(1).max(160),
+  email: z.email(),
+  title: z.string().trim().max(160).optional(),
+  bio: z.string().trim().max(4000).optional(),
+  avatarUrl: z.url().startsWith('https://').optional(),
+  position: z.number().int().min(0).max(1000).optional(),
 });
 
 export const CreateEventSchema = z.object({
@@ -280,6 +313,9 @@ export type UpdateSessionInput = z.infer<typeof UpdateSessionSchema>;
 export type CreateAgendaItemInput = z.infer<typeof CreateAgendaItemSchema>;
 export type Session = z.infer<typeof SessionSchema>;
 export type EventStatus = z.infer<typeof EventStatusSchema>;
+export type EventPresenterRole = z.infer<typeof EventPresenterRoleSchema>;
+export type EventPresenter = z.infer<typeof EventPresenterSchema>;
+export type CreateEventPresenterInput = z.infer<typeof CreateEventPresenterSchema>;
 export type PublicFormFieldType = z.infer<typeof PublicFormFieldTypeSchema>;
 export type PublicFormField = z.infer<typeof PublicFormFieldSchema>;
 export type CreateEventInput = z.infer<typeof CreateEventSchema>;
