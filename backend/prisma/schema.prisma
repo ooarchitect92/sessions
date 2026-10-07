@@ -152,6 +152,7 @@ enum NotificationStatus {
   SENDING
   DELIVERED
   FAILED
+  DEAD_LETTER
   CANCELLED
 }
 
