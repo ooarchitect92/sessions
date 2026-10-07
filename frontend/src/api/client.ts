@@ -361,6 +361,54 @@ export interface EventNotificationDeliveryRecord {
   };
 }
 
+export interface AttendanceParticipantRecord {
+  userId: string;
+  displayName: string;
+  email: string;
+  avatarUrl: string | null;
+  eventRegistrationId: string | null;
+  firstJoinedAt: string;
+  lastLeftAt: string | null;
+  active: boolean;
+  connectionCount: number;
+  attendanceSeconds: number;
+}
+
+export interface AttendanceAnalytics {
+  uniqueAttendees: number;
+  activeAttendees: number;
+  totalAttendanceSeconds: number;
+  averageAttendanceSeconds: number;
+  participants: AttendanceParticipantRecord[];
+}
+
+export interface EventAnalyticsRecord {
+  event: {
+    id: string;
+    title: string;
+    startsAt: string;
+    sessionId: string | null;
+  };
+  registrations: {
+    total: number;
+    byStatus: Record<string, number>;
+  };
+  attendance: AttendanceAnalytics;
+  engagement: Record<string, number>;
+}
+
+export interface SessionAnalyticsRecord {
+  session: {
+    id: string;
+    title: string;
+    startsAt: string;
+    durationMinutes: number;
+    status: string;
+  };
+  attendance: AttendanceAnalytics;
+  engagement: Record<string, number>;
+}
+
 export interface BookingPageRecord extends BookingPage {
   _count?: { reservations: number };
 }
@@ -1189,6 +1237,14 @@ export const api = {
       `/notifications/events/deliveries/${deliveryId}/retry`,
       { method: 'POST' },
     );
+  },
+
+  getEventAnalytics(eventId: string): Promise<EventAnalyticsRecord> {
+    return request<EventAnalyticsRecord>(`/analytics/events/${eventId}`);
+  },
+
+  getSessionAnalytics(sessionId: string): Promise<SessionAnalyticsRecord> {
+    return request<SessionAnalyticsRecord>(`/analytics/sessions/${sessionId}`);
   },
 
   updateEvent(
