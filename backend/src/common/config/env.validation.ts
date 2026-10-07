@@ -78,6 +78,12 @@ const environmentSchema = z
       .url()
       .default('https://api.openai.com/v1/chat/completions'),
     AI_OPENAI_MODEL: z.string().min(1).max(160).default('gpt-4o-mini'),
+    EMAIL_PROVIDER: z.enum(['disabled', 'mock', 'http']).default('mock'),
+    EMAIL_HTTP_ENDPOINT: z.string().url().optional(),
+    EMAIL_HTTP_API_KEY: z.string().min(1).optional(),
+    EMAIL_FROM: z.string().email().default('no-reply@sessions.local'),
+    NOTIFICATION_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(5),
+    NOTIFICATION_RETRY_BASE_SECONDS: z.coerce.number().int().min(10).max(3600).default(60),
     OUTBOX_POLL_MS: z.coerce.number().int().min(250).max(60000).default(1000),
   })
   .superRefine((value, context) => {
@@ -96,6 +102,20 @@ const environmentSchema = z
         'AI_OPENAI_API_KEY',
         'AI_OPENAI_API_KEY is required when AI_PROVIDER=openai',
       );
+    }
+    if (value.EMAIL_PROVIDER === 'http') {
+      if (!value.EMAIL_HTTP_ENDPOINT) {
+        issue(
+          'EMAIL_HTTP_ENDPOINT',
+          'EMAIL_HTTP_ENDPOINT is required when EMAIL_PROVIDER=http',
+        );
+      }
+      if (!value.EMAIL_HTTP_API_KEY) {
+        issue(
+          'EMAIL_HTTP_API_KEY',
+          'EMAIL_HTTP_API_KEY is required when EMAIL_PROVIDER=http',
+        );
+      }
     }
 
     if (value.NODE_ENV !== 'production') return;
@@ -156,6 +176,12 @@ const environmentSchema = z
     }
     if (value.AI_PROVIDER === 'mock') {
       issue('AI_PROVIDER', 'AI_PROVIDER=mock is forbidden in production');
+    }
+    if (value.EMAIL_PROVIDER !== 'http') {
+      issue(
+        'EMAIL_PROVIDER',
+        'EMAIL_PROVIDER=http is required in production',
+      );
     }
     if (!value.PUBLIC_API_URL.startsWith('https://')) {
       issue('PUBLIC_API_URL', 'PUBLIC_API_URL must use HTTPS in production');
