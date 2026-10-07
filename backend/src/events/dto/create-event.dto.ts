@@ -3,7 +3,6 @@ import {
   IsArray,
   IsInt,
   IsISO8601,
-  IsObject,
   ValidateNested,
   IsOptional,
   IsString,
@@ -13,6 +12,7 @@ import {
   Min,
 } from 'class-validator';
 import { DynamicFormFieldDto } from '../../common/forms/dynamic-form';
+import { EventBrandingDto } from './event-branding.dto';
 
 export class CreateEventDto {
   @IsString()
@@ -52,6 +52,7 @@ export class CreateEventDto {
   @Type(() => DynamicFormFieldDto)
   registrationFields: DynamicFormFieldDto[] = [];
 
-  @IsObject()
-  branding: Record<string, unknown> = {};
+  @ValidateNested()
+  @Type(() => EventBrandingDto)
+  branding: EventBrandingDto = {};
 }

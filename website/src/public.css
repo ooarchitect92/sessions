@@ -612,3 +612,71 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+.public-event-themed {
+  --event-primary: #183f38;
+  --event-accent: #dcefe8;
+}
+
+.public-event-themed .public-kicker {
+  color: var(--event-primary);
+}
+
+.public-event-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(220px, 0.8fr);
+  gap: 26px;
+  align-items: center;
+  margin-bottom: 28px;
+  padding: 28px;
+  border-radius: 20px;
+  background: var(--event-accent);
+}
+
+.public-event-hero h1 {
+  color: var(--event-primary);
+}
+
+.public-event-hero-image {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 16px;
+  object-fit: cover;
+}
+
+.public-about-section {
+  margin: 30px 0;
+  padding: 22px 0;
+  border-top: 1px solid #ddd9cf;
+  border-bottom: 1px solid #ddd9cf;
+}
+
+.public-about-section h2 {
+  margin: 7px 0 0;
+  color: #17352f;
+  font-size: clamp(22px, 4vw, 34px);
+}
+
+.public-about-section p {
+  margin: 10px 0 0;
+  max-width: 760px;
+  color: #64706c;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+.public-event-themed .public-action-card button {
+  background: var(--event-primary);
+}
+
+.public-event-themed .public-presenter-avatar {
+  background: var(--event-primary);
+}
+
+@media (max-width: 760px) {
+  .public-event-hero {
+    grid-template-columns: 1fr;
+    padding: 20px;
+  }
+}

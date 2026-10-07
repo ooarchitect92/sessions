@@ -112,7 +112,7 @@ export class EventsService {
           timezone: input.timezone,
           capacity: input.capacity ?? null,
           registrationFields: input.registrationFields as unknown as Prisma.InputJsonValue,
-          branding: input.branding as Prisma.InputJsonValue,
+          branding: input.branding as unknown as Prisma.InputJsonValue,
         },
       });
       await transaction.eventPresenter.create({
@@ -234,7 +234,7 @@ export class EventsService {
               }
             : {}),
           ...(input.branding !== undefined
-            ? { branding: input.branding as Prisma.InputJsonValue }
+            ? { branding: input.branding as unknown as Prisma.InputJsonValue }
             : {}),
         },
       });
