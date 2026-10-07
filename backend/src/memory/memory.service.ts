@@ -193,13 +193,13 @@ export class MemoryService {
             ? { summaryText: input.summaryText.trim() }
             : {}),
           ...(input.decisions !== undefined
-            ? { decisions: input.decisions as Prisma.InputJsonValue }
+            ? { decisions: this.toJson(input.decisions) }
             : {}),
           ...(input.actionItems !== undefined
-            ? { actionItems: input.actionItems as Prisma.InputJsonValue }
+            ? { actionItems: this.toJson(input.actionItems) }
             : {}),
           ...(input.citations !== undefined
-            ? { citations: input.citations as Prisma.InputJsonValue }
+            ? { citations: this.toJson(input.citations) }
             : {}),
           version: { increment: 1 },
         },
@@ -438,6 +438,10 @@ export class MemoryService {
         payload: { memorySummaryId: summary.id, sessionId: session.id },
       });
     }
+  }
+
+  private toJson(value: unknown): Prisma.InputJsonValue {
+    return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
   }
 
   private assertHost(principal: Principal): void {
