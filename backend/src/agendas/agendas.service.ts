@@ -124,7 +124,7 @@ export class AgendasService {
       title: session.title,
       description: session.description,
       durationMinutes: session.durationMinutes,
-      prompt: input.prompt,
+      ...(input.prompt !== undefined ? { prompt: input.prompt } : {}),
     });
 
     await this.database.run(principal, async (transaction) => {
