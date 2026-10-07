@@ -105,7 +105,7 @@ export const EventBrandingSchema = z.object({
   ctaLabel: z.string().trim().min(1).max(80).optional(),
   showPresenters: z.boolean().optional(),
   showEventFacts: z.boolean().optional(),
-  sectionOrder: z.array(EventLandingSectionSchema).max(3).optional(),
+  sectionOrder: z.array(EventLandingSectionSchema).max(3).refine((items) => new Set(items).size === items.length, { message: 'Landing-page sections must be unique' }).optional(),
 });
 
 const SlugSchema = z
