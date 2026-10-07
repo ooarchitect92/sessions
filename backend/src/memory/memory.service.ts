@@ -302,6 +302,7 @@ export class MemoryService {
             status: ArtifactStatus.PENDING,
             failureCode: null,
             completedAt: null,
+            sourceTranscriptVersion: null,
             version: { increment: 1 },
           },
         });
@@ -485,6 +486,7 @@ export class MemoryService {
             status: ArtifactStatus.PENDING,
             failureCode: null,
             completedAt: null,
+            sourceTranscriptVersion: null,
             version: { increment: 1 },
           },
         });
