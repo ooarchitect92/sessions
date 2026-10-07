@@ -101,9 +101,14 @@ function registration(
 function transactionHarness() {
   const create = vi.fn(async (input: unknown) => input);
   const deleteMany = vi.fn(async () => ({ count: 2 }));
+  const findWorkspace = vi.fn(async () => ({
+    name: 'Sales',
+    settings: {},
+  }));
   return {
     transaction: {
       emailDelivery: { create, deleteMany },
+      workspace: { findUnique: findWorkspace },
     } as never,
     create,
     deleteMany,
