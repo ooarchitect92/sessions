@@ -5,7 +5,6 @@ import {
   IsArray,
   IsBoolean,
   IsInt,
-  IsObject,
   IsOptional,
   IsString,
   Length,
@@ -14,6 +13,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
+import { DynamicFormFieldDto } from '../../common/forms/dynamic-form';
 import { AvailabilityRuleDto } from './create-booking-page.dto';
 
 export class UpdateBookingPageDto {
@@ -73,8 +73,9 @@ export class UpdateBookingPageDto {
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(50)
-  @IsObject({ each: true })
-  intakeFields?: Record<string, unknown>[];
+  @ValidateNested({ each: true })
+  @Type(() => DynamicFormFieldDto)
+  intakeFields?: DynamicFormFieldDto[];
 
   @IsOptional()
   @IsBoolean()
