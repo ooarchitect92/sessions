@@ -1,5 +1,6 @@
 import {
   ArrayMaxSize,
+  ArrayUnique,
   IsArray,
   IsBoolean,
   IsHexColor,
@@ -72,6 +73,7 @@ export class EventBrandingDto {
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(3)
+  @ArrayUnique()
   @IsIn(EVENT_LANDING_SECTIONS, { each: true })
   sectionOrder?: EventLandingSection[];
 }
