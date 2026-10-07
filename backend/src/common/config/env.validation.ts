@@ -64,6 +64,13 @@ const environmentSchema = z
       .min(1024)
       .max(500 * 1024 * 1024)
       .default(25 * 1024 * 1024),
+    AI_PROVIDER: z.enum(['disabled', 'mock', 'openai']).default('disabled'),
+    AI_OPENAI_API_KEY: z.string().min(1).optional(),
+    AI_OPENAI_ENDPOINT: z
+      .string()
+      .url()
+      .default('https://api.openai.com/v1/chat/completions'),
+    AI_OPENAI_MODEL: z.string().min(1).max(160).default('gpt-4o-mini'),
     OUTBOX_POLL_MS: z.coerce.number().int().min(250).max(60000).default(1000),
   })
   .superRefine((value, context) => {
@@ -75,6 +82,12 @@ const environmentSchema = z
       issue(
         'STT_OPENAI_API_KEY',
         'STT_OPENAI_API_KEY is required when STT_PROVIDER=openai',
+      );
+    }
+    if (value.AI_PROVIDER === 'openai' && !value.AI_OPENAI_API_KEY) {
+      issue(
+        'AI_OPENAI_API_KEY',
+        'AI_OPENAI_API_KEY is required when AI_PROVIDER=openai',
       );
     }
 
@@ -127,6 +140,9 @@ const environmentSchema = z
     }
     if (value.STT_PROVIDER === 'mock') {
       issue('STT_PROVIDER', 'STT_PROVIDER=mock is forbidden in production');
+    }
+    if (value.AI_PROVIDER === 'mock') {
+      issue('AI_PROVIDER', 'AI_PROVIDER=mock is forbidden in production');
     }
     if (!value.PUBLIC_API_URL.startsWith('https://')) {
       issue('PUBLIC_API_URL', 'PUBLIC_API_URL must use HTTPS in production');
