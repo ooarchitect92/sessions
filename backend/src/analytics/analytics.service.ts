@@ -14,6 +14,7 @@ import {
   type Principal,
 } from '../common/auth/principal';
 import { TenantDatabaseService } from '../database/tenant-database.service';
+import { mergeAttendanceRanges } from './attendance-math';
 
 type IntervalLike = {
   userId: string;
@@ -304,28 +305,12 @@ export class AnalyticsService {
     }
 
     const participants = [...grouped.entries()].map(([userId, rows]) => {
-      const ranges = rows
-        .map((row) => ({
+      const durationMs = mergeAttendanceRanges(
+        rows.map((row) => ({
           start: row.joinedAt.getTime(),
           end: (row.leftAt ?? now).getTime(),
-        }))
-        .sort((left, right) => left.start - right.start);
-
-      let durationMs = 0;
-      let currentStart = ranges[0]?.start ?? 0;
-      let currentEnd = ranges[0]?.end ?? 0;
-      for (const range of ranges.slice(1)) {
-        if (range.start <= currentEnd) {
-          currentEnd = Math.max(currentEnd, range.end);
-        } else {
-          durationMs += Math.max(0, currentEnd - currentStart);
-          currentStart = range.start;
-          currentEnd = range.end;
-        }
-      }
-      if (ranges.length) {
-        durationMs += Math.max(0, currentEnd - currentStart);
-      }
+        })),
+      );
 
       const first = rows[0];
       return {
