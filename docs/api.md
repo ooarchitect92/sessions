@@ -86,7 +86,7 @@ Access tokens are short-lived JWTs. Managed browser sessions use opaque, hashed 
 | `POST`  | `/v1/sessions/{id}/agenda-items/apply-draft`       | explicitly append or replace with a reviewed AI draft   |
 | `PUT`   | `/v1/sessions/{id}/agenda-items/order`             | atomically reorder all items                            |
 | `POST`  | `/v1/sessions/{id}/agenda-items/{itemId}/activate` | make item current and emit event                        |
-| `POST`  | `/v1/sessions/{id}/media-token`                    | short-lived LiveKit room token                          |
+| `POST`  | `/v1/sessions/{id}/media-token`                    | short-lived main or assignment-authorized breakout LiveKit token |
 | `POST`  | `/v1/content/resolve-embed`                         | validate HTTPS content and return a sandboxed embed contract |
 
 ### Events and registrations
@@ -126,6 +126,13 @@ Access tokens are short-lived JWTs. Managed browser sessions use opaque, hashed 
 | `POST`  | `/v1/sessions/{id}/chat-messages/{messageId}/reactions` | toggle an allowed emoji reaction              |
 | `GET`   | `/v1/sessions/{id}/whiteboard`                           | load compacted snapshot plus recent operations |
 | `POST`  | `/v1/sessions/{id}/whiteboard/operations`                | append an idempotent whiteboard operation       |
+| `GET`   | `/v1/sessions/{id}/breakouts`                             | breakout rooms, current assignment and announcements |
+| `POST`  | `/v1/sessions/{id}/breakouts/rooms`                       | host creates a breakout room                    |
+| `POST`  | `/v1/sessions/{id}/breakouts/assign`                      | host assigns one workspace member               |
+| `POST`  | `/v1/sessions/{id}/breakouts/randomize`                   | deterministically distribute selected members   |
+| `POST`  | `/v1/sessions/{id}/breakouts/open`                        | open rooms during a live session                |
+| `POST`  | `/v1/sessions/{id}/breakouts/close`                       | close open rooms and return participants         |
+| `POST`  | `/v1/sessions/{id}/breakouts/broadcast`                   | persist and broadcast a host announcement        |
 | `GET`   | `/v1/sessions/{id}/polls`                       | list polls, options and response counts             |
 | `POST`  | `/v1/sessions/{id}/polls`                       | create poll                                         |
 | `POST`  | `/v1/sessions/{id}/polls/{pollId}/launch`       | launch the only active poll                         |
@@ -157,6 +164,8 @@ Authenticated clients join `session:{sessionId}` through the `/realtime` Socket.
 - `chat.message.created`
 - `poll.created`, `poll.launched`, `poll.closed`, `poll.results.updated`
 - `question.created`, `question.updated`, `question.votes.updated`
+- `whiteboard.operation.appended`
+- `breakouts.updated`, `breakouts.announcement`
 - `memory.updated`
 
 The current single-replica event bridge is in-process. A Redis/NATS adapter is a mandatory gate before horizontally scaling realtime API replicas.
@@ -167,7 +176,7 @@ The following families define the remaining contract direction; they are not cla
 
 - `/v1/availability/connections`, `/calendar-connections`, `/reschedules`, `/cancellations`
 - `/v1/artifacts/{id}/playback`, `/shares`, `/retention`, `/exports`, `/deletions`
-- `/v1/whiteboards`, `/breakout-rooms`, `/attendance`, `/engagement-events`
+- `/v1/attendance`, `/engagement-events`
 - `/v1/integrations`, `/oauth/connections`, `/webhooks`, `/api-keys`
 - `/v1/analytics`, `/usage`, `/exports`
 - `/v1/ai/jobs`, `/follow-ups`, `/evaluations`

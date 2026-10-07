@@ -25,7 +25,7 @@
 - [x] moderated Q&A with voting and answers
 - [x] reactions and private direct-message channels with targeted realtime delivery
 - [x] collaborative whiteboard with persisted operations, snapshots and automatic compaction
-- [ ] breakout assignment, media-room transition and host broadcast
+- [x] breakout assignment, assignment-aware media-room transition and host broadcast
 - [x] HTTPS agenda content blocks, provider normalization and sandboxed embed resolver
 - [ ] upload quarantine, malware scan and signed downloads
 - [x] recording, transcript and summary artifact state models

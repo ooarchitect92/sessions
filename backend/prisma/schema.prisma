@@ -120,6 +120,12 @@ enum QuestionStatus {
   HIDDEN
 }
 
+enum BreakoutStatus {
+  DRAFT
+  OPEN
+  CLOSED
+}
+
 model Organization {
   id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name                String                @db.VarChar(160)
@@ -143,6 +149,9 @@ model Organization {
   chatReactions       ChatReaction[]
   whiteboards         Whiteboard[]
   whiteboardOperations WhiteboardOperation[]
+  breakoutRooms      BreakoutRoom[]
+  breakoutAssignments BreakoutAssignment[]
+  breakoutAnnouncements BreakoutAnnouncement[]
   polls               Poll[]
   pollOptions         PollOption[]
   pollAnswers         PollAnswer[]
@@ -182,6 +191,9 @@ model Workspace {
   chatReactions       ChatReaction[]
   whiteboards         Whiteboard[]
   whiteboardOperations WhiteboardOperation[]
+  breakoutRooms       BreakoutRoom[]
+  breakoutAssignments BreakoutAssignment[]
+  breakoutAnnouncements BreakoutAnnouncement[]
   polls               Poll[]
   pollOptions         PollOption[]
   pollAnswers         PollAnswer[]
@@ -217,6 +229,8 @@ model User {
   receivedChatMessages    ChatMessage[]            @relation("ChatMessageRecipient")
   chatReactions           ChatReaction[]
   whiteboardOperations    WhiteboardOperation[]
+  breakoutAssignments     BreakoutAssignment[]
+  breakoutAnnouncements   BreakoutAnnouncement[]
   createdPolls            Poll[]                   @relation("PollCreator")
   submittedQuestions      Question[]               @relation("QuestionAuthor")
   authSessions            AuthSession[]
@@ -304,6 +318,9 @@ model Session {
   chatReactions        ChatReaction[]
   whiteboard           Whiteboard?
   whiteboardOperations WhiteboardOperation[]
+  breakoutRooms        BreakoutRoom[]
+  breakoutAssignments  BreakoutAssignment[]
+  breakoutAnnouncements BreakoutAnnouncement[]
   polls                Poll[]
   questions            Question[]
 
@@ -652,6 +669,63 @@ model WhiteboardOperation {
   @@unique([whiteboardId, sequence])
   @@index([organizationId, workspaceId, sessionId, sequence])
   @@map("whiteboard_operations")
+}
+
+model BreakoutRoom {
+  id              String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String             @map("organization_id") @db.Uuid
+  workspaceId     String             @map("workspace_id") @db.Uuid
+  sessionId       String             @map("session_id") @db.Uuid
+  name            String             @db.VarChar(160)
+  position        Int
+  livekitRoomName String             @unique @map("livekit_room_name") @db.VarChar(220)
+  status          BreakoutStatus     @default(DRAFT)
+  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization    Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace       Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  session         Session            @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  assignments     BreakoutAssignment[]
+
+  @@unique([sessionId, position])
+  @@index([organizationId, workspaceId, sessionId, status])
+  @@map("breakout_rooms")
+}
+
+model BreakoutAssignment {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  workspaceId    String       @map("workspace_id") @db.Uuid
+  sessionId      String       @map("session_id") @db.Uuid
+  breakoutRoomId String       @map("breakout_room_id") @db.Uuid
+  userId         String       @map("user_id") @db.Uuid
+  assignedAt     DateTime     @default(now()) @map("assigned_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  session        Session      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  breakoutRoom   BreakoutRoom @relation(fields: [breakoutRoomId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, userId])
+  @@index([organizationId, workspaceId, sessionId, breakoutRoomId])
+  @@map("breakout_assignments")
+}
+
+model BreakoutAnnouncement {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  workspaceId    String       @map("workspace_id") @db.Uuid
+  sessionId      String       @map("session_id") @db.Uuid
+  authorUserId   String       @map("author_user_id") @db.Uuid
+  body           String       @db.Text
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  session        Session      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  author         User         @relation(fields: [authorUserId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, workspaceId, sessionId, createdAt])
+  @@map("breakout_announcements")
 }
 
 model Poll {

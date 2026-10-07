@@ -84,8 +84,12 @@ export function SessionPage() {
   });
 
   const join = useMutation({
-    mutationFn: () => api.createMediaToken(sessionId),
-    onSuccess: setMedia,
+    mutationFn: (breakoutRoomId?: string) =>
+      api.createMediaToken(sessionId, breakoutRoomId),
+    onSuccess: (token) => {
+      setStageMode('media');
+      setMedia(token);
+    },
   });
 
   const activate = useMutation({
@@ -208,7 +212,7 @@ export function SessionPage() {
           ) : null}
           <button
             className="button primary"
-            onClick={() => join.mutate()}
+            onClick={() => join.mutate(undefined)}
             disabled={join.isPending || !consentGranted}
           >
             {!consentGranted
@@ -500,6 +504,7 @@ export function SessionPage() {
             )
           ) : media ? (
             <LiveKitRoom
+              key={media.roomName}
               token={media.token}
               serverUrl={media.url}
               connect
@@ -533,7 +538,7 @@ export function SessionPage() {
               ) : null}
               <button
                 className="button primary large"
-                onClick={() => join.mutate()}
+                onClick={() => join.mutate(undefined)}
                 disabled={join.isPending || !consentGranted}
               >
                 {!consentGranted
@@ -549,7 +554,11 @@ export function SessionPage() {
           )}
         </section>
 
-        <SessionCollaborationPanel sessionId={sessionId} />
+        <SessionCollaborationPanel
+          sessionId={sessionId}
+          onJoinBreakout={(roomId) => join.mutate(roomId)}
+          onReturnMain={() => join.mutate(undefined)}
+        />
       </div>
     </div>
   );
