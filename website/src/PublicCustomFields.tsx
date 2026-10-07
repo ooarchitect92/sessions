@@ -28,11 +28,12 @@ export function PublicCustomFields({
   return (
     <>
       {fields.map((field) => {
+        const answer = answers[field.key];
         if (field.type === 'CHECKBOX' || field.type === 'CONSENT') {
           return (
             <label className="public-checkbox-field" key={field.key}>
               <input
-                checked={answers[field.key] === true}
+                checked={answer === true}
                 onChange={(event) => onChange(field.key, event.target.checked)}
                 required={field.required}
                 type="checkbox"
@@ -54,7 +55,7 @@ export function PublicCustomFields({
                 maxLength={5000}
                 placeholder={field.placeholder}
                 required={field.required}
-                value={typeof answers[field.key] === 'string' ? answers[field.key] : ''}
+                value={typeof answer === 'string' ? answer : ''}
                 onChange={(event) => onChange(field.key, event.target.value)}
               />
             </label>
@@ -68,7 +69,7 @@ export function PublicCustomFields({
               {field.required ? ' *' : ''}
               <select
                 required={field.required}
-                value={typeof answers[field.key] === 'string' ? answers[field.key] : ''}
+                value={typeof answer === 'string' ? answer : ''}
                 onChange={(event) => onChange(field.key, event.target.value)}
               >
                 <option value="">Select an option</option>
@@ -90,7 +91,7 @@ export function PublicCustomFields({
               maxLength={5000}
               placeholder={field.placeholder}
               required={field.required}
-              value={typeof answers[field.key] === 'string' ? answers[field.key] : ''}
+              value={typeof answer === 'string' ? answer : ''}
               onChange={(event) => onChange(field.key, event.target.value)}
             />
           </label>
