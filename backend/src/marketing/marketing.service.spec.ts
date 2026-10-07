@@ -1,7 +1,8 @@
 import {
   BadRequestException,
   ConflictException,
-  TooManyRequestsException,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import { MarketingService } from './marketing.service';
@@ -71,37 +72,30 @@ describe('MarketingService', () => {
 
   it('rejects honeypot submissions', async () => {
     const { service } = createService();
+    const { name: _name, ...newsletterInput } = baseInput;
     await expect(
-      service.createLead({ ...baseInput, kind: 'NEWSLETTER', name: undefined, website: 'spam' }),
+      service.createLead({ ...newsletterInput, kind: 'NEWSLETTER', website: 'spam' }),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('rate limits repeated public submissions without storing raw IP addresses', async () => {
     const { service } = createService({ incr: vi.fn().mockResolvedValue(9) });
-    await expect(service.createLead(baseInput, '203.0.113.9')).rejects.toBeInstanceOf(
-      TooManyRequestsException,
-    );
+    try {
+      await service.createLead(baseInput, '203.0.113.9');
+      throw new Error('expected rate limit');
+    } catch (error) {
+      expect(error).toBeInstanceOf(HttpException);
+      expect((error as HttpException).getStatus()).toBe(HttpStatus.TOO_MANY_REQUESTS);
+    }
   });
 
   it('returns the same accepted lead for an idempotent retry', async () => {
-    const requestHash = '3f831645c8f16a64f3ef41a76cc6f0d460911b94cc66cb7a96a4d938d54a6c8e';
     const create = vi.fn().mockRejectedValue({ code: 'P2002' });
-    const findUnique = vi.fn().mockResolvedValue({
-      id: '11111111-1111-4111-8111-111111111111',
-      kind: 'DEMO',
-      createdAt: new Date('2026-10-08T00:00:00.000Z'),
-      requestHash,
-    });
-    const { service } = createService({ create, findUnique });
-    const hashingInput = {
-      ...baseInput,
-      email: 'alex@example.com',
-    };
     const nodeCrypto = await import('node:crypto');
     const normalized = {
-      kind: hashingInput.kind,
-      name: hashingInput.name,
-      email: hashingInput.email,
+      kind: 'DEMO',
+      name: 'Alex',
+      email: 'alex@example.com',
       company: null,
       teamSize: null,
       message: null,
@@ -109,14 +103,21 @@ describe('MarketingService', () => {
       consent: true,
       metadata: {},
     };
-    findUnique.mockResolvedValueOnce({
+    const requestHash = nodeCrypto
+      .createHash('sha256')
+      .update(JSON.stringify(normalized))
+      .digest('hex');
+    const findUnique = vi.fn().mockResolvedValue({
       id: '11111111-1111-4111-8111-111111111111',
       kind: 'DEMO',
       createdAt: new Date('2026-10-08T00:00:00.000Z'),
-      requestHash: nodeCrypto.createHash('sha256').update(JSON.stringify(normalized)).digest('hex'),
+      requestHash,
     });
+    const { service } = createService({ create, findUnique });
 
-    await expect(service.createLead(hashingInput)).resolves.toMatchObject({
+    await expect(
+      service.createLead({ ...baseInput, email: 'alex@example.com' }),
+    ).resolves.toMatchObject({
       id: '11111111-1111-4111-8111-111111111111',
       status: 'RECEIVED',
     });

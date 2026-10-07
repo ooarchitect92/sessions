@@ -2,9 +2,10 @@ import { Prisma } from '@prisma/client';
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
+  HttpStatus,
   Injectable,
   Logger,
-  TooManyRequestsException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash } from 'node:crypto';
@@ -94,11 +95,16 @@ export class MarketingService {
         const count = await this.redis.incr(key);
         if (count === 1) await this.redis.expire(key, 600);
         if (count > 8) {
-          throw new TooManyRequestsException('Too many requests. Please wait before retrying.');
+          throw new HttpException(
+            'Too many requests. Please wait before retrying.',
+            HttpStatus.TOO_MANY_REQUESTS,
+          );
         }
       }
     } catch (error: unknown) {
-      if (error instanceof TooManyRequestsException) throw error;
+      if (error instanceof HttpException && error.getStatus() === HttpStatus.TOO_MANY_REQUESTS) {
+        throw error;
+      }
       this.logger.warn(
         `Marketing lead rate-limit check degraded: ${error instanceof Error ? error.message : 'unknown error'}`,
       );
