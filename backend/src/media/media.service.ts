@@ -7,6 +7,7 @@ import {
   hasAnyRole,
   type Principal,
 } from '../common/auth/principal';
+import { BreakoutsService } from '../breakouts/breakouts.service';
 import { RecordingsService } from '../recordings/recordings.service';
 import { SessionsService } from '../sessions/sessions.service';
 
@@ -22,12 +23,14 @@ export class MediaService {
     private readonly config: ConfigService,
     private readonly sessions: SessionsService,
     private readonly recordings: RecordingsService,
+    private readonly breakouts: BreakoutsService,
   ) {}
 
   async createJoinToken(
     principal: Principal,
     sessionId: string,
-  ): Promise<{ url: string; token: string; expiresIn: number; expiresAt: string }> {
+    breakoutRoomId?: string,
+  ): Promise<{ url: string; token: string; expiresIn: number; expiresAt: string; roomName: string; breakoutRoomId: string | null }> {
     const session = await this.sessions.getById(principal, sessionId);
     const isHost = hasAnyRole(principal, HOST_ROLES);
     if (session.status === SessionStatus.DRAFT && !isHost) {
@@ -40,6 +43,11 @@ export class MediaService {
     }
 
     await this.recordings.assertConsentAndPrepare(principal, session);
+
+    const breakout = breakoutRoomId
+      ? await this.breakouts.resolveMediaRoom(principal, sessionId, breakoutRoomId)
+      : null;
+    const targetRoomName = breakout?.livekitRoomName ?? session.livekitRoomName;
 
     const canPublish =
       isHost ||
@@ -59,12 +67,13 @@ export class MediaService {
           organizationId: principal.organizationId,
           workspaceId: principal.workspaceId,
           sessionId,
+          breakoutRoomId: breakout?.id ?? null,
           roles: principal.roles,
         }),
       },
     );
     accessToken.addGrant({
-      room: session.livekitRoomName,
+      room: targetRoomName,
       roomJoin: true,
       roomAdmin: isHost,
       canPublish,
@@ -77,6 +86,8 @@ export class MediaService {
       token: await accessToken.toJwt(),
       expiresIn,
       expiresAt: new Date(Date.now() + expiresIn * 1000).toISOString(),
+      roomName: targetRoomName,
+      breakoutRoomId: breakout?.id ?? null,
     };
   }
 }
