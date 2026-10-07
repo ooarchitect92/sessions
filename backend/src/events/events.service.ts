@@ -160,10 +160,7 @@ export class EventsService {
     return this.database.run(principal, (transaction) =>
       transaction.event.findMany({
         orderBy: [{ startsAt: "asc" }, { createdAt: "desc" }],
-        include: {
-        presenters: { orderBy: { position: "asc" } },
-        _count: { select: { registrations: true } },
-      },
+        include: { _count: { select: { registrations: true } } },
       }),
     );
   }
@@ -174,7 +171,6 @@ export class EventsService {
         where: { id },
         include: {
           session: true,
-          presenters: { orderBy: { position: "asc" } },
           _count: { select: { registrations: true } },
         },
       });
