@@ -289,3 +289,14 @@ Persisted engagement events are recorded for chat messages, chat reactions, poll
 - `GET /v1/analytics/events/{eventId}` returns registrations by status, webinar attendance, participant durations, current active attendees, and engagement counts.
 
 Attendance duration aggregation merges overlapping intervals per user so multiple tabs or reconnect overlap are not double-counted.
+
+
+### Transcript review, correction, and revision history
+
+Hosts can review completed transcripts without mutating provider output invisibly. Every correction uses optimistic concurrency and snapshots the previous transcript before changes are applied.
+
+- `GET /v1/memory/{sessionId}/transcript/revisions` lists prior transcript snapshots, newest first.
+- `PATCH /v1/memory/{sessionId}/transcript` corrects language, speaker labels, timestamps, or text. The request requires `If-Match` with the current transcript version.
+- `POST /v1/memory/{sessionId}/transcript/revisions/{revisionId}/restore` restores a prior revision while first preserving the current transcript as a new revision.
+
+Language tags are validated using a BCP-47-style policy. Transcript edits are host-restricted, tenant-scoped, audited, emitted through the outbox, and invalidate AI summary source-version state. Summary workers pin the transcript version they read and refuse stale writes if the transcript changes while generation is in progress.
