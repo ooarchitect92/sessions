@@ -7,8 +7,10 @@ export function mergeAttendanceRanges(ranges: AttendanceRange[]): number {
   if (ranges.length === 0) return 0;
   const sorted = [...ranges].sort((left, right) => left.start - right.start);
   let durationMs = 0;
-  let currentStart = sorted[0].start;
-  let currentEnd = sorted[0].end;
+  const first = sorted[0];
+  if (!first) return 0;
+  let currentStart = first.start;
+  let currentEnd = first.end;
 
   for (const range of sorted.slice(1)) {
     if (range.start <= currentEnd) {
