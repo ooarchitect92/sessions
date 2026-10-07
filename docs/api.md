@@ -100,6 +100,10 @@ Access tokens are short-lived JWTs. Managed browser sessions use opaque, hashed 
 | `POST`  | `/v1/events/{id}/publish`                                               | publish and atomically create scheduled webinar session |
 | `POST`  | `/v1/events/{id}/cancel`                                                | cancel event and cancel an eligible linked session      |
 | `GET`   | `/v1/events/{id}/registrations`                                         | list registrations                                      |
+| `GET`   | `/v1/events/{id}/presenters`                                            | host-visible organizer/host/co-host/speaker team        |
+| `POST`  | `/v1/events/{id}/presenters`                                            | add a host, co-host or speaker                          |
+| `PATCH` | `/v1/events/{eventId}/presenters/{presenterId}`                         | edit presenter role/profile/public visibility           |
+| `POST`  | `/v1/events/{eventId}/presenters/{presenterId}/remove`                  | remove a non-organizer presenter                        |
 | `PATCH` | `/v1/events/{eventId}/registrations/{registrationId}`                   | update attendance/registration status                   |
 | `GET`   | `/v1/public/{orgSlug}/{workspaceSlug}/events/{eventSlug}`               | public published event metadata                         |
 | `POST`  | `/v1/public/{orgSlug}/{workspaceSlug}/events/{eventSlug}/registrations` | register or waitlist an attendee                        |
@@ -251,3 +255,8 @@ The booking reminder worker materializes 24-hour and 1-hour reminders for confir
 | `POST` | `/v1/calendar/connections/{id}/disconnect` | revoke local use of the connection and remove refresh credentials |
 
 Connected Google and Microsoft calendars contribute provider free/busy intervals to booking availability. OAuth state is one-time and time-limited; provider access/refresh tokens are encrypted with AES-256-GCM before persistence. Booking creation and rescheduling re-check connected-calendar busy time in addition to booking-page rules, buffers, lead time, and existing reservations.
+
+
+### Webinar stage roles
+
+Each event has one protected `ORGANIZER` created with the event. Hosts may add `HOST`, `CO_HOST`, and `SPEAKER` presenters. For event-backed webinar sessions, LiveKit grants are derived from the event presenter role: organizer/host/co-host receive room-admin + publish permission, speakers receive publish permission without room-admin, and non-presenters are subscribe/data-only. Public event payloads expose only presenters marked public and omit presenter email/user identifiers.
