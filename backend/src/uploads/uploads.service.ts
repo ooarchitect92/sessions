@@ -130,11 +130,9 @@ export class UploadsService {
     if (!existing) throw new NotFoundException('Upload not found');
     if (existing.status !== UploadStatus.AWAITING_UPLOAD) {
       if (
-        [
-          UploadStatus.PENDING_SCAN,
-          UploadStatus.SCANNING,
-          UploadStatus.READY,
-        ].includes(existing.status)
+        existing.status === UploadStatus.PENDING_SCAN ||
+        existing.status === UploadStatus.SCANNING ||
+        existing.status === UploadStatus.READY
       ) {
         return this.publicAsset(existing);
       }
