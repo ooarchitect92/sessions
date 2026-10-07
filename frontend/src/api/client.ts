@@ -317,6 +317,50 @@ export interface EventRecord extends PlatformEvent {
   _count?: { registrations: number };
 }
 
+export type EventReminderKind =
+  | 'EVENT_REMINDER_24H'
+  | 'EVENT_REMINDER_1H';
+
+export interface EventNotificationTemplateRecord {
+  id: string;
+  eventId: string;
+  kind: EventReminderKind;
+  enabled: boolean;
+  subject: string;
+  bodyText: string;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EventNotificationDeliveryRecord {
+  id: string;
+  eventRegistrationId: string;
+  kind: EventReminderKind;
+  status:
+    | 'PENDING'
+    | 'SENDING'
+    | 'DELIVERED'
+    | 'FAILED'
+    | 'DEAD_LETTER'
+    | 'CANCELLED';
+  recipientEmail: string;
+  scheduledFor: string;
+  attempts: number;
+  provider: string | null;
+  providerMessageId: string | null;
+  lastError: string | null;
+  deliveredAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  eventRegistration: {
+    id: string;
+    name: string;
+    email: string;
+    status: string;
+  };
+}
+
 export interface BookingPageRecord extends BookingPage {
   _count?: { reservations: number };
 }
@@ -1098,6 +1142,51 @@ export const api = {
   ): Promise<{ id: string; deleted: true }> {
     return request(
       `/events/${eventId}/presenters/${presenterId}/remove`,
+      { method: 'POST' },
+    );
+  },
+
+  listEventNotificationTemplates(
+    eventId: string,
+  ): Promise<EventNotificationTemplateRecord[]> {
+    return request<EventNotificationTemplateRecord[]>(
+      `/notifications/events/${eventId}/templates`,
+    );
+  },
+
+  updateEventNotificationTemplate(
+    eventId: string,
+    kind: EventReminderKind,
+    version: number,
+    input: Partial<{
+      enabled: boolean;
+      subject: string;
+      bodyText: string;
+    }>,
+  ): Promise<EventNotificationTemplateRecord> {
+    return request<EventNotificationTemplateRecord>(
+      `/notifications/events/${eventId}/templates/${kind}`,
+      {
+        method: 'PATCH',
+        headers: { 'if-match': String(version) },
+        body: JSON.stringify(input),
+      },
+    );
+  },
+
+  listEventNotificationDeliveries(
+    eventId: string,
+  ): Promise<EventNotificationDeliveryRecord[]> {
+    return request<EventNotificationDeliveryRecord[]>(
+      `/notifications/events/${eventId}/deliveries`,
+    );
+  },
+
+  retryEventNotificationDelivery(
+    deliveryId: string,
+  ): Promise<EventNotificationDeliveryRecord> {
+    return request<EventNotificationDeliveryRecord>(
+      `/notifications/events/deliveries/${deliveryId}/retry`,
       { method: 'POST' },
     );
   },
