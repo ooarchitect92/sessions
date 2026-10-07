@@ -3,6 +3,7 @@ import { ConfigModule } from "@nestjs/config";
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from "@nestjs/core";
 import { ScheduleModule } from "@nestjs/schedule";
 import { AgendasModule } from "./agendas/agendas.module";
+import { AiModule } from "./ai/ai.module";
 import { AuthModule } from "./auth/auth.module";
 import { BookingsModule } from "./bookings/bookings.module";
 import { CollaborationModule } from "./collaboration/collaboration.module";
@@ -34,6 +35,7 @@ import { WorkspacesModule } from "./workspaces/workspaces.module";
     ScheduleModule.forRoot(),
     PrismaModule,
     InfrastructureModule,
+    AiModule,
     AuthModule,
     WorkspacesModule,
     HealthModule,
