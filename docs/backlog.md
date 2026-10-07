@@ -40,7 +40,7 @@
 - [x] booking-page CRUD, public slot selection and atomic reservation/session creation
 - [x] booking self-service reschedule, cancellation and ICS calendar invites
 - [x] booking reminder delivery and reconciliation
-- [ ] Google and Microsoft calendar OAuth and busy-time synchronization
+- [x] Google and Microsoft calendar OAuth and busy-time synchronization
 - [x] webinar/event draft, publish and cancellation lifecycle
 - [x] public event page, registration, capacity and waitlist handling
 - [ ] dynamic registration and intake form renderer

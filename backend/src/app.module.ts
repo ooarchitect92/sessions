@@ -6,6 +6,7 @@ import { AgendasModule } from "./agendas/agendas.module";
 import { AiModule } from "./ai/ai.module";
 import { AuthModule } from "./auth/auth.module";
 import { BookingsModule } from "./bookings/bookings.module";
+import { CalendarModule } from "./calendar/calendar.module";
 import { BreakoutsModule } from "./breakouts/breakouts.module";
 import { CollaborationModule } from "./collaboration/collaboration.module";
 import { ContentModule } from "./content/content.module";
@@ -42,6 +43,7 @@ import { WorkspacesModule } from "./workspaces/workspaces.module";
     InfrastructureModule,
     AiModule,
     AuthModule,
+    CalendarModule,
     WorkspacesModule,
     HealthModule,
     OutboxModule,

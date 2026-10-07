@@ -84,6 +84,12 @@ const environmentSchema = z
     EMAIL_FROM: z.string().email().default('no-reply@sessions.local'),
     NOTIFICATION_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(5),
     NOTIFICATION_RETRY_BASE_SECONDS: z.coerce.number().int().min(10).max(3600).default(60),
+    WEB_APP_URL: z.string().url().default('http://localhost:3000'),
+    GOOGLE_CALENDAR_CLIENT_ID: z.string().min(1).optional(),
+    GOOGLE_CALENDAR_CLIENT_SECRET: z.string().min(1).optional(),
+    MICROSOFT_CALENDAR_CLIENT_ID: z.string().min(1).optional(),
+    MICROSOFT_CALENDAR_CLIENT_SECRET: z.string().min(1).optional(),
+    MICROSOFT_CALENDAR_TENANT: z.string().min(1).default('common'),
     OUTBOX_POLL_MS: z.coerce.number().int().min(250).max(60000).default(1000),
   })
   .superRefine((value, context) => {
@@ -101,6 +107,24 @@ const environmentSchema = z
       issue(
         'AI_OPENAI_API_KEY',
         'AI_OPENAI_API_KEY is required when AI_PROVIDER=openai',
+      );
+    }
+    if (
+      Boolean(value.GOOGLE_CALENDAR_CLIENT_ID) !==
+      Boolean(value.GOOGLE_CALENDAR_CLIENT_SECRET)
+    ) {
+      issue(
+        'GOOGLE_CALENDAR_CLIENT_SECRET',
+        'Google Calendar client ID and secret must be configured together',
+      );
+    }
+    if (
+      Boolean(value.MICROSOFT_CALENDAR_CLIENT_ID) !==
+      Boolean(value.MICROSOFT_CALENDAR_CLIENT_SECRET)
+    ) {
+      issue(
+        'MICROSOFT_CALENDAR_CLIENT_SECRET',
+        'Microsoft Calendar client ID and secret must be configured together',
       );
     }
     if (value.EMAIL_PROVIDER === 'http') {

@@ -234,3 +234,16 @@ LiveKit egress lifecycle changes are performed by the bounded recording worker. 
 | `POST` | `/v1/notifications/{deliveryId}/retry` | manually requeue a failed/dead-letter reminder |
 
 The booking reminder worker materializes 24-hour and 1-hour reminders for confirmed reservations, retries failures with exponential backoff, cancels stale reminders after cancellation/rescheduling, and records provider delivery identifiers for reconciliation.
+
+
+### Calendar integrations
+
+| Method | Path | Purpose |
+| ------ | ---- | ------- |
+| `GET` | `/v1/calendar/connections` | list the current user's Google/Microsoft calendar connections |
+| `POST` | `/v1/calendar/oauth/{provider}/start` | create a short-lived OAuth state and return the provider authorization URL |
+| `GET` | `/v1/calendar/oauth/{provider}/callback` | public OAuth callback; consumes the one-time state and stores encrypted provider tokens |
+| `PATCH` | `/v1/calendar/connections/{id}` | enable/disable availability sync or select a calendar identifier |
+| `POST` | `/v1/calendar/connections/{id}/disconnect` | revoke local use of the connection and remove refresh credentials |
+
+Connected Google and Microsoft calendars contribute provider free/busy intervals to booking availability. OAuth state is one-time and time-limited; provider access/refresh tokens are encrypted with AES-256-GCM before persistence. Booking creation and rescheduling re-check connected-calendar busy time in addition to booking-page rules, buffers, lead time, and existing reservations.

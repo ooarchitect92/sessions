@@ -109,6 +109,22 @@ export interface WorkspaceMember {
   };
 }
 
+export type CalendarProvider = 'GOOGLE' | 'MICROSOFT';
+
+export interface CalendarConnectionRecord {
+  id: string;
+  provider: CalendarProvider;
+  status: 'ACTIVE' | 'ERROR' | 'REVOKED';
+  externalAccountEmail: string | null;
+  calendarId: string;
+  scopes: string[];
+  syncEnabled: boolean;
+  lastSyncAt: string | null;
+  lastError: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface WorkspaceInvitation {
   id: string;
   email: string;
@@ -1030,6 +1046,38 @@ export const api = {
 
   listBookings(): Promise<BookingPageRecord[]> {
     return request<BookingPageRecord[]>("/bookings");
+  },
+
+  listCalendarConnections(): Promise<CalendarConnectionRecord[]> {
+    return request<CalendarConnectionRecord[]>('/calendar/connections');
+  },
+
+  startCalendarOAuth(provider: CalendarProvider): Promise<{
+    provider: CalendarProvider;
+    authorizationUrl: string;
+    expiresAt: string;
+  }> {
+    return request(`/calendar/oauth/${provider.toLowerCase()}/start`, {
+      method: 'POST',
+    });
+  },
+
+  updateCalendarConnection(
+    connectionId: string,
+    input: { syncEnabled?: boolean; calendarId?: string },
+  ): Promise<CalendarConnectionRecord> {
+    return request(`/calendar/connections/${connectionId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    });
+  },
+
+  disconnectCalendar(
+    connectionId: string,
+  ): Promise<CalendarConnectionRecord> {
+    return request(`/calendar/connections/${connectionId}/disconnect`, {
+      method: 'POST',
+    });
   },
 
   createBooking(input: CreateBookingPageInput): Promise<BookingPageRecord> {
