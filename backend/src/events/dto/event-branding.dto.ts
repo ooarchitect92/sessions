@@ -3,8 +3,8 @@ import {
   ArrayUnique,
   IsArray,
   IsBoolean,
-  IsHexColor,
   IsIn,
+  Matches,
   IsOptional,
   IsString,
   IsUrl,
@@ -21,11 +21,11 @@ export type EventLandingSection = (typeof EVENT_LANDING_SECTIONS)[number];
 
 export class EventBrandingDto {
   @IsOptional()
-  @IsHexColor()
+  @Matches(/^#[0-9a-fA-F]{6}$/)
   primaryColor?: string;
 
   @IsOptional()
-  @IsHexColor()
+  @Matches(/^#[0-9a-fA-F]{6}$/)
   accentColor?: string;
 
   @IsOptional()
