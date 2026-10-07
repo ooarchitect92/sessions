@@ -105,7 +105,7 @@ export function DynamicFormBuilder({
                           ...(type === 'CONSENT' ? { required: true } : {}),
                           ...(type === 'SELECT' || type === 'MULTI_SELECT'
                             ? { options: field.options?.length ? field.options : ['Option 1'] }
-                            : { options: undefined }),
+                            : { options: [] }),
                         });
                       }}
                     >
