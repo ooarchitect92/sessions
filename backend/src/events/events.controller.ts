@@ -13,7 +13,9 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentPrincipal } from '../common/auth/current-principal.decorator';
 import type { Principal } from '../common/auth/principal';
 import { CreateEventDto } from './dto/create-event.dto';
+import { CreateEventPresenterDto } from './dto/create-event-presenter.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
+import { UpdateEventPresenterDto } from './dto/update-event-presenter.dto';
 import { UpdateRegistrationStatusDto } from './dto/update-registration-status.dto';
 import { EventsService } from './events.service';
 
@@ -83,6 +85,47 @@ export class EventsController {
     @Headers('if-match') ifMatch: string | undefined,
   ) {
     return this.events.cancel(principal, id, parseVersion(ifMatch));
+  }
+
+  @Get(':id/presenters')
+  presenters(
+    @CurrentPrincipal() principal: Principal,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ) {
+    return this.events.listPresenters(principal, id);
+  }
+
+  @Post(':id/presenters')
+  createPresenter(
+    @CurrentPrincipal() principal: Principal,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() body: CreateEventPresenterDto,
+  ) {
+    return this.events.createPresenter(principal, id, body);
+  }
+
+  @Patch(':eventId/presenters/:presenterId')
+  updatePresenter(
+    @CurrentPrincipal() principal: Principal,
+    @Param('eventId', new ParseUUIDPipe({ version: '4' })) eventId: string,
+    @Param('presenterId', new ParseUUIDPipe({ version: '4' })) presenterId: string,
+    @Body() body: UpdateEventPresenterDto,
+  ) {
+    return this.events.updatePresenter(
+      principal,
+      eventId,
+      presenterId,
+      body,
+    );
+  }
+
+  @Post(':eventId/presenters/:presenterId/remove')
+  deletePresenter(
+    @CurrentPrincipal() principal: Principal,
+    @Param('eventId', new ParseUUIDPipe({ version: '4' })) eventId: string,
+    @Param('presenterId', new ParseUUIDPipe({ version: '4' })) presenterId: string,
+  ) {
+    return this.events.deletePresenter(principal, eventId, presenterId);
   }
 
   @Get(':id/registrations')
