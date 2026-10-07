@@ -6,6 +6,7 @@ import { Link, useParams } from 'react-router-dom';
 import { api, type MediaToken } from '../api/client';
 import { AgendaContentStage } from '../components/AgendaContentStage';
 import { SessionCollaborationPanel } from '../components/SessionCollaborationPanel';
+import { WhiteboardStage } from '../components/WhiteboardStage';
 import { useSessionRealtime } from '../hooks/use-session-realtime';
 
 function formatTime(value: string): string {
@@ -156,11 +157,13 @@ export function SessionPage() {
   const current = session.data;
   const activeAgendaItem =
     current.agendaItems.find((item) => item.id === current.currentAgendaItemId) ?? null;
-  const hasSharedContent =
+  const hasEmbedContent =
     Boolean(activeAgendaItem) &&
     ['WEBSITE', 'VIDEO', 'PRESENTATION'].includes(activeAgendaItem?.type ?? '') &&
     typeof activeAgendaItem?.content.url === 'string' &&
     activeAgendaItem.content.url.trim().length > 0;
+  const hasWhiteboard = activeAgendaItem?.type === 'WHITEBOARD';
+  const hasSharedStage = hasEmbedContent || hasWhiteboard;
   const canStart = ['DRAFT', 'SCHEDULED'].includes(current.status);
   const canEnd = current.status === 'LIVE';
   const consentGranted =
@@ -440,7 +443,16 @@ export function SessionPage() {
                 return (
                   <li key={item.id} className={active ? 'agenda-item active' : 'agenda-item'}>
                     <button
-                      onClick={() => activate.mutate(item.id)}
+                      onClick={() => {
+                        if (
+                          ['WEBSITE', 'VIDEO', 'PRESENTATION', 'WHITEBOARD'].includes(
+                            item.type,
+                          )
+                        ) {
+                          setStageMode('content');
+                        }
+                        activate.mutate(item.id);
+                      }}
                       disabled={activate.isPending}
                     >
                       <span className="agenda-index">{item.position + 1}</span>
@@ -461,14 +473,14 @@ export function SessionPage() {
         </aside>
 
         <section className="meeting-stage">
-          {hasSharedContent ? (
+          {hasSharedStage ? (
             <div className="stage-mode-switch" role="tablist" aria-label="Meeting stage mode">
               <button
                 type="button"
                 className={stageMode === 'content' ? 'active' : ''}
                 onClick={() => setStageMode('content')}
               >
-                Shared content
+                {hasWhiteboard ? 'Whiteboard' : 'Shared content'}
               </button>
               <button
                 type="button"
@@ -480,8 +492,12 @@ export function SessionPage() {
             </div>
           ) : null}
 
-          {hasSharedContent && stageMode === 'content' && activeAgendaItem ? (
-            <AgendaContentStage item={activeAgendaItem} />
+          {hasSharedStage && stageMode === 'content' && activeAgendaItem ? (
+            hasWhiteboard ? (
+              <WhiteboardStage sessionId={sessionId} title={activeAgendaItem.title} />
+            ) : (
+              <AgendaContentStage item={activeAgendaItem} />
+            )
           ) : media ? (
             <LiveKitRoom
               token={media.token}
@@ -506,13 +522,13 @@ export function SessionPage() {
                 handles camera, microphone, screen sharing, adaptive subscriptions, and
                 reconnect behavior.
               </p>
-              {hasSharedContent ? (
+              {hasSharedStage ? (
                 <button
                   type="button"
                   className="button secondary large"
                   onClick={() => setStageMode('content')}
                 >
-                  Show shared content
+                  {hasWhiteboard ? 'Open whiteboard' : 'Show shared content'}
                 </button>
               ) : null}
               <button

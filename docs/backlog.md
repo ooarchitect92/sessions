@@ -24,7 +24,7 @@
 - [x] poll creation, launch, answer, results and close lifecycle
 - [x] moderated Q&A with voting and answers
 - [x] reactions and private direct-message channels with targeted realtime delivery
-- [ ] whiteboard integration, snapshots and operation compaction
+- [x] collaborative whiteboard with persisted operations, snapshots and automatic compaction
 - [ ] breakout assignment, media-room transition and host broadcast
 - [x] HTTPS agenda content blocks, provider normalization and sandboxed embed resolver
 - [ ] upload quarantine, malware scan and signed downloads

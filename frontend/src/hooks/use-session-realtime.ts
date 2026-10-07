@@ -40,6 +40,9 @@ export function useSessionRealtime(sessionId: string): void {
           void queryClient.invalidateQueries({ queryKey: ['chat', sessionId] });
         });
       }
+      socket.on('whiteboard.operation.appended', () => {
+        void queryClient.invalidateQueries({ queryKey: ['whiteboard', sessionId] });
+      });
       for (const eventName of [
         'poll.created',
         'poll.launched',

@@ -26,6 +26,7 @@ export interface SessionRealtimeEvent {
     | 'question.created'
     | 'question.updated'
     | 'question.votes.updated'
+    | 'whiteboard.operation.appended'
     | 'memory.updated';
   payload: unknown;
 }
