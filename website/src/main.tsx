@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { PublicBookingPage } from './PublicBookingPage';
 import { PublicBookingManagePage } from './PublicBookingManagePage';
 import { PublicEventPage } from './PublicEventPage';
+import { PublicWebinarJoinPage } from './PublicWebinarJoinPage';
 import './styles.css';
 import './public.css';
 
@@ -331,7 +332,25 @@ function RoutedPage() {
     rest.length === 2 &&
     rest[0] === 'manage' &&
     rest[1] !== undefined;
+  const eventJoinRoute =
+    route === 'events' &&
+    organizationSlug !== undefined &&
+    workspaceSlug !== undefined &&
+    resourceSlug !== undefined &&
+    rest.length === 2 &&
+    rest[0] === 'join' &&
+    rest[1] !== undefined;
 
+  if (eventJoinRoute) {
+    return (
+      <PublicWebinarJoinPage
+        organizationSlug={organizationSlug}
+        workspaceSlug={workspaceSlug}
+        eventSlug={resourceSlug}
+        registrationId={rest[1]!}
+      />
+    );
+  }
   if (route === 'events' && completePublicRoute) {
     return (
       <PublicEventPage
