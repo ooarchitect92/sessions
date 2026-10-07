@@ -1,5 +1,5 @@
 import { UploadPurpose } from '@prisma/client';
-import { IsEnum, IsInt, IsMimeType, IsOptional, IsString, IsUUID, Length, Max } from 'class-validator';
+import { IsEnum, IsInt, IsMimeType, IsOptional, IsString, IsUUID, Length, Max, Min } from 'class-validator';
 
 export class CreateUploadDto {
   @IsString()
@@ -10,6 +10,7 @@ export class CreateUploadDto {
   mimeType!: string;
 
   @IsInt()
+  @Min(1)
   @Max(100 * 1024 * 1024)
   sizeBytes!: number;
 
