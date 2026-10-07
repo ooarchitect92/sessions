@@ -142,6 +142,19 @@ enum UploadPurpose {
   EVENT_RESOURCE
 }
 
+enum NotificationKind {
+  BOOKING_REMINDER_24H
+  BOOKING_REMINDER_1H
+}
+
+enum NotificationStatus {
+  PENDING
+  SENDING
+  DELIVERED
+  FAILED
+  CANCELLED
+}
+
 model Organization {
   id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name                String                @db.VarChar(160)
@@ -175,8 +188,10 @@ model Organization {
   questions           Question[]
   questionVotes       QuestionVote[]
   authSessions        AuthSession[]
+  notificationDeliveries NotificationDelivery[]
   authChallenges      AuthChallenge[]
   workspaceInvitations WorkspaceInvitation[]
+  notificationDeliveries NotificationDelivery[]
 
   @@map("organizations")
 }
@@ -475,11 +490,39 @@ model BookingReservation {
   workspace      Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   bookingPage    BookingPage   @relation(fields: [bookingPageId], references: [id], onDelete: Cascade)
   session        Session?      @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  notificationDeliveries NotificationDelivery[]
 
   @@unique([bookingPageId, startsAt])
   @@index([organizationId, workspaceId, startsAt])
   @@index([bookingPageId, status, startsAt])
   @@map("booking_reservations")
+}
+
+model NotificationDelivery {
+  id                String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId    String             @map("organization_id") @db.Uuid
+  workspaceId       String             @map("workspace_id") @db.Uuid
+  bookingReservationId String          @map("booking_reservation_id") @db.Uuid
+  kind              NotificationKind
+  status            NotificationStatus @default(PENDING)
+  recipientEmail    String             @map("recipient_email") @db.Citext
+  scheduledFor      DateTime           @map("scheduled_for") @db.Timestamptz(6)
+  attempts          Int                @default(0)
+  nextAttemptAt     DateTime?          @map("next_attempt_at") @db.Timestamptz(6)
+  provider          String?            @db.VarChar(80)
+  providerMessageId String?            @map("provider_message_id") @db.VarChar(255)
+  lastError         String?            @map("last_error") @db.VarChar(500)
+  deliveredAt       DateTime?          @map("delivered_at") @db.Timestamptz(6)
+  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace         Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  bookingReservation BookingReservation @relation(fields: [bookingReservationId], references: [id], onDelete: Cascade)
+
+  @@unique([bookingReservationId, kind, scheduledFor])
+  @@index([status, nextAttemptAt, scheduledFor])
+  @@index([organizationId, workspaceId, createdAt])
+  @@map("notification_deliveries")
 }
 
 model Recording {
