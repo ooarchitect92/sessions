@@ -6,11 +6,14 @@ import type {
   ChatChannel,
   CreateBookingPageInput,
   CreateEventInput,
+  CreateEventPresenterInput,
   CreatePollInput,
   CreateQuestionInput,
   CreateRoomInput,
   CreateSessionInput,
   Event as PlatformEvent,
+  EventPresenter,
+  EventPresenterRole,
   Paginated,
   PollStatus,
   PollType,
@@ -371,6 +374,7 @@ export interface MediaToken {
 }
 
 export interface EventRecord extends PlatformEvent {
+  presenters?: EventPresenter[];
   _count?: { registrations: number };
 }
 
@@ -1329,6 +1333,55 @@ export const api = {
       method: "POST",
       headers: { "idempotency-key": crypto.randomUUID() },
       body: JSON.stringify(input),
+    });
+  },
+
+  getEvent(eventId: string): Promise<EventRecord> {
+    return request<EventRecord>(`/events/${eventId}`);
+  },
+
+  listEventPresenters(eventId: string): Promise<EventPresenter[]> {
+    return request<EventPresenter[]>(`/events/${eventId}/presenters`);
+  },
+
+  createEventPresenter(
+    eventId: string,
+    input: CreateEventPresenterInput,
+  ): Promise<EventPresenter> {
+    return request<EventPresenter>(`/events/${eventId}/presenters`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  updateEventPresenter(
+    eventId: string,
+    presenterId: string,
+    input: Partial<{
+      role: Exclude<EventPresenterRole, 'ORGANIZER'>;
+      name: string;
+      email: string;
+      title: string | null;
+      bio: string | null;
+      avatarUrl: string | null;
+      position: number;
+    }>,
+  ): Promise<EventPresenter> {
+    return request<EventPresenter>(
+      `/events/${eventId}/presenters/${presenterId}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(input),
+      },
+    );
+  },
+
+  deleteEventPresenter(
+    eventId: string,
+    presenterId: string,
+  ): Promise<{ id: string; deleted: true }> {
+    return request(`/events/${eventId}/presenters/${presenterId}`, {
+      method: 'DELETE',
     });
   },
 
