@@ -100,7 +100,9 @@ export function MemoryDetailPage() {
       if (!transcript) throw new Error('Transcript is unavailable');
       return api.updateTranscript(sessionId, transcript.version, {
         language: transcriptLanguage.trim(),
-        reason: transcriptReason.trim() || undefined,
+        ...(transcriptReason.trim()
+          ? { reason: transcriptReason.trim() }
+          : {}),
         segments: transcriptSegments.map((segment) => ({
           startMs: segment.startMs,
           endMs: segment.endMs,
