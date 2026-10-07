@@ -108,7 +108,7 @@ export class EventsService {
           durationMinutes: input.durationMinutes,
           timezone: input.timezone,
           capacity: input.capacity ?? null,
-          registrationFields: input.registrationFields as Prisma.InputJsonValue,
+          registrationFields: input.registrationFields as unknown as Prisma.InputJsonValue,
           branding: input.branding as Prisma.InputJsonValue,
         },
       });
@@ -214,7 +214,7 @@ export class EventsService {
           ...(input.registrationFields !== undefined
             ? {
                 registrationFields:
-                  input.registrationFields as Prisma.InputJsonValue,
+                  input.registrationFields as unknown as Prisma.InputJsonValue,
               }
             : {}),
           ...(input.branding !== undefined
