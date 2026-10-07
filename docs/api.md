@@ -260,3 +260,8 @@ Connected Google and Microsoft calendars contribute provider free/busy intervals
 ### Webinar stage roles
 
 Each event has one protected `ORGANIZER` created with the event. Hosts may add `HOST`, `CO_HOST`, and `SPEAKER` presenters. For event-backed webinar sessions, LiveKit grants are derived from the event presenter role: organizer/host/co-host receive room-admin + publish permission, speakers receive publish permission without room-admin, and non-presenters are subscribe/data-only. Public event payloads expose only presenters marked public and omit presenter email/user identifiers.
+
+
+### Webinar landing-page composition
+
+Event `branding` is a validated, non-HTML visual configuration used by the public event site and the organizer preview. Hosts can configure scoped primary/accent colors, hero copy, an HTTPS hero image, about copy, registration CTA text, presenter/details visibility, and the order of the About / Presenters / Details sections. The public renderer treats all copy as text (no raw HTML injection) and applies colors through page-scoped CSS variables.
