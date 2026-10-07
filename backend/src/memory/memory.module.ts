@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AiModule } from '../ai/ai.module';
 import { AuditModule } from '../audit/audit.module';
 import { OutboxModule } from '../outbox/outbox.module';
 import { RecordingsController, TranscriptsController } from './artifacts.controller';
@@ -6,7 +7,7 @@ import { MemoryController } from './memory.controller';
 import { MemoryService } from './memory.service';
 
 @Module({
-  imports: [AuditModule, OutboxModule],
+  imports: [AiModule, AuditModule, OutboxModule],
   controllers: [MemoryController, RecordingsController, TranscriptsController],
   providers: [MemoryService],
   exports: [MemoryService],

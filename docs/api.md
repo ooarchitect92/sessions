@@ -84,7 +84,20 @@ Access tokens are short-lived JWTs. Managed browser sessions use opaque, hashed 
 | `POST`  | `/v1/sessions/{id}/agenda-items`                   | append an agenda item                                   |
 | `PUT`   | `/v1/sessions/{id}/agenda-items/order`             | atomically reorder all items                            |
 | `POST`  | `/v1/sessions/{id}/agenda-items/{itemId}/activate` | make item current and emit event                        |
+| `POST`  | `/v1/sessions/{id}/agenda-items/save-template`      | save the current ordered agenda as a workspace template |
+| `POST`  | `/v1/sessions/{id}/agenda-items/apply-template/{templateId}` | append or replace agenda items from a template |
+| `POST`  | `/v1/sessions/{id}/transcription/chunks`            | submit a bounded live microphone audio chunk for STT and realtime captions |
 | `POST`  | `/v1/sessions/{id}/media-token`                    | short-lived LiveKit room token                          |
+
+### Agenda templates
+
+| Method   | Path                                | Purpose |
+| -------- | ----------------------------------- | ------- |
+| `GET`    | `/v1/agenda-templates`              | list workspace templates and ordered items |
+| `GET`    | `/v1/agenda-templates/{templateId}` | read one reusable agenda template |
+| `POST`   | `/v1/agenda-templates`              | create a reusable workspace template |
+| `PATCH`  | `/v1/agenda-templates/{templateId}` | update a versioned template with `If-Match` |
+| `DELETE` | `/v1/agenda-templates/{templateId}` | delete a workspace template |
 
 ### Events and registrations
 
@@ -110,6 +123,9 @@ Access tokens are short-lived JWTs. Managed browser sessions use opaque, hashed 
 | `GET`   | `/v1/bookings/{id}`                                                        | page details                                                         |
 | `PATCH` | `/v1/bookings/{id}`                                                        | update rules or active state with `If-Match`                         |
 | `GET`   | `/v1/bookings/{id}/reservations`                                           | list reservations and linked sessions                                |
+| `PATCH` | `/v1/bookings/{id}/reservations/{reservationId}/reschedule`                  | move a confirmed reservation to an available slot and sync its session |
+| `POST`  | `/v1/bookings/{id}/reservations/{reservationId}/cancel`                      | cancel a confirmed reservation and eligible linked session           |
+| `GET`   | `/v1/bookings/{id}/reservations/{reservationId}/calendar`                    | generate an RFC 5545-compatible ICS payload                           |
 | `GET`   | `/v1/public/{orgSlug}/{workspaceSlug}/bookings/{bookingSlug}`              | public page metadata                                                 |
 | `GET`   | `/v1/public/{orgSlug}/{workspaceSlug}/bookings/{bookingSlug}/slots`        | generate available slots for a bounded date range                    |
 | `POST`  | `/v1/public/{orgSlug}/{workspaceSlug}/bookings/{bookingSlug}/reservations` | lock a slot and atomically create reservation plus scheduled session |
@@ -151,6 +167,7 @@ Authenticated clients join `session:{sessionId}` through the `/realtime` Socket.
 - `poll.created`, `poll.launched`, `poll.closed`, `poll.results.updated`
 - `question.created`, `question.updated`, `question.votes.updated`
 - `memory.updated`
+- `transcript.live.segment`
 
 The current single-replica event bridge is in-process. A Redis/NATS adapter is a mandatory gate before horizontally scaling realtime API replicas.
 
@@ -194,3 +211,86 @@ Validation details must never leak secrets or cross-tenant resource existence. P
 - `DELETE /v1/recordings/:sessionId` schedules permanent object deletion and is restricted to host roles.
 
 LiveKit egress lifecycle changes are performed by the bounded recording worker. Provider job IDs and object keys remain server-side; the browser receives only expiring access grants.
+
+
+### Calendar integrations
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/v1/calendar-integrations` | list the current user's workspace calendar connections without exposing tokens |
+| `POST` | `/v1/calendar-integrations/{provider}/connect` | create a short-lived OAuth state and return the provider authorization URL |
+| `GET` | `/v1/calendar-integrations/oauth/{provider}/callback` | public OAuth callback that verifies one-time state, exchanges the code and stores encrypted credentials |
+| `DELETE` | `/v1/calendar-integrations/{provider}` | disconnect the current user's calendar provider |
+
+Connected Google and Microsoft calendars are queried for external busy intervals during public slot discovery and again before a booking reservation is committed. Access tokens are refreshed from encrypted refresh tokens when near expiry.
+
+
+### Booking calendar reconciliation
+
+Confirmed bookings now create durable calendar synchronization records for every enabled Google or Microsoft calendar connection owned by the booking-page host. Creation, reschedule and cancellation queue `CREATE`, `UPDATE` or `CANCEL` operations inside the same database transaction as the booking change. A background worker performs provider API writes with bounded exponential retry, persists provider event IDs, and emits `calendar.event.synced` or `calendar.event.sync_failed` outbox events.
+
+
+### Booking and event notification scheduling
+
+Public booking reservations and confirmed event registrations now create email-delivery records inside the same database transaction as the source record. The notification pipeline queues immediate confirmations plus 24-hour and 1-hour reminders when those reminder times are still in the future. Waitlisted event registrations receive a waitlist notice instead of reminders. Booking reschedules replace pending reminders and queue a reschedule notice. The email worker only claims rows whose `scheduled_for` time is due and suppresses reminders when their booking or event registration is no longer active.
+
+
+### Invitee booking self-service
+
+A booking reservation now receives a cryptographically random opaque management token at creation. Only the SHA-256 digest is persisted, together with an expiry timestamp; the plaintext token is returned once to the public booking client. The management API deliberately returns 404 for invalid, expired, or mismatched tokens.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/v1/public/{organizationSlug}/{workspaceSlug}/bookings/{bookingSlug}/reservations/{reservationId}/manage?token=...` | view the safe booking-management projection |
+| `POST` | `/v1/public/{organizationSlug}/{workspaceSlug}/bookings/{bookingSlug}/reservations/{reservationId}/reschedule?token=...` | move a confirmed booking after checking internal and connected-calendar conflicts |
+| `POST` | `/v1/public/{organizationSlug}/{workspaceSlug}/bookings/{bookingSlug}/reservations/{reservationId}/cancel?token=...` | cancel the booking and linked scheduled session |
+
+Invitee reschedules update the linked session, queue Google/Microsoft calendar reconciliation, replace pending reminder schedules, and emit the normal `booking.rescheduled` outbox event. Invitee cancellation cancels the linked session, queues provider-event cancellation, deletes future reminders, queues a cancellation notice, and emits `booking.cancelled`.
+
+
+### Dynamic public forms
+
+Booking pages and events now use the same typed public-form contract. Supported field types are `TEXT`, `TEXTAREA`, `SELECT`, `CHECKBOX`, and `CONSENT`. Definitions require stable lowercase keys, labels, optional placeholders, required flags, and options only for select fields.
+
+The backend validates field definitions when booking pages/events are created or edited, rejects duplicate keys and malformed select definitions, and validates every public submission against the saved definition. Unknown answer keys, missing required values, unaccepted required consent, oversized text and invalid select choices are rejected before the reservation or registration transaction is committed.
+
+
+### Workspace branding
+
+Workspace owners/admins can persist a validated `settings.branding` object through the existing versioned workspace update endpoint. The supported public-branding fields are `brandName`, HTTPS `logoUrl`, six-digit `primaryColor` and `accentColor`, an allow-listed `fontFamily`, HTTPS `waitingRoomImageUrl`, and `hideSessionsBranding`.
+
+Public booking and event responses inherit this workspace branding. Event-level branding is normalized over the workspace defaults. The public website applies the brand name/logo, palette, font and optional hero image while keeping the underlying booking and registration workflows unchanged. Invalid persisted branding falls back to safe product defaults instead of breaking the public page.
+
+
+### Workspace email templates
+
+Workspace owners/admins can customize booking and event lifecycle notifications through the existing versioned workspace settings endpoint using `settings.emailTemplates`. Supported template purposes are booking confirmation, reschedule, cancellation, 24-hour/1-hour booking reminders, event confirmation, event waitlist and 24-hour/1-hour event reminders.
+
+Each template contains a subject and plain-text body, with an optional global signature. Supported placeholders are `{{name}}`, `{{title}}`, `{{starts_at}}`, `{{ends_at}}`, `{{timezone}}`, `{{brand_name}}` and `{{status_message}}`. Unknown placeholders and unknown purposes are rejected server-side. Templates are resolved when the delivery row is created, so queued messages preserve the exact rendered content even if workspace settings change later.
+
+
+### Webinar presenter roles
+
+Events now maintain a tenant-scoped presenter team with the roles `ORGANIZER`, `HOST`, `CO_HOST`, and `SPEAKER`. Event creation automatically binds the creator as the non-removable organizer. Hosts can add, update, reorder, or remove other presenters through `/v1/events/{eventId}/presenters`.
+
+Presenter records contain a public profile (name, title, bio, avatar) plus a private email identity used to resolve authenticated workspace users when possible. Public event responses expose only the safe profile fields and role; presenter email addresses and user IDs are not exposed.
+
+For webinar media tokens, organizers/hosts/co-hosts receive moderation privileges, speakers may publish camera/microphone media, and ordinary webinar attendees remain subscribe/data-only. Workspace host privileges continue to work as an administrative override.
+
+
+### Public webinar attendee admission
+
+Confirmed event registrations receive a one-time-visible opaque admission token and a branded public join URL. Only the token digest and expiry are stored in the registration row.
+
+`POST /v1/public/{organizationSlug}/{workspaceSlug}/events/{eventSlug}/admission`
+
+Request body:
+
+```json
+{
+  "registrationId": "uuid",
+  "admissionToken": "<opaque registration token>"
+}
+```
+
+The endpoint validates the public event route, registration state, token digest and expiry, and webinar admission window. It then marks first admission as attended/checked-in and returns a short-lived LiveKit credential. Attendee media grants are subscribe-only: no camera/microphone publishing and no room-admin permission. Admission currently opens 30 minutes before the scheduled event and closes one hour after the scheduled end.

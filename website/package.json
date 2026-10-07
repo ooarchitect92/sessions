@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "react": "19.3.0",
+    "livekit-client": "2.22.3",
     "react-dom": "19.3.0"
   },
   "devDependencies": {

@@ -3,8 +3,12 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentPrincipal } from '../common/auth/current-principal.decorator';
 import type { Principal } from '../common/auth/principal';
 import { AgendasService } from './agendas.service';
+import { ApplyAgendaDraftDto } from './dto/apply-agenda-draft.dto';
+import { ApplyAgendaTemplateDto } from './dto/apply-agenda-template.dto';
 import { CreateAgendaItemDto } from './dto/create-agenda-item.dto';
+import { GenerateAgendaDraftDto } from './dto/generate-agenda-draft.dto';
 import { ReorderAgendaDto } from './dto/reorder-agenda.dto';
+import { SaveSessionAgendaTemplateDto } from './dto/save-session-agenda-template.dto';
 
 @ApiTags('agendas')
 @ApiBearerAuth()
@@ -18,6 +22,43 @@ export class AgendasController {
     @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
   ) {
     return this.agendas.list(principal, sessionId);
+  }
+
+  @Post('ai-draft')
+  generateDraft(
+    @CurrentPrincipal() principal: Principal,
+    @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
+    @Body() body: GenerateAgendaDraftDto,
+  ) {
+    return this.agendas.generateDraft(principal, sessionId, body);
+  }
+
+  @Post('ai-apply')
+  applyDraft(
+    @CurrentPrincipal() principal: Principal,
+    @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
+    @Body() body: ApplyAgendaDraftDto,
+  ) {
+    return this.agendas.applyDraft(principal, sessionId, body);
+  }
+
+  @Post('save-template')
+  saveTemplate(
+    @CurrentPrincipal() principal: Principal,
+    @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
+    @Body() body: SaveSessionAgendaTemplateDto,
+  ) {
+    return this.agendas.saveSessionAsTemplate(principal, sessionId, body);
+  }
+
+  @Post('apply-template/:templateId')
+  applyTemplate(
+    @CurrentPrincipal() principal: Principal,
+    @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
+    @Param('templateId', new ParseUUIDPipe({ version: '4' })) templateId: string,
+    @Body() body: ApplyAgendaTemplateDto,
+  ) {
+    return this.agendas.applyTemplate(principal, sessionId, templateId, body);
   }
 
   @Post()

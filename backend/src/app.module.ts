@@ -3,8 +3,12 @@ import { ConfigModule } from "@nestjs/config";
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from "@nestjs/core";
 import { ScheduleModule } from "@nestjs/schedule";
 import { AgendasModule } from "./agendas/agendas.module";
+import { AnalyticsModule } from "./analytics/analytics.module";
+import { ApiKeysModule } from "./api-keys/api-keys.module";
+import { AiModule } from "./ai/ai.module";
 import { AuthModule } from "./auth/auth.module";
 import { BookingsModule } from "./bookings/bookings.module";
+import { BreakoutsModule } from "./breakouts/breakouts.module";
 import { CollaborationModule } from "./collaboration/collaboration.module";
 import { PrincipalGuard } from "./common/auth/principal.guard";
 import { validateEnvironment } from "./common/config/env.validation";
@@ -14,13 +18,18 @@ import { PrismaModule } from "./database/prisma.module";
 import { EventsModule } from "./events/events.module";
 import { HealthModule } from "./health/health.module";
 import { InfrastructureModule } from "./infrastructure/infrastructure.module";
+import { IntegrationsModule } from "./integrations/integrations.module";
 import { MediaModule } from "./media/media.module";
 import { MemoryModule } from "./memory/memory.module";
+import { NotificationsModule } from "./notifications/notifications.module";
 import { OutboxModule } from "./outbox/outbox.module";
 import { RealtimeModule } from "./realtime/realtime.module";
 import { RecordingsModule } from "./recordings/recordings.module";
 import { RoomsModule } from "./rooms/rooms.module";
 import { SessionsModule } from "./sessions/sessions.module";
+import { TranscriptionModule } from "./transcription/transcription.module";
+import { WebhooksModule } from "./webhooks/webhooks.module";
+import { WhiteboardModule } from "./whiteboard/whiteboard.module";
 import { WorkspacesModule } from "./workspaces/workspaces.module";
 
 @Module({
@@ -33,6 +42,7 @@ import { WorkspacesModule } from "./workspaces/workspaces.module";
     ScheduleModule.forRoot(),
     PrismaModule,
     InfrastructureModule,
+    IntegrationsModule,
     AuthModule,
     WorkspacesModule,
     HealthModule,
@@ -42,11 +52,18 @@ import { WorkspacesModule } from "./workspaces/workspaces.module";
     SessionsModule,
     RoomsModule,
     AgendasModule,
+    AnalyticsModule,
+    ApiKeysModule,
     EventsModule,
     BookingsModule,
+    BreakoutsModule,
     CollaborationModule,
     MediaModule,
     RealtimeModule,
+    TranscriptionModule,
+    AiModule,
+    NotificationsModule,
+    WebhooksModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: PrincipalGuard },

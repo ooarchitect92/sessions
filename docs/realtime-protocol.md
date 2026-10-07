@@ -58,6 +58,12 @@ Only one poll can be live in a session. Answers are upserted by `(pollId, respon
 
 Webinar attendee questions enter moderation; ordinary meeting questions may be approved immediately. Public list results never expose an anonymous author's display name.
 
+### Live transcription
+
+- `transcript.live.segment { transcriptId, sessionId, segmentId, position, startMs, endMs, speakerLabel, text, userId, displayName, language, isFinal }`
+
+Browser clients may opt into live captions only when the session has transcription enabled and is in the live state. Audio is submitted through the authenticated HTTP command path in bounded chunks, persisted as transcript segments under the tenant context, and only then broadcast to the session room. The current implementation uses provider-abstracted chunk transcription; provider-native streaming STT remains a scale/latency optimization.
+
 ### Memory
 
 - `memory.updated`
@@ -86,7 +92,7 @@ Socket presence is advisory. A tab crash, mobile suspension, or network partitio
 - `chat.message.edited`, `chat.message.deleted`, `chat.reaction.changed`
 - `whiteboard.operation`, `whiteboard.snapshot.ready`
 - `breakout.created`, `breakout.assignment.changed`, `breakout.broadcast`
-- `recording.started`, `recording.stopped`, `caption.partial`, `caption.final`
+- `recording.started`, `recording.stopped`, provider-native `caption.partial`
 - `timer.started`, `timer.paused`, `timer.expired`
 - `participant.media.changed`, `participant.hand.changed`, `participant.role.changed`
 

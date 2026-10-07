@@ -2,14 +2,163 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { WorkspaceRole } from '@sessions/contracts';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { api, type WorkspaceMember } from '../api/client';
+import {
+  api,
+  type CalendarProvider,
+  type WorkspaceMember,
+} from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 
-const TABS = ['workspace', 'members', 'workspaces', 'security'] as const;
+const TABS = [
+  'workspace',
+  'emails',
+  'members',
+  'workspaces',
+  'integrations',
+  'security',
+] as const;
 type SettingsTab = (typeof TABS)[number];
 
 const MEMBER_ROLES: WorkspaceRole[] = ['ADMIN', 'HOST', 'MEMBER', 'ANALYST', 'GUEST'];
 const ALL_ROLES: WorkspaceRole[] = ['OWNER', ...MEMBER_ROLES];
+
+const EMAIL_TEMPLATE_PURPOSES = [
+  'BOOKING_CONFIRMATION',
+  'BOOKING_RESCHEDULED',
+  'BOOKING_CANCELLED',
+  'BOOKING_REMINDER_24H',
+  'BOOKING_REMINDER_1H',
+  'EVENT_CONFIRMATION',
+  'EVENT_WAITLIST',
+  'EVENT_REMINDER_24H',
+  'EVENT_REMINDER_1H',
+] as const;
+
+type EmailTemplatePurpose = (typeof EMAIL_TEMPLATE_PURPOSES)[number];
+
+interface EmailTemplateDefinition {
+  subject: string;
+  body: string;
+}
+
+interface EmailTemplateSettingsState {
+  signature: string;
+  templates: Record<EmailTemplatePurpose, EmailTemplateDefinition>;
+}
+
+const DEFAULT_EMAIL_TEMPLATES: Record<EmailTemplatePurpose, EmailTemplateDefinition> = {
+  BOOKING_CONFIRMATION: {
+    subject: 'Booking confirmed: {{title}}',
+    body: 'Hi {{name}},\n\n{{status_message}}\n\nBooking: {{title}}\nStarts: {{starts_at}}\nEnds: {{ends_at}}\nTimezone: {{timezone}}',
+  },
+  BOOKING_RESCHEDULED: {
+    subject: 'Booking rescheduled: {{title}}',
+    body: 'Hi {{name}},\n\n{{status_message}}\n\nBooking: {{title}}\nStarts: {{starts_at}}\nEnds: {{ends_at}}\nTimezone: {{timezone}}',
+  },
+  BOOKING_CANCELLED: {
+    subject: 'Booking cancelled: {{title}}',
+    body: 'Hi {{name}},\n\n{{status_message}}\n\nBooking: {{title}}',
+  },
+  BOOKING_REMINDER_24H: {
+    subject: 'Reminder: {{title}} is tomorrow',
+    body: 'Hi {{name}},\n\n{{status_message}}\n\nBooking: {{title}}\nStarts: {{starts_at}}\nTimezone: {{timezone}}',
+  },
+  BOOKING_REMINDER_1H: {
+    subject: 'Reminder: {{title}} starts soon',
+    body: 'Hi {{name}},\n\n{{status_message}}\n\nBooking: {{title}}\nStarts: {{starts_at}}\nTimezone: {{timezone}}',
+  },
+  EVENT_CONFIRMATION: {
+    subject: 'Registration confirmed: {{title}}',
+    body: 'Hi {{name}},\n\n{{status_message}}\n\nEvent: {{title}}\nStarts: {{starts_at}}\nEnds: {{ends_at}}\nTimezone: {{timezone}}',
+  },
+  EVENT_WAITLIST: {
+    subject: 'Waitlist: {{title}}',
+    body: 'Hi {{name}},\n\n{{status_message}}\n\nEvent: {{title}}\nStarts: {{starts_at}}\nTimezone: {{timezone}}',
+  },
+  EVENT_REMINDER_24H: {
+    subject: 'Reminder: {{title}} is tomorrow',
+    body: 'Hi {{name}},\n\n{{status_message}}\n\nEvent: {{title}}\nStarts: {{starts_at}}\nTimezone: {{timezone}}',
+  },
+  EVENT_REMINDER_1H: {
+    subject: 'Reminder: {{title}} starts soon',
+    body: 'Hi {{name}},\n\n{{status_message}}\n\nEvent: {{title}}\nStarts: {{starts_at}}\nTimezone: {{timezone}}',
+  },
+};
+
+function emailTemplatesFromSettings(
+  settings: Record<string, unknown>,
+): EmailTemplateSettingsState {
+  const raw =
+    settings.emailTemplates &&
+    typeof settings.emailTemplates === 'object' &&
+    !Array.isArray(settings.emailTemplates)
+      ? (settings.emailTemplates as Record<string, unknown>)
+      : {};
+  const rawTemplates =
+    raw.templates && typeof raw.templates === 'object' && !Array.isArray(raw.templates)
+      ? (raw.templates as Record<string, unknown>)
+      : {};
+  const templates = { ...DEFAULT_EMAIL_TEMPLATES };
+  for (const purpose of EMAIL_TEMPLATE_PURPOSES) {
+    const candidate = rawTemplates[purpose];
+    if (candidate && typeof candidate === 'object' && !Array.isArray(candidate)) {
+      const object = candidate as Record<string, unknown>;
+      if (typeof object.subject === 'string' && typeof object.body === 'string') {
+        templates[purpose] = { subject: object.subject, body: object.body };
+      }
+    }
+  }
+  return {
+    signature: typeof raw.signature === 'string' ? raw.signature : '',
+    templates,
+  };
+}
+
+interface WorkspaceBrandingSettings {
+  brandName: string;
+  logoUrl: string;
+  primaryColor: string;
+  accentColor: string;
+  fontFamily: string;
+  waitingRoomImageUrl: string;
+  hideSessionsBranding: boolean;
+}
+
+const DEFAULT_WORKSPACE_BRANDING: WorkspaceBrandingSettings = {
+  brandName: '',
+  logoUrl: '',
+  primaryColor: '#183f38',
+  accentColor: '#d9efe7',
+  fontFamily: 'Inter',
+  waitingRoomImageUrl: '',
+  hideSessionsBranding: false,
+};
+
+function brandingFromSettings(settings: Record<string, unknown>): WorkspaceBrandingSettings {
+  const value =
+    settings.branding && typeof settings.branding === 'object' && !Array.isArray(settings.branding)
+      ? (settings.branding as Record<string, unknown>)
+      : {};
+  return {
+    brandName: typeof value.brandName === 'string' ? value.brandName : '',
+    logoUrl: typeof value.logoUrl === 'string' ? value.logoUrl : '',
+    primaryColor:
+      typeof value.primaryColor === 'string'
+        ? value.primaryColor
+        : DEFAULT_WORKSPACE_BRANDING.primaryColor,
+    accentColor:
+      typeof value.accentColor === 'string'
+        ? value.accentColor
+        : DEFAULT_WORKSPACE_BRANDING.accentColor,
+    fontFamily:
+      typeof value.fontFamily === 'string'
+        ? value.fontFamily
+        : DEFAULT_WORKSPACE_BRANDING.fontFamily,
+    waitingRoomImageUrl:
+      typeof value.waitingRoomImageUrl === 'string' ? value.waitingRoomImageUrl : '',
+    hideSessionsBranding: value.hideSessionsBranding === true,
+  };
+}
 
 function toSlug(value: string): string {
   return value
@@ -59,26 +208,36 @@ export function SettingsPage() {
               <span>
                 {item === 'workspace'
                   ? '◇'
-                  : item === 'members'
-                    ? '◎'
-                    : item === 'workspaces'
-                      ? '▦'
-                      : '⌾'}
+                  : item === 'emails'
+                    ? '✉'
+                    : item === 'members'
+                      ? '◎'
+                      : item === 'workspaces'
+                        ? '▦'
+                        : item === 'integrations'
+                          ? '↗'
+                          : '⌾'}
               </span>
               {item === 'workspace'
                 ? 'Workspace profile'
-                : item === 'members'
-                  ? 'Members and invites'
-                  : item === 'workspaces'
-                    ? 'Your workspaces'
-                    : 'Security'}
+                : item === 'emails'
+                  ? 'Email templates'
+                  : item === 'members'
+                    ? 'Members and invites'
+                    : item === 'workspaces'
+                      ? 'Your workspaces'
+                      : item === 'integrations'
+                        ? 'Integrations'
+                        : 'Security'}
             </button>
           ))}
         </nav>
         <section className="settings-content">
           {tab === 'workspace' ? <WorkspaceProfile /> : null}
+          {tab === 'emails' ? <EmailTemplateSettings /> : null}
           {tab === 'members' ? <MembersAndInvitations /> : null}
           {tab === 'workspaces' ? <WorkspaceDirectory /> : null}
+          {tab === 'integrations' ? <IntegrationSettings /> : null}
           {tab === 'security' ? <SecuritySettings /> : null}
         </section>
       </div>
@@ -96,6 +255,9 @@ function WorkspaceProfile() {
   const [slug, setSlug] = useState('');
   const [timezone, setTimezone] = useState('UTC');
   const [recordingConsentRequired, setRecordingConsentRequired] = useState(true);
+  const [branding, setBranding] = useState<WorkspaceBrandingSettings>(
+    DEFAULT_WORKSPACE_BRANDING,
+  );
   const canManage = ['OWNER', 'ADMIN'].includes(workspace.data?.currentRole ?? 'GUEST');
 
   useEffect(() => {
@@ -106,6 +268,7 @@ function WorkspaceProfile() {
     setRecordingConsentRequired(
       workspace.data.settings.recordingConsentRequired !== false,
     );
+    setBranding(brandingFromSettings(workspace.data.settings));
   }, [workspace.data]);
 
   const update = useMutation({
@@ -115,7 +278,18 @@ function WorkspaceProfile() {
         name,
         slug,
         timezone,
-        settings: { recordingConsentRequired },
+        settings: {
+          recordingConsentRequired,
+          branding: {
+            brandName: branding.brandName.trim() || null,
+            logoUrl: branding.logoUrl.trim() || null,
+            primaryColor: branding.primaryColor,
+            accentColor: branding.accentColor,
+            fontFamily: branding.fontFamily,
+            waitingRoomImageUrl: branding.waitingRoomImageUrl.trim() || null,
+            hideSessionsBranding: branding.hideSessionsBranding,
+          },
+        },
       });
     },
     onSuccess: async () => {
@@ -181,6 +355,147 @@ function WorkspaceProfile() {
               />
             </label>
           </div>
+          <div className="settings-branding-section">
+            <div className="settings-section-heading">
+              <div>
+                <span className="eyebrow">Public identity</span>
+                <h3>Branding</h3>
+                <p>
+                  Apply your workspace identity to public booking and event pages without changing
+                  the core product workflow.
+                </p>
+              </div>
+              <div
+                className="settings-brand-preview"
+                style={{
+                  background: branding.accentColor,
+                  borderColor: branding.primaryColor,
+                }}
+              >
+                <span style={{ background: branding.primaryColor }}>
+                  {(branding.brandName || name || 'S').slice(0, 1).toUpperCase()}
+                </span>
+                <strong>{branding.brandName || name || 'Workspace'}</strong>
+              </div>
+            </div>
+            <div className="settings-form-grid">
+              <label>
+                Brand name
+                <input
+                  disabled={!canManage}
+                  maxLength={160}
+                  value={branding.brandName}
+                  onChange={(event) =>
+                    setBranding((current) => ({
+                      ...current,
+                      brandName: event.target.value,
+                    }))
+                  }
+                  placeholder={name || 'Your brand'}
+                />
+              </label>
+              <label>
+                Logo URL (HTTPS)
+                <input
+                  disabled={!canManage}
+                  type="url"
+                  value={branding.logoUrl}
+                  onChange={(event) =>
+                    setBranding((current) => ({
+                      ...current,
+                      logoUrl: event.target.value,
+                    }))
+                  }
+                  placeholder="https://cdn.example.com/logo.svg"
+                />
+              </label>
+              <label>
+                Primary color
+                <input
+                  disabled={!canManage}
+                  type="color"
+                  value={branding.primaryColor}
+                  onChange={(event) =>
+                    setBranding((current) => ({
+                      ...current,
+                      primaryColor: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label>
+                Accent color
+                <input
+                  disabled={!canManage}
+                  type="color"
+                  value={branding.accentColor}
+                  onChange={(event) =>
+                    setBranding((current) => ({
+                      ...current,
+                      accentColor: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label>
+                Font family
+                <select
+                  disabled={!canManage}
+                  value={branding.fontFamily}
+                  onChange={(event) =>
+                    setBranding((current) => ({
+                      ...current,
+                      fontFamily: event.target.value,
+                    }))
+                  }
+                >
+                  <option value="Inter">Inter</option>
+                  <option value="Arial">Arial</option>
+                  <option value="Helvetica">Helvetica</option>
+                  <option value="Georgia">Georgia</option>
+                  <option value="Times New Roman">Times New Roman</option>
+                  <option value="Verdana">Verdana</option>
+                  <option value="Trebuchet MS">Trebuchet MS</option>
+                  <option value="system-ui">System UI</option>
+                </select>
+              </label>
+              <label>
+                Waiting-room image URL (HTTPS)
+                <input
+                  disabled={!canManage}
+                  type="url"
+                  value={branding.waitingRoomImageUrl}
+                  onChange={(event) =>
+                    setBranding((current) => ({
+                      ...current,
+                      waitingRoomImageUrl: event.target.value,
+                    }))
+                  }
+                  placeholder="https://cdn.example.com/cover.jpg"
+                />
+              </label>
+            </div>
+            <label className="settings-toggle-row">
+              <input
+                disabled={!canManage}
+                type="checkbox"
+                checked={branding.hideSessionsBranding}
+                onChange={(event) =>
+                  setBranding((current) => ({
+                    ...current,
+                    hideSessionsBranding: event.target.checked,
+                  }))
+                }
+              />
+              <span>
+                <strong>Hide Sessions attribution on public pages</strong>
+                <small>
+                  When enabled, public booking and event pages show only the workspace brand.
+                </small>
+              </span>
+            </label>
+          </div>
+
           <label className="settings-toggle-row">
             <input
               disabled={!canManage}
@@ -213,6 +528,201 @@ function WorkspaceProfile() {
           label="Audience workflows"
           value={workspace.data._count.events + workspace.data._count.bookingPages}
         />
+      </section>
+    </div>
+  );
+}
+
+function EmailTemplateSettings() {
+  const queryClient = useQueryClient();
+  const workspace = useQuery({
+    queryKey: ['workspace-current'],
+    queryFn: () => api.getCurrentWorkspace(),
+  });
+  const [selectedPurpose, setSelectedPurpose] =
+    useState<EmailTemplatePurpose>('BOOKING_CONFIRMATION');
+  const [state, setState] = useState<EmailTemplateSettingsState>({
+    signature: '',
+    templates: { ...DEFAULT_EMAIL_TEMPLATES },
+  });
+  const canManage = ['OWNER', 'ADMIN'].includes(workspace.data?.currentRole ?? 'GUEST');
+
+  useEffect(() => {
+    if (workspace.data) {
+      setState(emailTemplatesFromSettings(workspace.data.settings));
+    }
+  }, [workspace.data]);
+
+  const save = useMutation({
+    mutationFn: () => {
+      if (!workspace.data) throw new Error('Workspace is unavailable');
+      return api.updateCurrentWorkspace(workspace.data.version, {
+        settings: {
+          emailTemplates: state,
+        },
+      });
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['workspace-current'] });
+    },
+  });
+
+  if (workspace.isLoading) return <SettingsLoading />;
+  if (workspace.error || !workspace.data) {
+    return <SettingsError message={workspace.error?.message ?? 'Workspace unavailable'} />;
+  }
+
+  const template = state.templates[selectedPurpose];
+  const purposeLabel = selectedPurpose
+    .toLowerCase()
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+
+  return (
+    <div className="settings-stack">
+      <section className="panel settings-panel">
+        <div className="settings-panel-heading">
+          <div>
+            <span className="eyebrow">Transactional messaging</span>
+            <h2>Email templates</h2>
+            <p>
+              Customize booking and event lifecycle messages. Templates are resolved when an
+              email is queued, so each delivery keeps the exact approved subject and body.
+            </p>
+          </div>
+          <span className="settings-role-chip">{workspace.data.currentRole.toLowerCase()}</span>
+        </div>
+
+        <div className="email-template-layout">
+          <div className="email-template-sidebar">
+            {EMAIL_TEMPLATE_PURPOSES.map((purpose) => (
+              <button
+                type="button"
+                key={purpose}
+                className={purpose === selectedPurpose ? 'active' : ''}
+                onClick={() => setSelectedPurpose(purpose)}
+              >
+                {purpose
+                  .toLowerCase()
+                  .split('_')
+                  .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+                  .join(' ')}
+              </button>
+            ))}
+          </div>
+
+          <form
+            className="settings-form email-template-editor"
+            onSubmit={(event) => {
+              event.preventDefault();
+              save.mutate();
+            }}
+          >
+            <div className="settings-section-heading">
+              <div>
+                <span className="eyebrow">Selected message</span>
+                <h3>{purposeLabel}</h3>
+                <p>
+                  Supported placeholders: {'{{name}}'}, {'{{title}}'}, {'{{starts_at}}'},{' '}
+                  {'{{ends_at}}'}, {'{{timezone}}'}, {'{{brand_name}}'} and{' '}
+                  {'{{status_message}}'}.
+                </p>
+              </div>
+            </div>
+
+            <label>
+              Subject
+              <input
+                disabled={!canManage}
+                required
+                maxLength={240}
+                value={template.subject}
+                onChange={(event) =>
+                  setState((current) => ({
+                    ...current,
+                    templates: {
+                      ...current.templates,
+                      [selectedPurpose]: {
+                        ...current.templates[selectedPurpose],
+                        subject: event.target.value,
+                      },
+                    },
+                  }))
+                }
+              />
+            </label>
+            <label>
+              Body
+              <textarea
+                disabled={!canManage}
+                required
+                maxLength={10000}
+                rows={12}
+                value={template.body}
+                onChange={(event) =>
+                  setState((current) => ({
+                    ...current,
+                    templates: {
+                      ...current.templates,
+                      [selectedPurpose]: {
+                        ...current.templates[selectedPurpose],
+                        body: event.target.value,
+                      },
+                    },
+                  }))
+                }
+              />
+            </label>
+            <label>
+              Global signature
+              <textarea
+                disabled={!canManage}
+                maxLength={2000}
+                rows={4}
+                value={state.signature}
+                onChange={(event) =>
+                  setState((current) => ({
+                    ...current,
+                    signature: event.target.value,
+                  }))
+                }
+                placeholder={'Regards,\n{{brand_name}} team'}
+              />
+            </label>
+            <div className="email-template-preview">
+              <span>Preview structure</span>
+              <strong>{template.subject}</strong>
+              <pre>{template.body}</pre>
+              {state.signature ? <pre>{state.signature}</pre> : null}
+            </div>
+            {save.error ? <div className="error-banner">{save.error.message}</div> : null}
+            {save.isSuccess ? (
+              <div className="success-banner">Email templates saved.</div>
+            ) : null}
+            <div className="settings-actions">
+              <button className="button primary" disabled={!canManage || save.isPending}>
+                {save.isPending ? 'Saving…' : 'Save email templates'}
+              </button>
+              <button
+                className="button secondary"
+                type="button"
+                disabled={!canManage || save.isPending}
+                onClick={() =>
+                  setState((current) => ({
+                    ...current,
+                    templates: {
+                      ...current.templates,
+                      [selectedPurpose]: DEFAULT_EMAIL_TEMPLATES[selectedPurpose],
+                    },
+                  }))
+                }
+              >
+                Reset selected template
+              </button>
+            </div>
+          </form>
+        </div>
       </section>
     </div>
   );
@@ -779,6 +1289,641 @@ function SecuritySettings() {
           ))}
         </div>
         {revoke.error ? <div className="error-banner">{revoke.error.message}</div> : null}
+      </section>
+    </div>
+  );
+}
+
+function IntegrationSettings() {
+  return (
+    <>
+      <CalendarIntegrationsSettings />
+      <WebhookSettings />
+    </>
+  );
+}
+
+function CalendarIntegrationsSettings() {
+  const queryClient = useQueryClient();
+  const connections = useQuery({
+    queryKey: ['calendar-integrations'],
+    queryFn: () => api.listCalendarConnections(),
+  });
+
+  const connect = useMutation({
+    mutationFn: (provider: CalendarProvider) =>
+      api.beginCalendarConnection(
+        provider,
+        `${window.location.origin}/settings?tab=integrations`,
+      ),
+    onSuccess: (result) => {
+      window.location.assign(result.authorizeUrl);
+    },
+  });
+
+  const disconnect = useMutation({
+    mutationFn: (provider: CalendarProvider) => api.disconnectCalendar(provider),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['calendar-integrations'] });
+    },
+  });
+
+  const providers: Array<{
+    provider: CalendarProvider;
+    name: string;
+    description: string;
+  }> = [
+    {
+      provider: 'GOOGLE',
+      name: 'Google Calendar',
+      description: 'Use Google busy time and calendar events for scheduling.',
+    },
+    {
+      provider: 'MICROSOFT',
+      name: 'Microsoft Calendar',
+      description: 'Connect Microsoft 365 / Outlook calendars through OAuth.',
+    },
+  ];
+
+  return (
+    <div className="settings-stack">
+      <section className="panel settings-panel">
+        <div className="settings-panel-heading">
+          <div>
+            <span className="eyebrow">Scheduling providers</span>
+            <h2>Calendar connections</h2>
+            <p>
+              Calendar credentials use OAuth. Access and refresh tokens are encrypted
+              before persistence and never returned to the browser.
+            </p>
+          </div>
+        </div>
+        {connections.isLoading ? <SettingsLoading /> : null}
+        {connections.error ? (
+          <SettingsError message={connections.error.message} />
+        ) : null}
+        <div className="calendar-integration-grid">
+          {providers.map((item) => {
+            const connection = connections.data?.find(
+              (candidate) => candidate.provider === item.provider,
+            );
+            return (
+              <article className="calendar-integration-card" key={item.provider}>
+                <div>
+                  <span
+                    className={
+                      connection?.status === 'CONNECTED'
+                        ? 'state-chip enabled'
+                        : 'state-chip'
+                    }
+                  >
+                    {connection?.status === 'CONNECTED' ? 'Connected' : 'Not connected'}
+                  </span>
+                  <h3>{item.name}</h3>
+                  <p>{item.description}</p>
+                  {connection ? (
+                    <small>
+                      {connection.accountEmail || 'Connected account'}
+                      {connection.tokenExpiresAt
+                        ? ` · token expires ${formatDate(connection.tokenExpiresAt)}`
+                        : ''}
+                    </small>
+                  ) : null}
+                </div>
+                <div className="settings-actions">
+                  {connection ? (
+                    <button
+                      className="button secondary"
+                      type="button"
+                      disabled={disconnect.isPending}
+                      onClick={() => {
+                        if (window.confirm(`Disconnect ${item.name}?`)) {
+                          disconnect.mutate(item.provider);
+                        }
+                      }}
+                    >
+                      Disconnect
+                    </button>
+                  ) : (
+                    <button
+                      className="button primary"
+                      type="button"
+                      disabled={connect.isPending}
+                      onClick={() => connect.mutate(item.provider)}
+                    >
+                      Connect
+                    </button>
+                  )}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+        {connect.error ? <div className="error-banner">{connect.error.message}</div> : null}
+        {disconnect.error ? (
+          <div className="error-banner">{disconnect.error.message}</div>
+        ) : null}
+      </section>
+    </div>
+  );
+}
+
+function WebhookSettings() {
+  const auth = useAuth();
+  const queryClient = useQueryClient();
+  const currentRole = auth.me?.principal.roles[0] ?? 'GUEST';
+  const canManage = ['OWNER', 'ADMIN'].includes(currentRole);
+  const [apiKeyName, setApiKeyName] = useState('');
+  const [apiKeyRole, setApiKeyRole] = useState<'HOST' | 'MEMBER' | 'ANALYST'>(
+    'HOST',
+  );
+  const [apiKeyRead, setApiKeyRead] = useState(true);
+  const [apiKeyWrite, setApiKeyWrite] = useState(false);
+  const [apiKeyExpiry, setApiKeyExpiry] = useState('');
+  const [revealedApiKey, setRevealedApiKey] = useState<{
+    id: string;
+    token: string;
+    warning: string;
+  } | null>(null);
+  const [name, setName] = useState('');
+  const [url, setUrl] = useState('');
+  const [eventTypes, setEventTypes] = useState(
+    'session.started\nsession.ended\nrecording.ready\ntranscript.ready',
+  );
+  const [revealedSecret, setRevealedSecret] = useState<{
+    subscriptionId: string;
+    secret: string;
+    warning: string;
+  } | null>(null);
+
+  const apiKeys = useQuery({
+    queryKey: ['api-keys'],
+    queryFn: () => api.listApiKeys(),
+    enabled: canManage,
+  });
+
+  const createApiKey = useMutation({
+    mutationFn: () =>
+      api.createApiKey({
+        name: apiKeyName,
+        role: apiKeyRole,
+        scopes: [
+          ...(apiKeyRead ? ['read'] : []),
+          ...(apiKeyWrite ? ['write'] : []),
+        ],
+        ...(apiKeyExpiry
+          ? { expiresAt: new Date(apiKeyExpiry).toISOString() }
+          : {}),
+      }),
+    onSuccess: async (result) => {
+      setApiKeyName('');
+      setApiKeyRole('HOST');
+      setApiKeyRead(true);
+      setApiKeyWrite(false);
+      setApiKeyExpiry('');
+      setRevealedApiKey({
+        id: result.id,
+        token: result.token,
+        warning: result.tokenWarning,
+      });
+      await queryClient.invalidateQueries({ queryKey: ['api-keys'] });
+    },
+  });
+
+  const revokeApiKey = useMutation({
+    mutationFn: (id: string) => api.revokeApiKey(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['api-keys'] });
+    },
+  });
+
+  const webhooks = useQuery({
+    queryKey: ['webhooks'],
+    queryFn: () => api.listWebhooks(),
+    enabled: canManage,
+  });
+
+  const create = useMutation({
+    mutationFn: () =>
+      api.createWebhook({
+        name,
+        url,
+        eventTypes: eventTypes
+          .split(/[\n,;]/)
+          .map((value) => value.trim())
+          .filter(Boolean),
+      }),
+    onSuccess: async (result) => {
+      setName('');
+      setUrl('');
+      setRevealedSecret({
+        subscriptionId: result.id,
+        secret: result.secret,
+        warning: result.secretWarning,
+      });
+      await queryClient.invalidateQueries({ queryKey: ['webhooks'] });
+    },
+  });
+
+  const toggle = useMutation({
+    mutationFn: (input: { id: string; version: number; active: boolean }) =>
+      api.updateWebhook(input.id, input.version, { active: input.active }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['webhooks'] });
+    },
+  });
+
+  const remove = useMutation({
+    mutationFn: (id: string) => api.deleteWebhook(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['webhooks'] });
+    },
+  });
+
+  const rotate = useMutation({
+    mutationFn: (id: string) => api.rotateWebhookSecret(id),
+    onSuccess: async (result) => {
+      setRevealedSecret({
+        subscriptionId: result.id,
+        secret: result.secret,
+        warning: result.secretWarning,
+      });
+      await queryClient.invalidateQueries({ queryKey: ['webhooks'] });
+    },
+  });
+
+  if (!canManage) {
+    return (
+      <div className="settings-stack">
+        <section className="panel settings-panel">
+          <div className="settings-panel-heading">
+            <div>
+              <span className="eyebrow">External automation</span>
+              <h2>API and webhook integrations</h2>
+              <p>
+                Workspace owner or admin access is required to manage API credentials
+                and webhook endpoints.
+              </p>
+            </div>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  return (
+    <div className="settings-stack">
+      <section className="panel settings-panel">
+        <div className="settings-panel-heading">
+          <div>
+            <span className="eyebrow">Workspace API access</span>
+            <h2>Create API key</h2>
+            <p>
+              Create a scoped bearer credential for server-to-server automation.
+              Tokens are stored as hashes and the full value is shown only once.
+            </p>
+          </div>
+        </div>
+        <form
+          className="settings-form"
+          onSubmit={(event: FormEvent) => {
+            event.preventDefault();
+            createApiKey.mutate();
+          }}
+        >
+          <div className="settings-form-grid">
+            <label>
+              Key name
+              <input
+                required
+                maxLength={160}
+                value={apiKeyName}
+                onChange={(event) => setApiKeyName(event.target.value)}
+                placeholder="Production CRM"
+              />
+            </label>
+            <label>
+              Runtime role
+              <select
+                value={apiKeyRole}
+                onChange={(event) =>
+                  setApiKeyRole(
+                    event.target.value as 'HOST' | 'MEMBER' | 'ANALYST',
+                  )
+                }
+              >
+                <option value="HOST">host</option>
+                <option value="MEMBER">member</option>
+                <option value="ANALYST">analyst</option>
+              </select>
+            </label>
+            <label>
+              Optional expiry
+              <input
+                type="datetime-local"
+                value={apiKeyExpiry}
+                onChange={(event) => setApiKeyExpiry(event.target.value)}
+              />
+            </label>
+            <div className="api-key-scope-field">
+              <span>Scopes</span>
+              <label className="api-key-scope-option">
+                <input
+                  type="checkbox"
+                  checked={apiKeyRead}
+                  onChange={(event) => setApiKeyRead(event.target.checked)}
+                />
+                <span>
+                  <strong>Read</strong>
+                  <small>Allow GET/HEAD/OPTIONS API requests.</small>
+                </span>
+              </label>
+              <label className="api-key-scope-option">
+                <input
+                  type="checkbox"
+                  checked={apiKeyWrite}
+                  onChange={(event) => setApiKeyWrite(event.target.checked)}
+                />
+                <span>
+                  <strong>Write</strong>
+                  <small>Allow mutating API requests. Write also permits reads.</small>
+                </span>
+              </label>
+            </div>
+          </div>
+          {createApiKey.error ? (
+            <div className="error-banner">{createApiKey.error.message}</div>
+          ) : null}
+          <div className="settings-actions">
+            <button
+              className="button primary"
+              disabled={
+                createApiKey.isPending ||
+                !apiKeyName.trim() ||
+                (!apiKeyRead && !apiKeyWrite)
+              }
+            >
+              {createApiKey.isPending ? 'Creating…' : 'Create API key'}
+            </button>
+          </div>
+        </form>
+
+        {revealedApiKey ? (
+          <div className="webhook-secret-box">
+            <div>
+              <strong>API key</strong>
+              <small>{revealedApiKey.warning}</small>
+            </div>
+            <code>{revealedApiKey.token}</code>
+            <button
+              type="button"
+              className="button secondary"
+              onClick={() => {
+                void navigator.clipboard.writeText(revealedApiKey.token);
+              }}
+            >
+              Copy API key
+            </button>
+          </div>
+        ) : null}
+      </section>
+
+      <section className="panel settings-panel">
+        <div className="settings-panel-heading compact-settings-heading">
+          <div>
+            <span className="eyebrow">Server credentials</span>
+            <h2>API keys</h2>
+          </div>
+          <span className="count-pill">{apiKeys.data?.length ?? 0}</span>
+        </div>
+        {apiKeys.isLoading ? <SettingsLoading /> : null}
+        {apiKeys.error ? <SettingsError message={apiKeys.error.message} /> : null}
+        <div className="webhook-card-list">
+          {apiKeys.data?.map((key) => (
+            <article className="webhook-card" key={key.id}>
+              <div className="webhook-card-heading">
+                <div>
+                  <strong>{key.name}</strong>
+                  <span>{key.tokenPrefix}••••••••</span>
+                </div>
+                <span className={key.revokedAt ? 'state-chip' : 'state-chip enabled'}>
+                  {key.revokedAt ? 'Revoked' : 'Active'}
+                </span>
+              </div>
+              <div className="webhook-event-tags">
+                <code>{key.role.toLowerCase()}</code>
+                {key.scopes.map((scope) => (
+                  <code key={scope}>{scope}</code>
+                ))}
+              </div>
+              <div className="webhook-card-meta">
+                <span>Created {formatDate(key.createdAt)}</span>
+                <span>Last used {formatDate(key.lastUsedAt)}</span>
+                <span>
+                  {key.expiresAt ? `Expires ${formatDate(key.expiresAt)}` : 'No expiry'}
+                </span>
+              </div>
+              {!key.revokedAt ? (
+                <div className="webhook-card-actions">
+                  <button
+                    type="button"
+                    className="button danger"
+                    disabled={revokeApiKey.isPending}
+                    onClick={() => {
+                      if (window.confirm(`Revoke API key "${key.name}"?`)) {
+                        revokeApiKey.mutate(key.id);
+                      }
+                    }}
+                  >
+                    Revoke
+                  </button>
+                </div>
+              ) : null}
+            </article>
+          ))}
+          {apiKeys.data?.length === 0 ? (
+            <div className="settings-empty-row">No API keys have been created.</div>
+          ) : null}
+        </div>
+        {revokeApiKey.error ? (
+          <div className="error-banner">{revokeApiKey.error.message}</div>
+        ) : null}
+      </section>
+
+      <section className="panel settings-panel">
+        <div className="settings-panel-heading">
+          <div>
+            <span className="eyebrow">Signed event delivery</span>
+            <h2>Create webhook endpoint</h2>
+            <p>
+              Subscribe an HTTPS endpoint to workspace events. Deliveries use an HMAC-SHA256
+              signature and retry with bounded exponential backoff.
+            </p>
+          </div>
+        </div>
+        <form
+          className="settings-form"
+          onSubmit={(event: FormEvent) => {
+            event.preventDefault();
+            create.mutate();
+          }}
+        >
+          <div className="settings-form-grid">
+            <label>
+              Endpoint name
+              <input
+                required
+                maxLength={160}
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="CRM automation"
+              />
+            </label>
+            <label>
+              HTTPS endpoint
+              <input
+                required
+                type="url"
+                maxLength={2000}
+                value={url}
+                onChange={(event) => setUrl(event.target.value)}
+                placeholder="https://example.com/webhooks/sessions"
+              />
+            </label>
+            <label className="settings-grid-span">
+              Event types
+              <textarea
+                required
+                rows={6}
+                value={eventTypes}
+                onChange={(event) => setEventTypes(event.target.value)}
+                placeholder="session.started&#10;session.ended&#10;recording.ready"
+              />
+              <small>One event per line, or separate events with commas.</small>
+            </label>
+          </div>
+          {create.error ? <div className="error-banner">{create.error.message}</div> : null}
+          <div className="settings-actions">
+            <button
+              className="button primary"
+              disabled={
+                create.isPending ||
+                !name.trim() ||
+                !url.trim() ||
+                !eventTypes.trim()
+              }
+            >
+              {create.isPending ? 'Creating…' : 'Create webhook'}
+            </button>
+          </div>
+        </form>
+
+        {revealedSecret ? (
+          <div className="webhook-secret-box">
+            <div>
+              <strong>Signing secret</strong>
+              <small>{revealedSecret.warning}</small>
+            </div>
+            <code>{revealedSecret.secret}</code>
+            <button
+              type="button"
+              className="button secondary"
+              onClick={() => {
+                void navigator.clipboard.writeText(revealedSecret.secret);
+              }}
+            >
+              Copy secret
+            </button>
+          </div>
+        ) : null}
+      </section>
+
+      <section className="panel settings-panel">
+        <div className="settings-panel-heading compact-settings-heading">
+          <div>
+            <span className="eyebrow">Workspace endpoints</span>
+            <h2>Webhook subscriptions</h2>
+          </div>
+          <span className="count-pill">{webhooks.data?.length ?? 0}</span>
+        </div>
+        {webhooks.isLoading ? <SettingsLoading /> : null}
+        {webhooks.error ? <SettingsError message={webhooks.error.message} /> : null}
+        <div className="webhook-card-list">
+          {webhooks.data?.map((webhook) => {
+            const latest = webhook.deliveries?.[0];
+            return (
+              <article className="webhook-card" key={webhook.id}>
+                <div className="webhook-card-heading">
+                  <div>
+                    <strong>{webhook.name}</strong>
+                    <span>{webhook.url}</span>
+                  </div>
+                  <span className={webhook.active ? 'state-chip enabled' : 'state-chip'}>
+                    {webhook.active ? 'Active' : 'Paused'}
+                  </span>
+                </div>
+                <div className="webhook-event-tags">
+                  {webhook.eventTypes.map((eventType) => (
+                    <code key={eventType}>{eventType}</code>
+                  ))}
+                </div>
+                <div className="webhook-card-meta">
+                  <span>{webhook._count?.deliveries ?? 0} deliveries</span>
+                  <span>
+                    {latest
+                      ? `Latest: ${latest.status.toLowerCase()} · ${latest.eventType}`
+                      : 'No deliveries yet'}
+                  </span>
+                </div>
+                {latest?.lastError ? (
+                  <small className="webhook-last-error">{latest.lastError}</small>
+                ) : null}
+                <div className="webhook-card-actions">
+                  <button
+                    type="button"
+                    className="button secondary"
+                    disabled={toggle.isPending}
+                    onClick={() =>
+                      toggle.mutate({
+                        id: webhook.id,
+                        version: webhook.version,
+                        active: !webhook.active,
+                      })
+                    }
+                  >
+                    {webhook.active ? 'Pause' : 'Resume'}
+                  </button>
+                  <button
+                    type="button"
+                    className="button secondary"
+                    disabled={rotate.isPending}
+                    onClick={() => rotate.mutate(webhook.id)}
+                  >
+                    Rotate secret
+                  </button>
+                  <button
+                    type="button"
+                    className="button danger"
+                    disabled={remove.isPending}
+                    onClick={() => {
+                      if (window.confirm(`Delete webhook "${webhook.name}"?`)) {
+                        remove.mutate(webhook.id);
+                      }
+                    }}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+          {webhooks.data?.length === 0 ? (
+            <div className="settings-empty-row">No webhook endpoints have been created.</div>
+          ) : null}
+        </div>
+        {toggle.error ? <div className="error-banner">{toggle.error.message}</div> : null}
+        {rotate.error ? <div className="error-banner">{rotate.error.message}</div> : null}
+        {remove.error ? <div className="error-banner">{remove.error.message}</div> : null}
       </section>
     </div>
   );

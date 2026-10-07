@@ -436,3 +436,330 @@
     padding: 20px;
   }
 }
+
+.public-action-card > button {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 12px;
+  border: 0;
+  border-radius: 12px;
+  background: #183f38;
+  color: #fff;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.public-action-card > button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.public-action-card > .public-danger-button {
+  border: 1px solid #e5b8af;
+  background: #fff4f1;
+  color: #963f32;
+}
+
+.public-action-card > small {
+  display: block;
+  margin-top: 16px;
+  color: #78837f;
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.public-form textarea,
+.public-form select {
+  width: 100%;
+  border: 1px solid #d4d3cc;
+  border-radius: 11px;
+  padding: 12px;
+  outline: 0;
+  background: #fff;
+  color: #142421;
+  font: inherit;
+}
+
+.public-form textarea {
+  min-height: 110px;
+  resize: vertical;
+}
+
+.public-form select {
+  min-height: 45px;
+}
+
+.public-form textarea:focus,
+.public-form select:focus {
+  border-color: #507b70;
+  box-shadow: 0 0 0 3px rgba(48, 111, 85, 0.12);
+}
+
+.public-checkbox-field {
+  grid-template-columns: 18px minmax(0, 1fr) !important;
+  align-items: start;
+  gap: 10px !important;
+}
+
+.public-checkbox-field input {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+}
+
+.public-flow-page {
+  font-family: var(--public-font, 'Manrope'), sans-serif;
+  background:
+    linear-gradient(rgba(241, 238, 230, 0.92), rgba(241, 238, 230, 0.96)),
+    var(--public-hero-image, none),
+    #f1eee6;
+  background-size: cover;
+  background-position: center;
+}
+
+.public-flow-page .public-wordmark span,
+.public-flow-page .public-action-card > button,
+.public-flow-page .public-form button {
+  background: var(--public-primary, #183f38);
+}
+
+.public-flow-page .public-live-label {
+  background: var(--public-accent, #dff0e9);
+  color: var(--public-primary, #26614f);
+}
+
+.public-flow-page .public-kicker,
+.public-flow-page .slot-grid button.selected {
+  color: var(--public-primary, #183f38);
+}
+
+.public-wordmark img {
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  object-fit: contain;
+  background: #fff;
+}
+
+.public-wordmark strong {
+  font: inherit;
+}
+
+.public-wordmark small {
+  color: #7b8582;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.public-presenter-section {
+  display: grid;
+  gap: 12px;
+  margin: 28px 0;
+}
+
+.public-presenter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+}
+
+.public-presenter-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #d8ddd9;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.public-presenter-card img,
+.public-presenter-avatar {
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  border-radius: 14px;
+  object-fit: cover;
+}
+
+.public-presenter-avatar {
+  display: grid;
+  place-items: center;
+  background: var(--public-primary, #183f38);
+  color: #fff;
+  font-weight: 850;
+}
+
+.public-presenter-card > div {
+  display: grid;
+  gap: 3px;
+}
+
+.public-presenter-card > div > span {
+  color: var(--public-primary, #183f38);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.public-presenter-card p {
+  margin: 4px 0 0;
+  color: #68736f;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+
+.public-primary-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  margin-top: 12px;
+  padding: 0 18px;
+  border-radius: 12px;
+  background: var(--public-primary, #183f38);
+  color: #fff;
+  font-weight: 850;
+  text-decoration: none;
+}
+
+.public-webinar-page {
+  min-height: 100vh;
+  background: #0f1715;
+  color: #f6f8f7;
+}
+
+.public-webinar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px clamp(18px, 4vw, 48px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.public-webinar-page .public-wordmark {
+  color: #fff;
+}
+
+.public-webinar-state {
+  max-width: 520px;
+  color: #b9c5c1;
+  font-size: 12px;
+  text-align: right;
+}
+
+.public-webinar-state.connected {
+  color: #9be0c7;
+}
+
+.public-webinar-state.error {
+  color: #f2b8ad;
+}
+
+.public-webinar-shell {
+  display: grid;
+  gap: 18px;
+  padding: clamp(20px, 4vw, 48px);
+}
+
+.public-webinar-copy {
+  display: grid;
+  gap: 8px;
+  max-width: 900px;
+}
+
+.public-webinar-copy h1,
+.public-webinar-copy p {
+  margin: 0;
+}
+
+.public-webinar-copy h1 {
+  font-size: clamp(28px, 5vw, 52px);
+  line-height: 1;
+}
+
+.public-webinar-copy p {
+  color: #aebbb7;
+}
+
+.public-webinar-stage {
+  position: relative;
+  display: grid;
+  min-height: min(68vh, 760px);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  background: #050807;
+}
+
+.public-webinar-video {
+  width: 100%;
+  height: 100%;
+  min-height: min(68vh, 760px);
+  object-fit: contain;
+  background: #050807;
+}
+
+.public-webinar-audio {
+  display: none;
+}
+
+.public-webinar-placeholder {
+  display: grid;
+  place-content: center;
+  gap: 8px;
+  min-height: min(68vh, 760px);
+  padding: 24px;
+  text-align: center;
+  color: #eef4f2;
+}
+
+.public-webinar-placeholder p {
+  max-width: 520px;
+  margin: 0;
+  color: #91a09b;
+  line-height: 1.6;
+}
+
+.public-webinar-placeholder.waiting {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.public-webinar-attendee-note {
+  max-width: 760px;
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.public-webinar-attendee-note strong {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.public-webinar-attendee-note p {
+  margin: 0;
+  color: #aebbb7;
+  line-height: 1.6;
+}
+
+@media (max-width: 700px) {
+  .public-webinar-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .public-webinar-state {
+    text-align: left;
+  }
+
+  .public-webinar-stage,
+  .public-webinar-video,
+  .public-webinar-placeholder {
+    min-height: 52vh;
+  }
+}

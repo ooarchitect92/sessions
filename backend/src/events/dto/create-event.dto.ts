@@ -1,15 +1,19 @@
+import { Type } from 'class-transformer';
 import {
   IsArray,
   IsInt,
   IsISO8601,
-  IsObject,
   IsOptional,
+  IsObject,
   IsString,
   Length,
   Matches,
   Max,
   Min,
+  ArrayMaxSize,
+  ValidateNested,
 } from 'class-validator';
+import { PublicFormFieldDto } from '../../common/forms/public-form-field.dto';
 
 export class CreateEventDto {
   @IsString()
@@ -45,8 +49,10 @@ export class CreateEventDto {
   capacity?: number | null;
 
   @IsArray()
-  @IsObject({ each: true })
-  registrationFields: Record<string, unknown>[] = [];
+  @ArrayMaxSize(50)
+  @ValidateNested({ each: true })
+  @Type(() => PublicFormFieldDto)
+  registrationFields: PublicFormFieldDto[] = [];
 
   @IsObject()
   branding: Record<string, unknown> = {};

@@ -1,5 +1,15 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { publicApi } from './public-api';
+import {
+  PublicCustomFields,
+  type PublicFormAnswers,
+  type PublicFormField,
+} from './PublicCustomFields';
+import {
+  PublicWordmark,
+  publicBrandStyle,
+  type PublicBranding,
+} from './PublicBranding';
 
 interface PublicEvent {
   id: string;
@@ -10,15 +20,27 @@ interface PublicEvent {
   durationMinutes: number;
   timezone: string;
   capacity: number | null;
-  registrationFields: Array<Record<string, unknown>>;
-  branding: Record<string, unknown>;
+  registrationFields: PublicFormField[];
+  branding: PublicBranding;
   status: 'PUBLISHED' | 'LIVE';
   registrationCount: number;
+  presenters: Array<{
+    id: string;
+    role: 'ORGANIZER' | 'HOST' | 'CO_HOST' | 'SPEAKER';
+    name: string;
+    title: string | null;
+    bio: string | null;
+    avatarUrl: string | null;
+    position: number;
+  }>;
 }
 
 interface Registration {
   id: string;
   status: 'REGISTERED' | 'WAITLISTED';
+  admissionToken?: string;
+  joinUrl?: string;
+  admissionTokenExpiresAt?: string;
 }
 
 export function PublicEventPage({
@@ -36,6 +58,7 @@ export function PublicEventPage({
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [registration, setRegistration] = useState<Registration | null>(null);
+  const [answers, setAnswers] = useState<PublicFormAnswers>({});
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -72,7 +95,7 @@ export function PublicEventPage({
         )}/events/${encodeURIComponent(eventSlug)}/registrations`,
         {
           method: 'POST',
-          body: JSON.stringify({ name, email, answers: {} }),
+          body: JSON.stringify({ name, email, answers }),
         },
       );
       setRegistration(result);
@@ -91,12 +114,12 @@ export function PublicEventPage({
     event.capacity === null ? null : Math.max(0, event.capacity - event.registrationCount);
 
   return (
-    <main className="public-flow-page event-flow-page">
+    <main
+      className="public-flow-page event-flow-page"
+      style={publicBrandStyle(event.branding)}
+    >
       <header className="public-flow-nav">
-        <a className="public-wordmark" href="/">
-          <span>S</span>
-          Sessions
-        </a>
+        <PublicWordmark branding={event.branding} />
         <span className="public-live-label">{event.status === 'LIVE' ? 'Live now' : 'Registration open'}</span>
       </header>
 
@@ -107,6 +130,32 @@ export function PublicEventPage({
           <p className="public-event-description">
             {event.description ?? 'Join a focused, interactive webinar with a shared agenda, live questions, and collaborative participation.'}
           </p>
+          {event.presenters.length > 0 ? (
+            <section className="public-presenter-section">
+              <span className="public-kicker">Meet the presenters</span>
+              <div className="public-presenter-grid">
+                {event.presenters.map((presenter) => (
+                  <article className="public-presenter-card" key={presenter.id}>
+                    {presenter.avatarUrl ? (
+                      <img alt="" src={presenter.avatarUrl} />
+                    ) : (
+                      <span className="public-presenter-avatar">
+                        {presenter.name.slice(0, 1).toUpperCase()}
+                      </span>
+                    )}
+                    <div>
+                      <strong>{presenter.name}</strong>
+                      <span>
+                        {presenter.title ||
+                          presenter.role.toLowerCase().replace('_', '-')}
+                      </span>
+                      {presenter.bio ? <p>{presenter.bio}</p> : null}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          ) : null}
           <div className="public-event-facts">
             <article>
               <span>Date and time</span>
@@ -150,6 +199,11 @@ export function PublicEventPage({
                 The registration has been stored. Reminder delivery and calendar attachment
                 generation are handled by the notification workflow when configured.
               </p>
+              {registration.joinUrl ? (
+                <a className="public-primary-link" href={registration.joinUrl}>
+                  Join webinar
+                </a>
+              ) : null}
             </div>
           ) : (
             <>
@@ -177,12 +231,13 @@ export function PublicEventPage({
                     autoComplete="email"
                   />
                 </label>
-                {event.registrationFields.length > 0 ? (
-                  <div className="public-form-note">
-                    This event has {event.registrationFields.length} additional organizer-defined
-                    fields. The full dynamic form renderer is the next form-builder increment.
-                  </div>
-                ) : null}
+                <PublicCustomFields
+                  fields={event.registrationFields}
+                  answers={answers}
+                  onChange={(key, value) =>
+                    setAnswers((current) => ({ ...current, [key]: value }))
+                  }
+                />
                 {error ? <div className="public-error">{error}</div> : null}
                 <button disabled={submitting || !name.trim() || !email.trim()}>
                   {submitting ? 'Registering…' : 'Register now'}

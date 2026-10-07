@@ -57,6 +57,88 @@ export function useSessionRealtime(sessionId: string): void {
           void queryClient.invalidateQueries({ queryKey: ['questions', sessionId] });
         });
       }
+      for (const eventName of [
+        'breakout.updated',
+        'breakout.started',
+        'breakout.closed',
+      ]) {
+        socket.on(eventName, () => {
+          void queryClient.invalidateQueries({
+            queryKey: ['breakouts', sessionId],
+          });
+        });
+      }
+      for (const eventName of [
+        'whiteboard.operation',
+        'whiteboard.snapshot.updated',
+      ]) {
+        socket.on(eventName, () => {
+          void queryClient.invalidateQueries({
+            queryKey: ['whiteboard', sessionId],
+          });
+        });
+      }
+      socket.on(
+        'session.reaction',
+        (payload: {
+          userId?: string;
+          displayName?: string;
+          reaction?: string;
+          occurredAt?: string;
+        }) => {
+          window.dispatchEvent(
+            new CustomEvent('sessions:reaction', { detail: payload }),
+          );
+        },
+      );
+      socket.on(
+        'session.hand_raise',
+        (payload: {
+          userId?: string;
+          displayName?: string;
+          raised?: boolean;
+          occurredAt?: string;
+        }) => {
+          window.dispatchEvent(
+            new CustomEvent('sessions:hand-raise', { detail: payload }),
+          );
+        },
+      );
+      socket.on('breakout.broadcast', (payload: { message?: string }) => {
+        if (payload?.message) {
+          window.dispatchEvent(
+            new CustomEvent('sessions:breakout-broadcast', {
+              detail: { message: payload.message },
+            }),
+          );
+        }
+      });
+      socket.on(
+        'transcript.live.segment',
+        (payload: {
+          transcriptId?: string;
+          sessionId?: string;
+          segmentId?: string;
+          position?: number;
+          startMs?: number;
+          endMs?: number;
+          speakerLabel?: string | null;
+          text?: string;
+          userId?: string;
+          displayName?: string;
+          language?: string | null;
+          isFinal?: boolean;
+        }) => {
+          if (payload?.segmentId && payload.text) {
+            window.dispatchEvent(
+              new CustomEvent('sessions:live-caption', { detail: payload }),
+            );
+          }
+          void queryClient.invalidateQueries({
+            queryKey: ['memory-detail', sessionId],
+          });
+        },
+      );
       socket.on('memory.updated', () => {
         void queryClient.invalidateQueries({ queryKey: ['memory'] });
         void queryClient.invalidateQueries({

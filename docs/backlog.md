@@ -20,13 +20,17 @@
 
 ## Phase 2 — collaboration and reliable capture
 
-- [x] persistent public and host chat
+- [x] persistent public, host-only and private direct-message chat with privacy-scoped realtime delivery
 - [x] poll creation, launch, answer, results and close lifecycle
 - [x] moderated Q&A with voting and answers
-- [ ] reactions and private direct-message channels
-- [ ] whiteboard integration, snapshots and operation compaction
-- [ ] breakout assignment, media-room transition and host broadcast
-- [ ] content blocks and sandboxed embed resolver
+- [x] live emoji reactions and raise/lower-hand signals
+- [ ] durable attendance intervals, richer presence state and moderation policy controls
+- [x] persistent collaborative whiteboard with realtime operations, host snapshots and operation compaction
+- [ ] live collaborator cursors, image upload pipeline, undo/redo history and large-board performance qualification
+- [x] breakout assignment, assignment-aware LiveKit media-room transition and host broadcast
+- [ ] durable breakout attendance intervals, forced client migration and webinar-scale qualification
+- [x] HTTPS agenda content blocks with backend validation and sandboxed meeting-stage embeds
+- [ ] provider-specific OAuth embed adapters, uploads/native viewers and remote co-browsing controls
 - [ ] upload quarantine, malware scan and signed downloads
 - [x] recording, transcript and summary artifact state models
 - [x] post-session artifact requests, audit evidence and retry controls
@@ -53,20 +57,30 @@
 - [x] workspace memory list, detail page and database text search
 - [x] transcript segment model with speaker/timestamp fields
 - [x] reviewed summary, decision, action-item and citation model
-- [ ] recording/STT workers, streaming captions and diarization qualification
-- [ ] transcript correction, revision history and language policy
+- [ ] recording/STT workers, streaming captions and diarization qualification (post-session HTTP STT worker is implemented; streaming captions and diarization/provider qualification remain)
+- [x] transcript correction and audit-backed revision history
+- [ ] transcript language policy and diarization correction workflow
 - [x] object-storage access, signed playback and secure download paths
-- [ ] PostgreSQL full-text index and optional vector retrieval with workspace filters
-- [ ] agenda generator and provider-abstracted AI execution gateway
-- [ ] summary/action editor, follow-up approval and CRM write controls
+- [x] PostgreSQL full-text transcript index with workspace-scoped search
+- [ ] optional vector retrieval with workspace filters
+- [x] review-first agenda generator with provider abstraction and explicit apply step
+- [x] provider-abstracted post-session AI summary execution gateway
+- [x] versioned summary editor and explicit human approval
+- [x] structured action-item editor with approval invalidation
+- [x] review-first AI follow-up email drafting and approval
+- [x] governed outbound email delivery queue with provider abstraction and delivery history
+- [ ] CRM write controls
 - [ ] groundedness, privacy, prompt-injection, cost and latency evaluation suite
 
 ## Phase 5 — platform and enterprise
 
-- [ ] API keys, webhook subscriptions, HMAC signatures, replay and reconciliation
+- [x] workspace API keys with hashed secret storage, role binding, expiry/revocation and read/write scopes
+- [x] webhook subscriptions, HMAC-SHA256 signatures, bounded retries and manual replay
+- [ ] webhook delivery reconciliation/operational dashboards
 - [ ] provider integration framework, credential governance and SSRF-safe egress
 - [ ] branding, email templates, custom domains and automated TLS
-- [ ] analytics aggregation and governed exports
+- [x] workspace/session analytics aggregation and dashboard from persisted tenant data
+- [ ] governed analytics exports, attendance intervals and page-view/conversion event qualification
 - [ ] plans, subscriptions, entitlements, seats, quota ledger and reconciliation
 - [ ] SAML/OIDC enterprise SSO, SCIM, audit exports and retention policies
 - [ ] localization, accessibility certification, regional cells and disaster-recovery qualification

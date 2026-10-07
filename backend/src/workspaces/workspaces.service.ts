@@ -15,6 +15,8 @@ import {
 import { createHash, randomUUID } from 'node:crypto';
 import { AuditService } from '../audit/audit.service';
 import { SecurityService } from '../auth/security.service';
+import { normalizeWorkspaceBranding } from '../common/branding/workspace-branding';
+import { normalizeWorkspaceEmailTemplates } from '../common/notifications/workspace-email-templates';
 import {
   ADMIN_ROLES,
   hasAnyRole,
@@ -218,6 +220,22 @@ export class WorkspacesService {
       throw new BadRequestException('At least one workspace field must be supplied');
     }
     if (input.timezone !== undefined) this.assertTimeZone(input.timezone);
+    const normalizedSettings =
+      input.settings === undefined
+        ? undefined
+        : {
+            ...input.settings,
+            ...(Object.prototype.hasOwnProperty.call(input.settings, 'branding')
+              ? { branding: normalizeWorkspaceBranding(input.settings.branding) }
+              : {}),
+            ...(Object.prototype.hasOwnProperty.call(input.settings, 'emailTemplates')
+              ? {
+                  emailTemplates: normalizeWorkspaceEmailTemplates(
+                    input.settings.emailTemplates,
+                  ),
+                }
+              : {}),
+          };
 
     return this.prisma.$transaction(async (transaction) => {
       await this.requireCurrentMembership(principal, transaction);
@@ -255,11 +273,11 @@ export class WorkspacesService {
           ...(input.name !== undefined ? { name: input.name.trim() } : {}),
           ...(input.slug !== undefined ? { slug: input.slug } : {}),
           ...(input.timezone !== undefined ? { timezone: input.timezone } : {}),
-          ...(input.settings !== undefined
+          ...(normalizedSettings !== undefined
             ? {
                 settings: {
                   ...currentSettings,
-                  ...input.settings,
+                  ...normalizedSettings,
                 } as Prisma.InputJsonValue,
               }
             : {}),

@@ -6,27 +6,43 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import {
+  EventPresenterRole,
   EventStatus,
   Prisma,
   RegistrationStatus,
   SessionKind,
   SessionStatus,
   type Event,
+  type EventPresenter,
   type EventRegistration,
 } from "@prisma/client";
 import { createHash, randomUUID } from "node:crypto";
+import { ConfigService } from "@nestjs/config";
+import { SecurityService } from "../auth/security.service";
 import { AuditService } from "../audit/audit.service";
 import {
   HOST_ROLES,
   hasAnyRole,
   type Principal,
 } from "../common/auth/principal";
+import {
+  assertPublicFormFields,
+  validatePublicFormAnswers,
+} from "../common/forms/public-form-validation";
+import {
+  normalizeWorkspaceBranding,
+  publicWorkspaceBranding,
+} from "../common/branding/workspace-branding";
+import type { PublicFormFieldDto } from "../common/forms/public-form-field.dto";
 import { TenantDatabaseService } from "../database/tenant-database.service";
 import { WorkerPrismaService } from "../database/worker-prisma.service";
 import { OutboxService } from "../outbox/outbox.service";
+import { NotificationSchedulerService } from "../notifications/notification-scheduler.service";
 import { CreateEventDto } from "./dto/create-event.dto";
+import { CreateEventPresenterDto } from "./dto/create-event-presenter.dto";
 import { RegisterEventDto } from "./dto/register-event.dto";
 import { UpdateEventDto } from "./dto/update-event.dto";
+import { UpdateEventPresenterDto } from "./dto/update-event-presenter.dto";
 
 const PUBLIC_EVENT_STATUSES: EventStatus[] = [
   EventStatus.PUBLISHED,
@@ -45,6 +61,9 @@ export class EventsService {
     private readonly publicDatabase: WorkerPrismaService,
     private readonly audit: AuditService,
     private readonly outbox: OutboxService,
+    private readonly notifications: NotificationSchedulerService,
+    private readonly security: SecurityService,
+    private readonly config: ConfigService,
   ) {}
 
   async create(
@@ -54,6 +73,7 @@ export class EventsService {
   ): Promise<Event | Prisma.JsonObject> {
     this.assertHost(principal);
     this.assertTimeZone(input.timezone);
+    assertPublicFormFields(input.registrationFields);
     const requestHash = createHash("sha256")
       .update(JSON.stringify({ operation: "event.create", input }))
       .digest("hex");
@@ -102,8 +122,20 @@ export class EventsService {
           durationMinutes: input.durationMinutes,
           timezone: input.timezone,
           capacity: input.capacity ?? null,
-          registrationFields: input.registrationFields as Prisma.InputJsonValue,
+          registrationFields: input.registrationFields as unknown as Prisma.InputJsonValue,
           branding: input.branding as Prisma.InputJsonValue,
+        },
+      });
+      await transaction.eventPresenter.create({
+        data: {
+          organizationId: principal.organizationId,
+          workspaceId: principal.workspaceId,
+          eventId: event.id,
+          userId: principal.userId,
+          role: EventPresenterRole.ORGANIZER,
+          name: principal.displayName,
+          email: principal.email.toLowerCase(),
+          position: 0,
         },
       });
       const response = this.toJson(event);
@@ -138,7 +170,10 @@ export class EventsService {
     return this.database.run(principal, (transaction) =>
       transaction.event.findMany({
         orderBy: [{ startsAt: "asc" }, { createdAt: "desc" }],
-        include: { _count: { select: { registrations: true } } },
+        include: {
+          presenters: { orderBy: [{ position: "asc" }, { createdAt: "asc" }] },
+          _count: { select: { registrations: true } },
+        },
       }),
     );
   }
@@ -149,6 +184,7 @@ export class EventsService {
         where: { id },
         include: {
           session: true,
+          presenters: { orderBy: [{ position: "asc" }, { createdAt: "asc" }] },
           _count: { select: { registrations: true } },
         },
       });
@@ -170,6 +206,9 @@ export class EventsService {
       );
     }
     if (input.timezone !== undefined) this.assertTimeZone(input.timezone);
+    if (input.registrationFields !== undefined) {
+      assertPublicFormFields(input.registrationFields);
+    }
 
     return this.database.run(principal, async (transaction) => {
       if (input.slug !== undefined) {
@@ -205,7 +244,7 @@ export class EventsService {
           ...(input.registrationFields !== undefined
             ? {
                 registrationFields:
-                  input.registrationFields as Prisma.InputJsonValue,
+                  input.registrationFields as unknown as Prisma.InputJsonValue,
               }
             : {}),
           ...(input.branding !== undefined
@@ -359,10 +398,11 @@ export class EventsService {
         where: { id: eventId },
       });
       if (!event) throw new NotFoundException("Event not found");
-      return transaction.eventRegistration.findMany({
+      const registrations = await transaction.eventRegistration.findMany({
         where: { eventId },
         orderBy: { registeredAt: "desc" },
       });
+      return registrations.map((registration) => this.registrationProjection(registration));
     });
   }
 
@@ -371,7 +411,7 @@ export class EventsService {
     eventId: string,
     registrationId: string,
     status: RegistrationStatus,
-  ): Promise<EventRegistration> {
+  ) {
     this.assertHost(principal);
     return this.database.run(principal, async (transaction) => {
       const registration = await transaction.eventRegistration.findFirst({
@@ -398,9 +438,190 @@ export class EventsService {
         aggregateType: "event_registration",
         aggregateId: registrationId,
         eventType: "event.registration.updated",
+        payload: this.toJson(this.registrationProjection(updated)),
+      });
+      return this.registrationProjection(updated);
+    });
+  }
+
+  async listPresenters(
+    principal: Principal,
+    eventId: string,
+  ): Promise<EventPresenter[]> {
+    this.assertHost(principal);
+    return this.database.run(principal, async (transaction) => {
+      const event = await transaction.event.findUnique({
+        where: { id: eventId },
+        select: { id: true },
+      });
+      if (!event) throw new NotFoundException("Event not found");
+      return transaction.eventPresenter.findMany({
+        where: { eventId },
+        orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+      });
+    });
+  }
+
+  async createPresenter(
+    principal: Principal,
+    eventId: string,
+    input: CreateEventPresenterDto,
+  ): Promise<EventPresenter> {
+    this.assertHost(principal);
+    if (input.role === EventPresenterRole.ORGANIZER) {
+      throw new BadRequestException("The event creator is the organizer");
+    }
+    return this.database.run(principal, async (transaction) => {
+      const event = await transaction.event.findUnique({
+        where: { id: eventId },
+        select: { id: true, status: true },
+      });
+      if (!event) throw new NotFoundException("Event not found");
+      if (event.status === EventStatus.CANCELLED || event.status === EventStatus.ENDED) {
+        throw new ConflictException("Presenters cannot be changed for a terminal event");
+      }
+      const email = input.email.toLowerCase();
+      const existing = await transaction.eventPresenter.findUnique({
+        where: { eventId_email: { eventId, email } },
+      });
+      if (existing) {
+        throw new ConflictException("This email is already on the presenter team");
+      }
+      const membership = await transaction.workspaceMembership.findFirst({
+        where: {
+          workspaceId: principal.workspaceId,
+          user: { email },
+        },
+        select: { userId: true },
+      });
+      const presenter = await transaction.eventPresenter.create({
+        data: {
+          organizationId: principal.organizationId,
+          workspaceId: principal.workspaceId,
+          eventId,
+          userId: membership?.userId ?? null,
+          role: input.role,
+          name: input.name.trim(),
+          email,
+          title: input.title?.trim() || null,
+          bio: input.bio?.trim() || null,
+          avatarUrl: input.avatarUrl?.trim() || null,
+          position: input.position ?? 0,
+        },
+      });
+      await this.audit.record(transaction, principal, {
+        action: "event.presenter.created",
+        resourceType: "event_presenter",
+        resourceId: presenter.id,
+        metadata: { eventId, role: presenter.role },
+      });
+      await this.outbox.enqueue(transaction, principal, {
+        aggregateType: "event_presenter",
+        aggregateId: presenter.id,
+        eventType: "event.presenter.created",
+        payload: this.toJson(presenter),
+      });
+      return presenter;
+    });
+  }
+
+  async updatePresenter(
+    principal: Principal,
+    eventId: string,
+    presenterId: string,
+    input: UpdateEventPresenterDto,
+  ): Promise<EventPresenter> {
+    this.assertHost(principal);
+    if (Object.keys(input).length === 0) {
+      throw new BadRequestException("At least one presenter field must be supplied");
+    }
+    return this.database.run(principal, async (transaction) => {
+      const presenter = await transaction.eventPresenter.findFirst({
+        where: { id: presenterId, eventId },
+      });
+      if (!presenter) throw new NotFoundException("Presenter not found");
+      if (presenter.role === EventPresenterRole.ORGANIZER && input.role !== undefined) {
+        throw new BadRequestException("The organizer role cannot be changed");
+      }
+      if (input.role === EventPresenterRole.ORGANIZER) {
+        throw new BadRequestException("Only the event creator can be the organizer");
+      }
+      const email = input.email?.toLowerCase();
+      let userId = presenter.userId;
+      if (email !== undefined && email !== presenter.email.toLowerCase()) {
+        const duplicate = await transaction.eventPresenter.findUnique({
+          where: { eventId_email: { eventId, email } },
+        });
+        if (duplicate) {
+          throw new ConflictException("This email is already on the presenter team");
+        }
+        const membership = await transaction.workspaceMembership.findFirst({
+          where: {
+            workspaceId: principal.workspaceId,
+            user: { email },
+          },
+          select: { userId: true },
+        });
+        userId = membership?.userId ?? null;
+      }
+      const updated = await transaction.eventPresenter.update({
+        where: { id: presenterId },
+        data: {
+          ...(input.role !== undefined ? { role: input.role } : {}),
+          ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+          ...(email !== undefined ? { email, userId } : {}),
+          ...(input.title !== undefined ? { title: input.title?.trim() || null } : {}),
+          ...(input.bio !== undefined ? { bio: input.bio?.trim() || null } : {}),
+          ...(input.avatarUrl !== undefined
+            ? { avatarUrl: input.avatarUrl?.trim() || null }
+            : {}),
+          ...(input.position !== undefined ? { position: input.position } : {}),
+        },
+      });
+      await this.audit.record(transaction, principal, {
+        action: "event.presenter.updated",
+        resourceType: "event_presenter",
+        resourceId: presenterId,
+        metadata: { eventId, fromRole: presenter.role, toRole: updated.role },
+      });
+      await this.outbox.enqueue(transaction, principal, {
+        aggregateType: "event_presenter",
+        aggregateId: presenterId,
+        eventType: "event.presenter.updated",
         payload: this.toJson(updated),
       });
       return updated;
+    });
+  }
+
+  async deletePresenter(
+    principal: Principal,
+    eventId: string,
+    presenterId: string,
+  ): Promise<{ id: string; deleted: true }> {
+    this.assertHost(principal);
+    return this.database.run(principal, async (transaction) => {
+      const presenter = await transaction.eventPresenter.findFirst({
+        where: { id: presenterId, eventId },
+      });
+      if (!presenter) throw new NotFoundException("Presenter not found");
+      if (presenter.role === EventPresenterRole.ORGANIZER) {
+        throw new BadRequestException("The event organizer cannot be removed");
+      }
+      await transaction.eventPresenter.delete({ where: { id: presenterId } });
+      await this.audit.record(transaction, principal, {
+        action: "event.presenter.deleted",
+        resourceType: "event_presenter",
+        resourceId: presenterId,
+        metadata: { eventId, role: presenter.role },
+      });
+      await this.outbox.enqueue(transaction, principal, {
+        aggregateType: "event_presenter",
+        aggregateId: presenterId,
+        eventType: "event.presenter.deleted",
+        payload: { eventId, presenterId },
+      });
+      return { id: presenterId, deleted: true };
     });
   }
 
@@ -424,9 +645,21 @@ export class EventsService {
       timezone: event.timezone,
       capacity: event.capacity,
       registrationFields: event.registrationFields,
-      branding: event.branding,
+      branding: normalizeWorkspaceBranding({
+        ...publicWorkspaceBranding(event.workspace.settings, event.workspace.name),
+        ...this.jsonObject(event.branding),
+      }),
       status: event.status,
       registrationCount: event._count.registrations,
+      presenters: event.presenters.map((presenter) => ({
+        id: presenter.id,
+        role: presenter.role,
+        name: presenter.name,
+        title: presenter.title,
+        bio: presenter.bio,
+        avatarUrl: presenter.avatarUrl,
+        position: presenter.position,
+      })),
     };
   }
 
@@ -435,11 +668,15 @@ export class EventsService {
     workspaceSlug: string,
     eventSlug: string,
     input: RegisterEventDto,
-  ): Promise<EventRegistration> {
+  ) {
     const event = await this.findPublicEvent(
       organizationSlug,
       workspaceSlug,
       eventSlug,
+    );
+    const normalizedAnswers = validatePublicFormAnswers(
+      event.registrationFields as unknown as PublicFormFieldDto[],
+      input.answers,
     );
     return this.publicDatabase.$transaction(async (transaction) => {
       await transaction.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${event.id}, 0))`;
@@ -460,17 +697,39 @@ export class EventsService {
         event.capacity !== null && confirmedCount >= event.capacity
           ? RegistrationStatus.WAITLISTED
           : RegistrationStatus.REGISTERED;
+      const registrationId = randomUUID();
+      const admission = this.security.createOpaqueToken(registrationId);
+      const admissionTokenExpiresAt = new Date(
+        event.startsAt.getTime() + (event.durationMinutes + 24 * 60) * 60_000,
+      );
       const registration = await transaction.eventRegistration.create({
         data: {
+          id: registrationId,
           organizationId: event.organizationId,
           workspaceId: event.workspaceId,
           eventId: event.id,
           name: input.name.trim(),
           email: input.email.toLowerCase(),
-          answers: input.answers as Prisma.InputJsonValue,
+          answers: normalizedAnswers as Prisma.InputJsonValue,
           status,
+          ...(status === RegistrationStatus.REGISTERED
+            ? {
+                admissionTokenHash: admission.tokenHash,
+                admissionTokenExpiresAt,
+              }
+            : {}),
         },
       });
+      const joinUrl =
+        status === RegistrationStatus.REGISTERED
+          ? this.eventJoinUrl(
+              organizationSlug,
+              workspaceSlug,
+              eventSlug,
+              registration.id,
+              admission.token,
+            )
+          : null;
       await this.outbox.enqueue(
         transaction,
         {
@@ -481,11 +740,54 @@ export class EventsService {
           aggregateType: "event_registration",
           aggregateId: registration.id,
           eventType: "event.registration.created",
-          payload: this.toJson(registration),
+          payload: this.toJson(this.registrationProjection(registration)),
         },
       );
-      return registration;
+      await this.notifications.queueEventRegistrationEmails(transaction, {
+        event,
+        registration,
+        ...(joinUrl ? { joinUrl } : {}),
+      });
+      return {
+        ...this.registrationProjection(registration),
+        ...(joinUrl
+          ? {
+              admissionToken: admission.token,
+              joinUrl,
+              admissionTokenExpiresAt: admissionTokenExpiresAt.toISOString(),
+            }
+          : {}),
+      };
     });
+  }
+
+  private eventJoinUrl(
+    organizationSlug: string,
+    workspaceSlug: string,
+    eventSlug: string,
+    registrationId: string,
+    admissionToken: string,
+  ): string {
+    const base = this.config.getOrThrow<string>("PUBLIC_SITE_URL").replace(/\/$/, "");
+    return `${base}/events/${encodeURIComponent(organizationSlug)}/${encodeURIComponent(
+      workspaceSlug,
+    )}/${encodeURIComponent(eventSlug)}/join/${encodeURIComponent(
+      registrationId,
+    )}?token=${encodeURIComponent(admissionToken)}`;
+  }
+
+  private registrationProjection(registration: EventRegistration) {
+    return {
+      id: registration.id,
+      eventId: registration.eventId,
+      name: registration.name,
+      email: registration.email,
+      answers: registration.answers,
+      status: registration.status,
+      registeredAt: registration.registeredAt,
+      checkedInAt: registration.checkedInAt,
+      updatedAt: registration.updatedAt,
+    };
   }
 
   private async findPublicEvent(
@@ -514,7 +816,11 @@ export class EventsService {
         slug: eventSlug,
         status: { in: PUBLIC_EVENT_STATUSES },
       },
-      include: { _count: { select: { registrations: true } } },
+      include: {
+        workspace: { select: { name: true, settings: true } },
+        presenters: { orderBy: [{ position: "asc" }, { createdAt: "asc" }] },
+        _count: { select: { registrations: true } },
+      },
     });
     if (!event) throw new NotFoundException("Event not found");
     return event;
@@ -547,6 +853,12 @@ export class EventsService {
     if (!hasAnyRole(principal, HOST_ROLES)) {
       throw new ForbiddenException("A host role is required");
     }
+  }
+
+  private jsonObject(value: unknown): Record<string, unknown> {
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
   }
 
   private toJson(value: unknown): Prisma.JsonObject {

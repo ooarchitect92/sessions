@@ -34,6 +34,12 @@ export const AgendaItemTypeSchema = z.enum([
 ]);
 
 export const EventStatusSchema = z.enum(['DRAFT', 'PUBLISHED', 'LIVE', 'ENDED', 'CANCELLED']);
+export const EventPresenterRoleSchema = z.enum([
+  'ORGANIZER',
+  'HOST',
+  'CO_HOST',
+  'SPEAKER',
+]);
 export const RegistrationStatusSchema = z.enum([
   'REGISTERED',
   'WAITLISTED',
@@ -55,7 +61,7 @@ export const RecordingConsentDecisionSchema = z.enum([
   'DECLINED',
   'REVOKED',
 ]);
-export const ChatChannelSchema = z.enum(['EVERYONE', 'HOSTS']);
+export const ChatChannelSchema = z.enum(['EVERYONE', 'HOSTS', 'PRIVATE']);
 export const PollTypeSchema = z.enum([
   'SINGLE_CHOICE',
   'MULTIPLE_CHOICE',
@@ -136,6 +142,50 @@ export const SessionSchema = z.object({
   updatedAt: z.iso.datetime(),
 });
 
+export const PublicFormFieldTypeSchema = z.enum([
+  'TEXT',
+  'TEXTAREA',
+  'SELECT',
+  'CHECKBOX',
+  'CONSENT',
+]);
+
+export const PublicFormFieldSchema = z.object({
+  key: z.string().trim().min(1).max(80).regex(/^[a-z][a-z0-9_]*$/),
+  label: z.string().trim().min(1).max(160),
+  type: PublicFormFieldTypeSchema,
+  required: z.boolean().default(false),
+  placeholder: z.string().trim().max(240).optional(),
+  options: z.array(z.string().trim().min(1).max(160)).max(50).default([]),
+});
+
+export const EventPresenterSchema = z.object({
+  id: z.uuid(),
+  organizationId: z.uuid(),
+  workspaceId: z.uuid(),
+  eventId: z.uuid(),
+  userId: z.uuid().nullable(),
+  role: EventPresenterRoleSchema,
+  name: z.string(),
+  email: z.email(),
+  title: z.string().nullable(),
+  bio: z.string().nullable(),
+  avatarUrl: z.string().nullable(),
+  position: z.number().int().nonnegative(),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+});
+
+export const CreateEventPresenterSchema = z.object({
+  role: EventPresenterRoleSchema.exclude(['ORGANIZER']),
+  name: z.string().trim().min(1).max(160),
+  email: z.email(),
+  title: z.string().trim().max(160).optional(),
+  bio: z.string().trim().max(4000).optional(),
+  avatarUrl: z.url().startsWith('https://').optional(),
+  position: z.number().int().min(0).max(1000).optional(),
+});
+
 export const CreateEventSchema = z.object({
   slug: SlugSchema,
   title: z.string().trim().min(1).max(160),
@@ -144,7 +194,7 @@ export const CreateEventSchema = z.object({
   durationMinutes: z.number().int().min(5).max(1440),
   timezone: z.string().trim().min(1).max(100),
   capacity: z.number().int().positive().max(100000).nullable().optional(),
-  registrationFields: z.array(z.record(z.string(), z.unknown())).default([]),
+  registrationFields: z.array(PublicFormFieldSchema).max(50).default([]),
   branding: z.record(z.string(), z.unknown()).default({}),
 });
 
@@ -161,7 +211,7 @@ export const EventSchema = z.object({
   timezone: z.string(),
   capacity: z.number().int().nullable(),
   status: EventStatusSchema,
-  registrationFields: z.array(z.record(z.string(), z.unknown())),
+  registrationFields: z.array(PublicFormFieldSchema),
   branding: z.record(z.string(), z.unknown()),
   publishedAt: z.iso.datetime().nullable(),
   version: z.number().int().positive(),
@@ -191,7 +241,7 @@ export const CreateBookingPageSchema = z.object({
   bufferBeforeMinutes: z.number().int().min(0).max(1440).default(0),
   bufferAfterMinutes: z.number().int().min(0).max(1440).default(0),
   availabilityRules: z.array(AvailabilityRuleSchema).min(1),
-  intakeFields: z.array(z.record(z.string(), z.unknown())).default([]),
+  intakeFields: z.array(PublicFormFieldSchema).max(50).default([]),
 });
 
 export const BookingPageSchema = z.object({
@@ -207,7 +257,7 @@ export const BookingPageSchema = z.object({
   bufferBeforeMinutes: z.number().int(),
   bufferAfterMinutes: z.number().int(),
   availabilityRules: z.array(AvailabilityRuleSchema),
-  intakeFields: z.array(z.record(z.string(), z.unknown())),
+  intakeFields: z.array(PublicFormFieldSchema),
   active: z.boolean(),
   version: z.number().int().positive(),
   createdAt: z.iso.datetime(),
@@ -226,6 +276,7 @@ export const ChatMessageSchema = z.object({
   id: z.uuid(),
   sessionId: z.uuid(),
   authorUserId: z.uuid(),
+  recipientUserId: z.uuid().nullable().optional(),
   channel: ChatChannelSchema,
   body: z.string(),
   editedAt: z.iso.datetime().nullable(),
@@ -262,6 +313,11 @@ export type UpdateSessionInput = z.infer<typeof UpdateSessionSchema>;
 export type CreateAgendaItemInput = z.infer<typeof CreateAgendaItemSchema>;
 export type Session = z.infer<typeof SessionSchema>;
 export type EventStatus = z.infer<typeof EventStatusSchema>;
+export type EventPresenterRole = z.infer<typeof EventPresenterRoleSchema>;
+export type EventPresenter = z.infer<typeof EventPresenterSchema>;
+export type CreateEventPresenterInput = z.infer<typeof CreateEventPresenterSchema>;
+export type PublicFormFieldType = z.infer<typeof PublicFormFieldTypeSchema>;
+export type PublicFormField = z.infer<typeof PublicFormFieldSchema>;
 export type CreateEventInput = z.infer<typeof CreateEventSchema>;
 export type Event = z.infer<typeof EventSchema>;
 export type RegisterForEventInput = z.infer<typeof RegisterForEventSchema>;

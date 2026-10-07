@@ -1,6 +1,7 @@
 import {
   CanActivate,
   ExecutionContext,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -9,6 +10,7 @@ import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { ApiKeysService } from '../../api-keys/api-keys.service';
 import { AuthService } from '../../auth/auth.service';
 import { IS_PUBLIC_KEY } from './public.decorator';
 import type { AccessTokenClaims, Principal } from './principal';
@@ -32,6 +34,7 @@ export class PrincipalGuard implements CanActivate {
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly auth: AuthService,
+    private readonly apiKeys: ApiKeysService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -50,6 +53,24 @@ export class PrincipalGuard implements CanActivate {
     }
 
     const token = authorization.slice('Bearer '.length).trim();
+    if (token.startsWith('sk_sessions_')) {
+      const principal = await this.apiKeys.resolveBearerToken(token);
+      const scopes = new Set(principal.apiKeyScopes ?? []);
+      const readOnlyMethod = ['GET', 'HEAD', 'OPTIONS'].includes(request.method);
+      const allowed = readOnlyMethod
+        ? scopes.has('read') || scopes.has('write')
+        : scopes.has('write');
+      if (!allowed) {
+        throw new ForbiddenException(
+          readOnlyMethod
+            ? 'This API key requires the read scope'
+            : 'This API key requires the write scope',
+        );
+      }
+      request.principal = principal;
+      return true;
+    }
+
     try {
       const claims = await this.jwt.verifyAsync<AccessTokenClaims>(token, {
         issuer: this.config.getOrThrow<string>('JWT_ISSUER'),

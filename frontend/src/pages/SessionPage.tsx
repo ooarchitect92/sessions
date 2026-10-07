@@ -1,10 +1,13 @@
 import '@livekit/components-styles';
 import { LiveKitRoom, VideoConference } from '@livekit/components-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { api, type MediaToken } from '../api/client';
+import { api, type AgendaDraft, type MediaToken } from '../api/client';
+import { AgendaContentStage } from '../components/AgendaContentStage';
+import { LiveCaptionsPanel } from '../components/LiveCaptionsPanel';
 import { SessionCollaborationPanel } from '../components/SessionCollaborationPanel';
+import { WhiteboardPanel } from '../components/WhiteboardPanel';
 import { useSessionRealtime } from '../hooks/use-session-realtime';
 
 function formatTime(value: string): string {
@@ -19,8 +22,29 @@ export function SessionPage() {
   const queryClient = useQueryClient();
   const [media, setMedia] = useState<MediaToken | null>(null);
   const [agendaEditorOpen, setAgendaEditorOpen] = useState(false);
+  const [aiAgendaOpen, setAiAgendaOpen] = useState(false);
+  const [templatePanelOpen, setTemplatePanelOpen] = useState(false);
+  const [templateName, setTemplateName] = useState('');
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [replaceAgendaWithTemplate, setReplaceAgendaWithTemplate] = useState(false);
+  const [aiObjective, setAiObjective] = useState('');
+  const [aiAudience, setAiAudience] = useState('');
+  const [agendaDraft, setAgendaDraft] = useState<AgendaDraft | null>(null);
   const [agendaTitle, setAgendaTitle] = useState('');
   const [agendaDuration, setAgendaDuration] = useState(10);
+  const [agendaUrl, setAgendaUrl] = useState('');
+  const [agendaText, setAgendaText] = useState('');
+  const [showSharedContent, setShowSharedContent] = useState(true);
+  const [breakoutNotice, setBreakoutNotice] = useState<string | null>(null);
+  const [handRaised, setHandRaised] = useState(false);
+  const [raisedHands, setRaisedHands] = useState<Record<string, string>>({});
+  const [reactionFeed, setReactionFeed] = useState<
+    Array<{
+      id: string;
+      displayName: string;
+      reaction: string;
+    }>
+  >([]);
   const [agendaType, setAgendaType] = useState<
     | 'TEXT'
     | 'PRESENTATION'
@@ -34,10 +58,68 @@ export function SessionPage() {
   >('TEXT');
   useSessionRealtime(sessionId);
 
+  useEffect(() => {
+    const breakoutHandler = (event: Event) => {
+      const detail = (event as CustomEvent<{ message?: string }>).detail;
+      if (!detail?.message) return;
+      setBreakoutNotice(detail.message);
+      window.setTimeout(() => setBreakoutNotice(null), 8000);
+    };
+    const reactionHandler = (event: Event) => {
+      const detail = (
+        event as CustomEvent<{
+          userId?: string;
+          displayName?: string;
+          reaction?: string;
+          occurredAt?: string;
+        }>
+      ).detail;
+      if (!detail?.reaction || !detail.displayName) return;
+      const id = `${detail.userId ?? 'user'}-${detail.occurredAt ?? Date.now()}`;
+      setReactionFeed((current) =>
+        [...current, { id, displayName: detail.displayName!, reaction: detail.reaction! }].slice(-6),
+      );
+      window.setTimeout(() => {
+        setReactionFeed((current) => current.filter((item) => item.id !== id));
+      }, 4500);
+    };
+    const handRaiseHandler = (event: Event) => {
+      const detail = (
+        event as CustomEvent<{
+          userId?: string;
+          displayName?: string;
+          raised?: boolean;
+        }>
+      ).detail;
+      if (!detail?.userId || !detail.displayName) return;
+      setRaisedHands((current) => {
+        const next = { ...current };
+        if (detail.raised) next[detail.userId!] = detail.displayName!;
+        else delete next[detail.userId!];
+        return next;
+      });
+    };
+
+    window.addEventListener('sessions:breakout-broadcast', breakoutHandler);
+    window.addEventListener('sessions:reaction', reactionHandler);
+    window.addEventListener('sessions:hand-raise', handRaiseHandler);
+    return () => {
+      window.removeEventListener('sessions:breakout-broadcast', breakoutHandler);
+      window.removeEventListener('sessions:reaction', reactionHandler);
+      window.removeEventListener('sessions:hand-raise', handRaiseHandler);
+    };
+  }, []);
+
   const session = useQuery({
     queryKey: ['session', sessionId],
     queryFn: () => api.getSession(sessionId),
     enabled: Boolean(sessionId),
+  });
+
+  const agendaTemplates = useQuery({
+    queryKey: ['agenda-templates'],
+    queryFn: () => api.listAgendaTemplates(),
+    enabled: templatePanelOpen,
   });
 
   const recordingConsent = useQuery({
@@ -80,6 +162,25 @@ export function SessionPage() {
     onSuccess: setMedia,
   });
 
+  const joinBreakout = useMutation({
+    mutationFn: (breakoutRoomId: string) =>
+      api.createBreakoutMediaToken(sessionId, breakoutRoomId),
+    onSuccess: (token) => {
+      setShowSharedContent(false);
+      setMedia(token);
+    },
+  });
+
+  const sendReaction = useMutation({
+    mutationFn: (reaction: '👍' | '👏' | '❤️' | '😂' | '🎉') =>
+      api.sendReaction(sessionId, reaction),
+  });
+
+  const toggleHandRaise = useMutation({
+    mutationFn: (raised: boolean) => api.setHandRaise(sessionId, raised),
+    onSuccess: (result) => setHandRaised(result.raised),
+  });
+
   const activate = useMutation({
     mutationFn: (agendaItemId: string) => api.activateAgendaItem(sessionId, agendaItemId),
     onSuccess: async () => {
@@ -93,14 +194,82 @@ export function SessionPage() {
         title: agendaTitle,
         durationSeconds: agendaDuration * 60,
         type: agendaType,
-        content: {},
+        content:
+          agendaType === 'TEXT'
+            ? { text: agendaText.trim() }
+            : ['WEBSITE', 'PRESENTATION', 'VIDEO'].includes(agendaType)
+              ? { url: agendaUrl.trim() }
+              : {},
       }),
     onSuccess: async () => {
       setAgendaTitle('');
       setAgendaDuration(10);
+      setAgendaUrl('');
+      setAgendaText('');
       setAgendaType('TEXT');
       setAgendaEditorOpen(false);
       await queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+    },
+  });
+
+  const generateAgendaDraft = useMutation({
+    mutationFn: () =>
+      api.generateAgendaDraft(sessionId, {
+        ...(aiObjective.trim() ? { objective: aiObjective.trim() } : {}),
+        ...(aiAudience.trim() ? { audience: aiAudience.trim() } : {}),
+        ...(session.data?.durationMinutes
+          ? { durationMinutes: session.data.durationMinutes }
+          : {}),
+      }),
+    onSuccess: (draft) => {
+      setAgendaDraft(draft);
+    },
+  });
+
+  const applyAgendaDraft = useMutation({
+    mutationFn: () => {
+      if (!agendaDraft) throw new Error('Generate an agenda draft first');
+      return api.applyAgendaDraft(sessionId, agendaDraft.items);
+    },
+    onSuccess: async () => {
+      setAgendaDraft(null);
+      setAiObjective('');
+      setAiAudience('');
+      setAiAgendaOpen(false);
+      await queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+    },
+  });
+
+  const saveAgendaTemplate = useMutation({
+    mutationFn: () =>
+      api.saveSessionAgendaAsTemplate(sessionId, { name: templateName }),
+    onSuccess: async (template) => {
+      setTemplateName('');
+      setSelectedTemplateId(template.id);
+      await queryClient.invalidateQueries({ queryKey: ['agenda-templates'] });
+    },
+  });
+
+  const applyAgendaTemplate = useMutation({
+    mutationFn: () => {
+      if (!selectedTemplateId) throw new Error('Choose an agenda template first');
+      return api.applyAgendaTemplate(
+        sessionId,
+        selectedTemplateId,
+        replaceAgendaWithTemplate,
+      );
+    },
+    onSuccess: async () => {
+      setTemplatePanelOpen(false);
+      await queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+    },
+  });
+
+  const deleteAgendaTemplate = useMutation({
+    mutationFn: (templateId: string) => api.deleteAgendaTemplate(templateId),
+    onSuccess: async (_, templateId) => {
+      if (selectedTemplateId === templateId) setSelectedTemplateId('');
+      await queryClient.invalidateQueries({ queryKey: ['agenda-templates'] });
     },
   });
 
@@ -132,6 +301,12 @@ export function SessionPage() {
   const consentGranted =
     !current.recordingEnabled ||
     recordingConsent.data?.currentDecision === 'GRANTED';
+  const activeAgendaItem =
+    current.agendaItems.find((item) => item.id === current.currentAgendaItemId) ?? null;
+  const activeHasSharedContent =
+    activeAgendaItem !== null &&
+    (activeAgendaItem.type === 'TEXT' ||
+      ['WEBSITE', 'PRESENTATION', 'VIDEO', 'WHITEBOARD'].includes(activeAgendaItem.type));
 
   return (
     <div className="session-workspace">
@@ -169,6 +344,28 @@ export function SessionPage() {
               End session
             </button>
           ) : null}
+          <div className="session-reaction-controls" aria-label="Meeting reactions">
+            {(['👍', '👏', '❤️', '😂', '🎉'] as const).map((reaction) => (
+              <button
+                key={reaction}
+                type="button"
+                className="reaction-button"
+                disabled={sendReaction.isPending}
+                onClick={() => sendReaction.mutate(reaction)}
+                aria-label={`Send ${reaction} reaction`}
+              >
+                {reaction}
+              </button>
+            ))}
+            <button
+              type="button"
+              className={handRaised ? 'hand-raise-button active' : 'hand-raise-button'}
+              disabled={toggleHandRaise.isPending}
+              onClick={() => toggleHandRaise.mutate(!handRaised)}
+            >
+              ✋ {handRaised ? 'Lower hand' : 'Raise hand'}
+            </button>
+          </div>
           <button
             className="button primary"
             onClick={() => join.mutate()}
@@ -236,17 +433,229 @@ export function SessionPage() {
             <span className="eyebrow">Run of show</span>
             <div className="rail-title-row">
               <h2>Agenda</h2>
-              <button
-                className="agenda-add-button"
-                type="button"
-                onClick={() => setAgendaEditorOpen((value) => !value)}
-                aria-expanded={agendaEditorOpen}
-              >
-                {agendaEditorOpen ? '×' : '+'}
-              </button>
+              <div className="agenda-heading-actions">
+                <button
+                  className="agenda-template-button"
+                  type="button"
+                  onClick={() => setTemplatePanelOpen((value) => !value)}
+                  aria-expanded={templatePanelOpen}
+                >
+                  Templates
+                </button>
+                <button
+                  className="agenda-ai-button"
+                  type="button"
+                  onClick={() => setAiAgendaOpen((value) => !value)}
+                  aria-expanded={aiAgendaOpen}
+                >
+                  AI
+                </button>
+                <button
+                  className="agenda-add-button"
+                  type="button"
+                  onClick={() => setAgendaEditorOpen((value) => !value)}
+                  aria-expanded={agendaEditorOpen}
+                >
+                  {agendaEditorOpen ? '×' : '+'}
+                </button>
+              </div>
             </div>
             <span>{current.agendaItems.length} items</span>
           </div>
+          {templatePanelOpen ? (
+            <section className="agenda-template-panel">
+              <span className="eyebrow">Reusable agenda library</span>
+              <h3>Agenda templates</h3>
+              <p>
+                Save this run of show for reuse, or apply a workspace template to this session.
+              </p>
+              <label>
+                Save current agenda
+                <div className="agenda-template-save-row">
+                  <input
+                    maxLength={160}
+                    value={templateName}
+                    onChange={(event) => setTemplateName(event.target.value)}
+                    placeholder="Sales discovery"
+                  />
+                  <button
+                    className="button secondary"
+                    type="button"
+                    disabled={
+                      saveAgendaTemplate.isPending ||
+                      !templateName.trim() ||
+                      current.agendaItems.length === 0
+                    }
+                    onClick={() => saveAgendaTemplate.mutate()}
+                  >
+                    {saveAgendaTemplate.isPending ? 'Saving…' : 'Save'}
+                  </button>
+                </div>
+              </label>
+              {saveAgendaTemplate.error ? (
+                <div className="error-banner">{saveAgendaTemplate.error.message}</div>
+              ) : null}
+              <label>
+                Apply template
+                <select
+                  value={selectedTemplateId}
+                  onChange={(event) => setSelectedTemplateId(event.target.value)}
+                >
+                  <option value="">Choose a template</option>
+                  {agendaTemplates.data?.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name} · {template.items.length} items
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="agenda-template-checkbox">
+                <input
+                  type="checkbox"
+                  checked={replaceAgendaWithTemplate}
+                  onChange={(event) =>
+                    setReplaceAgendaWithTemplate(event.target.checked)
+                  }
+                />
+                Replace existing agenda instead of appending
+              </label>
+              {selectedTemplateId ? (
+                <div className="agenda-template-preview">
+                  {agendaTemplates.data
+                    ?.find((template) => template.id === selectedTemplateId)
+                    ?.items.map((item) => (
+                      <div key={item.id}>
+                        <strong>{item.title}</strong>
+                        <span>
+                          {Math.round(item.durationSeconds / 60)} min ·{' '}
+                          {item.type.toLowerCase().replace('_', ' ')}
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              ) : null}
+              <div className="agenda-template-actions">
+                <button
+                  className="button primary"
+                  type="button"
+                  disabled={applyAgendaTemplate.isPending || !selectedTemplateId}
+                  onClick={() => applyAgendaTemplate.mutate()}
+                >
+                  {applyAgendaTemplate.isPending ? 'Applying…' : 'Apply template'}
+                </button>
+                {selectedTemplateId ? (
+                  <button
+                    className="button secondary"
+                    type="button"
+                    disabled={deleteAgendaTemplate.isPending}
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          'Delete this agenda template from the workspace library?',
+                        )
+                      ) {
+                        deleteAgendaTemplate.mutate(selectedTemplateId);
+                      }
+                    }}
+                  >
+                    Delete
+                  </button>
+                ) : null}
+              </div>
+              {applyAgendaTemplate.error ? (
+                <div className="error-banner">{applyAgendaTemplate.error.message}</div>
+              ) : null}
+            </section>
+          ) : null}
+          {aiAgendaOpen ? (
+            <section className="agenda-ai-panel">
+              <span className="eyebrow">AI copilot</span>
+              <h3>Draft a reviewable agenda</h3>
+              <p>
+                AI suggestions are not saved until you review and apply them.
+              </p>
+              <label>
+                Objective
+                <textarea
+                  rows={3}
+                  maxLength={2000}
+                  value={aiObjective}
+                  onChange={(event) => setAiObjective(event.target.value)}
+                  placeholder="Align on launch scope and assign owners"
+                />
+              </label>
+              <label>
+                Audience
+                <input
+                  maxLength={1000}
+                  value={aiAudience}
+                  onChange={(event) => setAiAudience(event.target.value)}
+                  placeholder="Product, engineering, and marketing"
+                />
+              </label>
+              <button
+                className="button secondary full-width"
+                type="button"
+                disabled={generateAgendaDraft.isPending}
+                onClick={() => generateAgendaDraft.mutate()}
+              >
+                {generateAgendaDraft.isPending ? 'Generating…' : 'Generate draft'}
+              </button>
+              {generateAgendaDraft.error ? (
+                <div className="error-banner">
+                  {generateAgendaDraft.error.message}
+                </div>
+              ) : null}
+              {agendaDraft ? (
+                <div className="agenda-ai-draft">
+                  <div className="agenda-ai-draft-heading">
+                    <strong>
+                      {agendaDraft.items.length} suggested items ·{' '}
+                      {Math.round(agendaDraft.totalDurationSeconds / 60)} min
+                    </strong>
+                    <small>
+                      {agendaDraft.provider} / {agendaDraft.model}
+                    </small>
+                  </div>
+                  <ol>
+                    {agendaDraft.items.map((item, index) => (
+                      <li key={`${item.title}-${index}`}>
+                        <strong>{item.title}</strong>
+                        <span>
+                          {Math.round(item.durationSeconds / 60)} min ·{' '}
+                          {item.type.toLowerCase().replace('_', ' ')}
+                        </span>
+                        {item.rationale ? <p>{item.rationale}</p> : null}
+                      </li>
+                    ))}
+                  </ol>
+                  <div className="agenda-ai-draft-actions">
+                    <button
+                      className="button primary"
+                      type="button"
+                      disabled={applyAgendaDraft.isPending}
+                      onClick={() => applyAgendaDraft.mutate()}
+                    >
+                      {applyAgendaDraft.isPending ? 'Applying…' : 'Apply reviewed draft'}
+                    </button>
+                    <button
+                      className="button secondary"
+                      type="button"
+                      disabled={applyAgendaDraft.isPending}
+                      onClick={() => setAgendaDraft(null)}
+                    >
+                      Discard
+                    </button>
+                  </div>
+                  {applyAgendaDraft.error ? (
+                    <div className="error-banner">
+                      {applyAgendaDraft.error.message}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </section>
+          ) : null}
           {agendaEditorOpen ? (
             <form className="agenda-inline-form" onSubmit={submitAgendaItem}>
               <label>
@@ -275,7 +684,14 @@ export function SessionPage() {
                   Content
                   <select
                     value={agendaType}
-                    onChange={(event) => setAgendaType(event.target.value as typeof agendaType)}
+                    onChange={(event) => {
+                      const nextType = event.target.value as typeof agendaType;
+                      setAgendaType(nextType);
+                      if (!['WEBSITE', 'PRESENTATION', 'VIDEO'].includes(nextType)) {
+                        setAgendaUrl('');
+                      }
+                      if (nextType !== 'TEXT') setAgendaText('');
+                    }}
                   >
                     <option value="TEXT">Discussion</option>
                     <option value="PRESENTATION">Presentation</option>
@@ -289,6 +705,37 @@ export function SessionPage() {
                   </select>
                 </label>
               </div>
+              {['WEBSITE', 'PRESENTATION', 'VIDEO'].includes(agendaType) ? (
+                <label>
+                  HTTPS content URL
+                  <input
+                    type="url"
+                    required
+                    value={agendaUrl}
+                    onChange={(event) => setAgendaUrl(event.target.value)}
+                    placeholder={
+                      agendaType === 'VIDEO'
+                        ? 'https://www.youtube.com/watch?v=…'
+                        : 'https://example.com/shared-content'
+                    }
+                  />
+                  <small>
+                    External content is rendered in a restricted sandboxed frame.
+                  </small>
+                </label>
+              ) : null}
+              {agendaType === 'TEXT' ? (
+                <label>
+                  Shared notes
+                  <textarea
+                    rows={4}
+                    maxLength={20000}
+                    value={agendaText}
+                    onChange={(event) => setAgendaText(event.target.value)}
+                    placeholder="Discussion context, prompts, or talking points"
+                  />
+                </label>
+              ) : null}
               {createAgendaItem.error ? (
                 <div className="error-banner">{createAgendaItem.error.message}</div>
               ) : null}
@@ -334,7 +781,30 @@ export function SessionPage() {
         </aside>
 
         <section className="meeting-stage">
-          {media ? (
+          {activeAgendaItem?.type === 'WHITEBOARD' && showSharedContent ? (
+            <div className="meeting-whiteboard-stage">
+              <div className="agenda-content-toolbar">
+                <div>
+                  <span className="eyebrow">Shared agenda content</span>
+                  <strong>{activeAgendaItem.title}</strong>
+                  <small>collaborative whiteboard</small>
+                </div>
+                <button
+                  className="button secondary"
+                  type="button"
+                  onClick={() => setShowSharedContent(false)}
+                >
+                  Show media
+                </button>
+              </div>
+              <WhiteboardPanel sessionId={sessionId} />
+            </div>
+          ) : activeHasSharedContent && showSharedContent && activeAgendaItem ? (
+            <AgendaContentStage
+              item={activeAgendaItem}
+              onShowMedia={() => setShowSharedContent(false)}
+            />
+          ) : media ? (
             <LiveKitRoom
               token={media.token}
               serverUrl={media.url}
@@ -358,6 +828,15 @@ export function SessionPage() {
                 handles camera, microphone, screen sharing, adaptive subscriptions, and
                 reconnect behavior.
               </p>
+              {activeHasSharedContent ? (
+                <button
+                  className="button secondary large"
+                  type="button"
+                  onClick={() => setShowSharedContent(true)}
+                >
+                  Show shared agenda content
+                </button>
+              ) : null}
               <button
                 className="button primary large"
                 onClick={() => join.mutate()}
@@ -374,10 +853,45 @@ export function SessionPage() {
               ) : null}
             </div>
           )}
+          <LiveCaptionsPanel
+            sessionId={sessionId}
+            enabled={current.transcriptionEnabled}
+            live={current.status === 'LIVE'}
+          />
+          {reactionFeed.length ? (
+            <div className="reaction-feed" aria-live="polite">
+              {reactionFeed.map((item) => (
+                <div key={item.id}>
+                  <span>{item.reaction}</span>
+                  <small>{item.displayName}</small>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {Object.keys(raisedHands).length ? (
+            <div className="raised-hands-badge">
+              <span>✋</span>
+              <strong>{Object.values(raisedHands).join(', ')}</strong>
+            </div>
+          ) : null}
         </section>
 
-        <SessionCollaborationPanel sessionId={sessionId} />
+        <SessionCollaborationPanel
+          sessionId={sessionId}
+          onJoinBreakout={(breakoutRoomId) => joinBreakout.mutate(breakoutRoomId)}
+        />
       </div>
+      {breakoutNotice ? (
+        <div className="breakout-toast">
+          <strong>Host announcement</strong>
+          <span>{breakoutNotice}</span>
+        </div>
+      ) : null}
+      {joinBreakout.error ? (
+        <div className="breakout-toast error-banner">
+          {joinBreakout.error.message}
+        </div>
+      ) : null}
     </div>
   );
 }

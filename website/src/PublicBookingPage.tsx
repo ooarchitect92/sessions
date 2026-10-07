@@ -1,5 +1,15 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { publicApi } from './public-api';
+import {
+  PublicCustomFields,
+  type PublicFormAnswers,
+  type PublicFormField,
+} from './PublicCustomFields';
+import {
+  PublicWordmark,
+  publicBrandStyle,
+  type PublicBranding,
+} from './PublicBranding';
 
 interface PublicBookingPage {
   id: string;
@@ -10,7 +20,8 @@ interface PublicBookingPage {
   timezone: string;
   minimumNoticeMinutes: number;
   availabilityRules: Array<Record<string, unknown>>;
-  intakeFields: Array<Record<string, unknown>>;
+  intakeFields: PublicFormField[];
+  branding: PublicBranding;
 }
 
 interface Slot {
@@ -24,6 +35,7 @@ interface Reservation {
   endsAt: string;
   status: 'CONFIRMED';
   session: { id: string; title: string } | null;
+  manageToken: string;
 }
 
 function calendarDate(value: Date): string {
@@ -55,6 +67,7 @@ export function PublicBookingPage({
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [reservation, setReservation] = useState<Reservation | null>(null);
+  const [answers, setAnswers] = useState<PublicFormAnswers>({});
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -106,7 +119,7 @@ export function PublicBookingPage({
             email,
             startsAt: selected.startsAt,
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            answers: {},
+            answers,
           }),
         },
       );
@@ -123,12 +136,12 @@ export function PublicBookingPage({
   if (!page) return <PublicBookingState title="Booking page unavailable" />;
 
   return (
-    <main className="public-flow-page booking-flow-page">
+    <main
+      className="public-flow-page booking-flow-page"
+      style={publicBrandStyle(page.branding)}
+    >
       <header className="public-flow-nav">
-        <a className="public-wordmark" href="/">
-          <span>S</span>
-          Sessions
-        </a>
+        <PublicWordmark branding={page.branding} />
         <span className="public-live-label">Secure scheduling</span>
       </header>
 
@@ -159,6 +172,16 @@ export function PublicBookingPage({
                 }).format(new Date(reservation.startsAt))}
               </p>
               <small>The scheduled session and reservation were created atomically.</small>
+              <a
+                className="public-secondary-link"
+                href={`/book/${encodeURIComponent(organizationSlug)}/${encodeURIComponent(
+                  workspaceSlug,
+                )}/${encodeURIComponent(bookingSlug)}/manage/${encodeURIComponent(
+                  reservation.id,
+                )}?token=${encodeURIComponent(reservation.manageToken)}`}
+              >
+                Manage or reschedule booking
+              </a>
             </div>
           </section>
         ) : (
@@ -235,12 +258,13 @@ export function PublicBookingPage({
                     autoComplete="email"
                   />
                 </label>
-                {page.intakeFields.length > 0 ? (
-                  <div className="public-form-note">
-                    {page.intakeFields.length} additional intake fields are configured. Their
-                    dynamic renderer follows in the form-builder increment.
-                  </div>
-                ) : null}
+                <PublicCustomFields
+                  fields={page.intakeFields}
+                  answers={answers}
+                  onChange={(key, value) =>
+                    setAnswers((current) => ({ ...current, [key]: value }))
+                  }
+                />
                 {error ? <div className="public-error">{error}</div> : null}
                 <button disabled={submitting || !selected || !name.trim() || !email.trim()}>
                   {submitting ? 'Scheduling…' : 'Schedule meeting'}

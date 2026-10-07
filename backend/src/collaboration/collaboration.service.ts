@@ -27,6 +27,8 @@ import { CreateChatMessageDto } from "./dto/create-chat-message.dto";
 import { CreatePollDto } from "./dto/create-poll.dto";
 import { CreateQuestionDto } from "./dto/create-question.dto";
 import { ModerateQuestionDto } from "./dto/moderate-question.dto";
+import { SendReactionDto } from "./dto/send-reaction.dto";
+import { SetHandRaiseDto } from "./dto/set-hand-raise.dto";
 import { SubmitPollAnswerDto } from "./dto/submit-poll-answer.dto";
 
 const ACTIVE_SESSION_STATUSES: SessionStatus[] = [
@@ -70,9 +72,24 @@ export class CollaborationService {
         where: {
           sessionId,
           deletedAt: null,
-          ...(!host ? { channel: ChatChannel.EVERYONE } : {}),
+          OR: [
+            { channel: ChatChannel.EVERYONE },
+            ...(host ? [{ channel: ChatChannel.HOSTS }] : []),
+            {
+              channel: ChatChannel.PRIVATE,
+              OR: [
+                { authorUserId: principal.userId },
+                { recipientUserId: principal.userId },
+              ],
+            },
+          ],
         },
-        include: { author: { select: { displayName: true, avatarUrl: true } } },
+        include: {
+          author: { select: { displayName: true, avatarUrl: true } },
+          recipient: {
+            select: { id: true, displayName: true, avatarUrl: true },
+          },
+        },
         orderBy: { createdAt: "asc" },
         take: 500,
       });
@@ -92,18 +109,64 @@ export class CollaborationService {
         "Only hosts can send messages to the host channel",
       );
     }
-    const message = await this.database.run(principal, async (transaction) => {
+    if (input.channel === ChatChannel.PRIVATE && !input.recipientUserId) {
+      throw new BadRequestException(
+        "Private messages require a recipient",
+      );
+    }
+    if (
+      input.channel !== ChatChannel.PRIVATE &&
+      input.recipientUserId !== undefined
+    ) {
+      throw new BadRequestException(
+        "Recipients are supported only for private messages",
+      );
+    }
+    if (
+      input.channel === ChatChannel.PRIVATE &&
+      input.recipientUserId === principal.userId
+    ) {
+      throw new BadRequestException("You cannot send a private message to yourself");
+    }
+
+    const result = await this.database.run(principal, async (transaction) => {
       await this.assertSessionActive(transaction, sessionId);
+      if (input.channel === ChatChannel.PRIVATE && input.recipientUserId) {
+        const recipientMembership = await transaction.workspaceMembership.findUnique({
+          where: {
+            workspaceId_userId: {
+              workspaceId: principal.workspaceId,
+              userId: input.recipientUserId,
+            },
+          },
+          select: { userId: true },
+        });
+        if (!recipientMembership) {
+          throw new NotFoundException(
+            "Private message recipient is not a member of this workspace",
+          );
+        }
+      }
+
       const created = await transaction.chatMessage.create({
         data: {
           organizationId: principal.organizationId,
           workspaceId: principal.workspaceId,
           sessionId,
           authorUserId: principal.userId,
+          recipientUserId:
+            input.channel === ChatChannel.PRIVATE
+              ? (input.recipientUserId ?? null)
+              : null,
           channel: input.channel,
           body: input.body.trim(),
         },
-        include: { author: { select: { displayName: true, avatarUrl: true } } },
+        include: {
+          author: { select: { displayName: true, avatarUrl: true } },
+          recipient: {
+            select: { id: true, displayName: true, avatarUrl: true },
+          },
+        },
       });
       await this.outbox.enqueue(transaction, principal, {
         aggregateType: "chat_message",
@@ -111,14 +174,97 @@ export class CollaborationService {
         eventType: "chat.message.created",
         payload: this.toJson(created),
       });
-      return created;
+      const hostUserIds =
+        input.channel === ChatChannel.HOSTS
+          ? (
+              await transaction.workspaceMembership.findMany({
+                where: {
+                  workspaceId: principal.workspaceId,
+                  role: { in: HOST_ROLES },
+                },
+                select: { userId: true },
+              })
+            ).map((membership) => membership.userId)
+          : [];
+
+      return { created, hostUserIds };
     });
+
+    if (input.channel === ChatChannel.EVERYONE) {
+      this.realtime.publishSessionEvent({
+        sessionId,
+        eventName: "chat.message.created",
+        payload: result.created,
+      });
+    } else if (input.channel === ChatChannel.HOSTS) {
+      for (const userId of result.hostUserIds) {
+        this.realtime.publishUserEvent({
+          userId,
+          eventName: "chat.message.created",
+          payload: result.created,
+        });
+      }
+    } else {
+      const recipientUserId = result.created.recipientUserId;
+      for (const userId of new Set(
+        [principal.userId, recipientUserId].filter(
+          (value): value is string => Boolean(value),
+        ),
+      )) {
+        this.realtime.publishUserEvent({
+          userId,
+          eventName: "chat.message.created",
+          payload: result.created,
+        });
+      }
+    }
+    return result.created;
+  }
+
+  async sendReaction(
+    principal: Principal,
+    sessionId: string,
+    input: SendReactionDto,
+  ) {
+    await this.database.run(principal, async (transaction) => {
+      await this.assertSessionActive(transaction, sessionId);
+    });
+    const payload = {
+      sessionId,
+      userId: principal.userId,
+      displayName: principal.displayName,
+      reaction: input.reaction,
+      occurredAt: new Date().toISOString(),
+    };
     this.realtime.publishSessionEvent({
       sessionId,
-      eventName: "chat.message.created",
-      payload: message,
+      eventName: "session.reaction",
+      payload,
     });
-    return message;
+    return payload;
+  }
+
+  async setHandRaise(
+    principal: Principal,
+    sessionId: string,
+    input: SetHandRaiseDto,
+  ) {
+    await this.database.run(principal, async (transaction) => {
+      await this.assertSessionActive(transaction, sessionId);
+    });
+    const payload = {
+      sessionId,
+      userId: principal.userId,
+      displayName: principal.displayName,
+      raised: input.raised,
+      occurredAt: new Date().toISOString(),
+    };
+    this.realtime.publishSessionEvent({
+      sessionId,
+      eventName: "session.hand_raise",
+      payload,
+    });
+    return payload;
   }
 
   async listPolls(principal: Principal, sessionId: string) {

@@ -17,4 +17,18 @@ export class MediaController {
   ) {
     return this.media.createJoinToken(principal, sessionId);
   }
+
+  @Post(':id/breakouts/:breakoutRoomId/media-token')
+  createBreakoutJoinToken(
+    @CurrentPrincipal() principal: Principal,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) sessionId: string,
+    @Param('breakoutRoomId', new ParseUUIDPipe({ version: '4' }))
+    breakoutRoomId: string,
+  ) {
+    return this.media.createBreakoutJoinToken(
+      principal,
+      sessionId,
+      breakoutRoomId,
+    );
+  }
 }

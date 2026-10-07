@@ -1,10 +1,10 @@
 import { Type } from 'class-transformer';
+import { PublicFormFieldDto } from '../../common/forms/public-form-field.dto';
 import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
   IsInt,
-  IsObject,
   IsOptional,
   IsString,
   Length,
@@ -77,6 +77,7 @@ export class CreateBookingPageDto {
 
   @IsArray()
   @ArrayMaxSize(50)
-  @IsObject({ each: true })
-  intakeFields: Record<string, unknown>[] = [];
+  @ValidateNested({ each: true })
+  @Type(() => PublicFormFieldDto)
+  intakeFields: PublicFormFieldDto[] = [];
 }

@@ -6,11 +6,14 @@ import type {
   ChatChannel,
   CreateBookingPageInput,
   CreateEventInput,
+  CreateEventPresenterInput,
   CreatePollInput,
   CreateQuestionInput,
   CreateRoomInput,
   CreateSessionInput,
   Event as PlatformEvent,
+  EventPresenter,
+  EventPresenterRole,
   Paginated,
   PollStatus,
   PollType,
@@ -134,6 +137,176 @@ export interface LoginSession {
   current: boolean;
 }
 
+export interface ApiKeyRecord {
+  id: string;
+  name: string;
+  tokenPrefix: string;
+  role: WorkspaceRole;
+  scopes: string[];
+  lastUsedAt: string | null;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ApiKeyCreateResult extends ApiKeyRecord {
+  token: string;
+  tokenWarning: string;
+}
+
+export interface WorkspaceAnalytics {
+  range: { from: string; to: string };
+  metrics: {
+    sessions: number;
+    completedSessions: number;
+    meetingMinutes: number;
+    meetingHours: number;
+    eventRegistrations: number;
+    attendedRegistrations: number;
+    registrationNoShowRate: number;
+    bookingReservations: number;
+    confirmedBookings: number;
+    bookingNoShowRate: number;
+    chatMessages: number;
+    polls: number;
+    pollAnswers: number;
+    questions: number;
+    questionVotes: number;
+    engagementActions: number;
+    readyRecordings: number;
+    recordingMinutes: number;
+    readyTranscripts: number;
+    readySummaries: number;
+    reviewedSummaries: number;
+  };
+  trend: Array<{
+    date: string;
+    sessions: number;
+    registrations: number;
+    bookings: number;
+    engagement: number;
+  }>;
+  recentSessions: Array<{
+    id: string;
+    title: string;
+    startsAt: string;
+    durationMinutes: number;
+    kind: "MEETING" | "WEBINAR";
+    status: SessionStatus;
+  }>;
+}
+
+export interface SessionAnalytics {
+  session: {
+    id: string;
+    title: string;
+    kind: "MEETING" | "WEBINAR";
+    status: SessionStatus;
+    startsAt: string;
+    durationMinutes: number;
+  };
+  attendance: {
+    registrations: number;
+    attended: number;
+    noShows: number;
+  };
+  engagement: {
+    chatMessages: number;
+    polls: number;
+    pollAnswers: number;
+    questions: number;
+    questionVotes: number;
+    total: number;
+  };
+  artifacts: {
+    recording: {
+      status: ArtifactStatus;
+      durationSeconds: number | null;
+      completedAt: string | null;
+    } | null;
+    transcript: {
+      status: ArtifactStatus;
+      completedAt: string | null;
+    } | null;
+    summary: {
+      status: ArtifactStatus;
+      reviewedAt: string | null;
+      completedAt: string | null;
+    } | null;
+  };
+}
+
+export interface WebhookDeliveryRecord {
+  id: string;
+  subscriptionId: string;
+  outboxEventId: string;
+  eventType: string;
+  status: "PENDING" | "PROCESSING" | "DELIVERED" | "FAILED";
+  attempts: number;
+  lastStatusCode: number | null;
+  lastResponseBody: string | null;
+  lastError: string | null;
+  nextAttemptAt: string;
+  deliveredAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type CalendarProvider = 'GOOGLE' | 'MICROSOFT';
+
+export interface CalendarConnectionRecord {
+  id: string;
+  provider: CalendarProvider;
+  providerAccountId: string | null;
+  accountEmail: string | null;
+  calendarId: string | null;
+  scopes: string[];
+  syncEnabled: boolean;
+  status: 'CONNECTED' | 'EXPIRED' | 'REVOKED' | 'ERROR';
+  tokenExpiresAt: string | null;
+  lastSyncedAt: string | null;
+  lastError: string | null;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CalendarConnectResult {
+  provider: CalendarProvider;
+  authorizeUrl: string;
+  expiresAt: string;
+}
+
+export interface WebhookSubscriptionRecord {
+  id: string;
+  name: string;
+  url: string;
+  eventTypes: string[];
+  active: boolean;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  _count?: { deliveries: number };
+  deliveries?: Array<
+    Pick<
+      WebhookDeliveryRecord,
+      | "id"
+      | "status"
+      | "eventType"
+      | "attempts"
+      | "deliveredAt"
+      | "lastError"
+      | "createdAt"
+    >
+  >;
+}
+
+export interface WebhookCreateResult extends WebhookSubscriptionRecord {
+  secret: string;
+  secretWarning: string;
+}
+
 export interface AgendaItem {
   id: string;
   organizationId: string;
@@ -146,6 +319,46 @@ export interface AgendaItem {
   content: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AgendaDraftItem {
+  title: string;
+  durationSeconds: number;
+  type: AgendaItemType;
+  content: Record<string, unknown>;
+  rationale?: string;
+}
+
+export interface AgendaDraft {
+  sessionId: string;
+  provider: string;
+  model: string;
+  items: AgendaDraftItem[];
+  totalDurationSeconds: number;
+  generatedAt: string;
+  persisted: false;
+}
+
+export interface AgendaTemplateRecord {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  createdById: string;
+  name: string;
+  description: string | null;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  items: Array<{
+    id: string;
+    templateId: string;
+    position: number;
+    title: string;
+    durationSeconds: number;
+    type: AgendaItemType;
+    content: Record<string, unknown>;
+  }>;
+  createdBy: { id: string; displayName: string };
 }
 
 export interface SessionDetail extends Session {
@@ -161,11 +374,48 @@ export interface MediaToken {
 }
 
 export interface EventRecord extends PlatformEvent {
+  presenters?: EventPresenter[];
   _count?: { registrations: number };
 }
 
 export interface BookingPageRecord extends BookingPage {
   _count?: { reservations: number };
+}
+
+export interface BookingReservationRecord {
+  id: string;
+  bookingPageId: string;
+  sessionId: string | null;
+  name: string;
+  email: string;
+  startsAt: string;
+  endsAt: string;
+  timezone: string;
+  answers: Record<string, unknown>;
+  status: 'CONFIRMED' | 'CANCELLED' | 'COMPLETED' | 'NO_SHOW';
+  version: number;
+  rescheduledAt: string | null;
+  cancelledAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  session: Session | null;
+  calendarEventSyncs?: Array<{
+    id: string;
+    provider: CalendarProvider;
+    action: 'CREATE' | 'UPDATE' | 'CANCEL';
+    status: 'PENDING' | 'PROCESSING' | 'SYNCED' | 'FAILED';
+    providerEventId: string | null;
+    attempts: number;
+    syncedAt: string | null;
+    failureCode: string | null;
+    updatedAt: string;
+  }>;
+}
+
+export interface CalendarInvitePayload {
+  filename: string;
+  mimeType: string;
+  content: string;
 }
 
 export interface RecordingRecord {
@@ -205,14 +455,28 @@ export interface RecordingPlaybackGrant {
   mimeType: string;
 }
 
-export interface TranscriptRecord {
-  id: string;
+export interface LiveTranscriptSegment {
+  transcriptId: string;
   sessionId: string;
-  status: ArtifactStatus;
+  segmentId: string;
+  position: number;
+  startMs: number;
+  endMs: number;
+  speakerLabel: string | null;
+  text: string;
+  userId?: string;
+  displayName?: string;
+  language?: string | null;
+  isFinal: true;
+}
+
+export interface LiveTranscriptionChunkResult {
+  sessionId: string;
+  transcriptId: string;
+  provider: string;
   language: string | null;
-  fullText?: string | null;
-  completedAt: string | null;
-  segments?: Array<{
+  segmentCount: number;
+  segments: Array<{
     id: string;
     position: number;
     startMs: number;
@@ -222,6 +486,49 @@ export interface TranscriptRecord {
   }>;
 }
 
+export interface TranscriptRecord {
+  id: string;
+  sessionId: string;
+  status: ArtifactStatus;
+  language: string | null;
+  fullText?: string | null;
+  completedAt: string | null;
+  version: number;
+  segments?: Array<{
+    id: string;
+    position: number;
+    startMs: number;
+    endMs: number;
+    speakerLabel: string | null;
+    text: string;
+  }>;
+  revisions?: Array<{
+    id: string;
+    segmentId: string;
+    editedByUserId: string;
+    before: { text?: string; speakerLabel?: string | null };
+    after: { text?: string; speakerLabel?: string | null };
+    createdAt: string;
+  }>;
+}
+
+export interface AiCitationRecord {
+  segmentPosition: number;
+  quote?: string;
+}
+
+export interface AiDecisionRecord {
+  text: string;
+  citations?: AiCitationRecord[];
+}
+
+export interface AiActionItemRecord {
+  text: string;
+  owner?: string;
+  dueDate?: string;
+  citations?: AiCitationRecord[];
+}
+
 export interface MemorySummaryRecord {
   id: string;
   sessionId: string;
@@ -229,10 +536,22 @@ export interface MemorySummaryRecord {
   provider: string | null;
   model: string | null;
   summaryText: string | null;
-  decisions: unknown[];
-  actionItems: unknown[];
-  citations: unknown[];
+  decisions: AiDecisionRecord[];
+  actionItems: AiActionItemRecord[];
+  citations: AiCitationRecord[];
   failureCode: string | null;
+  reviewedAt: string | null;
+  reviewedByUserId: string | null;
+  followUpDraft: {
+    subject?: string;
+    body?: string;
+    provider?: string;
+    model?: string;
+  };
+  followUpGeneratedAt: string | null;
+  followUpApprovedAt: string | null;
+  followUpApprovedByUserId: string | null;
+  version: number;
 }
 
 export interface MemoryListItem extends Session {
@@ -242,25 +561,110 @@ export interface MemoryListItem extends Session {
   _count: { chatMessages: number; polls: number; questions: number };
 }
 
+export interface EmailDeliveryRecord {
+  id: string;
+  sessionId: string;
+  memorySummaryId: string | null;
+  requestedByUserId: string;
+  status: 'PENDING' | 'PROCESSING' | 'SENT' | 'FAILED';
+  provider: string | null;
+  providerMessageId: string | null;
+  recipients: string[];
+  subject: string;
+  body: string;
+  attempts: number;
+  failureCode: string | null;
+  sentAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface MemoryDetail extends SessionDetail {
   recording: RecordingRecord | null;
   transcript: TranscriptRecord | null;
   memorySummary: MemorySummaryRecord | null;
+  emailDeliveries: EmailDeliveryRecord[];
   chatMessages: ChatMessageRecord[];
   polls: PollRecord[];
   questions: QuestionRecord[];
+}
+
+export type WhiteboardOperationKind =
+  | 'STROKE'
+  | 'SHAPE'
+  | 'TEXT'
+  | 'STICKY'
+  | 'IMAGE'
+  | 'CLEAR';
+
+export interface WhiteboardOperationRecord {
+  id: string;
+  operationId: string;
+  sessionId: string;
+  documentId: string;
+  authorUserId: string;
+  sequence: number;
+  kind: WhiteboardOperationKind;
+  payload: Record<string, unknown>;
+  createdAt: string;
+  author: {
+    id: string;
+    displayName: string;
+    avatarUrl: string | null;
+  };
+}
+
+export interface WhiteboardState {
+  document: {
+    id: string;
+    sessionId: string;
+    version: number;
+    snapshotVersion: number;
+    snapshot: Record<string, unknown>;
+    updatedAt: string;
+  };
+  operations: WhiteboardOperationRecord[];
+}
+
+export interface BreakoutAssignmentRecord {
+  id: string;
+  userId: string;
+  assignedAt: string;
+  user: {
+    id: string;
+    displayName: string;
+    avatarUrl: string | null;
+  };
+}
+
+export interface BreakoutRoomRecord {
+  id: string;
+  sessionId: string;
+  name: string;
+  position: number;
+  status: 'DRAFT' | 'ACTIVE' | 'CLOSED';
+  livekitRoomName: string;
+  createdAt: string;
+  updatedAt: string;
+  assignments: BreakoutAssignmentRecord[];
 }
 
 export interface ChatMessageRecord {
   id: string;
   sessionId: string;
   authorUserId: string;
+  recipientUserId: string | null;
   channel: ChatChannel;
   body: string;
   editedAt: string | null;
   deletedAt: string | null;
   createdAt: string;
   author: { displayName: string; avatarUrl: string | null };
+  recipient: {
+    id: string;
+    displayName: string;
+    avatarUrl: string | null;
+  } | null;
 }
 
 export interface PollOptionRecord {
@@ -384,26 +788,26 @@ export const api = {
     workspaceSlug: string;
     timezone: string;
   }): Promise<AuthTokenBundle | { verificationRequired: true; email: string; developmentVerificationToken?: string }> {
-    return publicRequest('/auth/signup', { method: 'POST', body: JSON.stringify(input) });
+    return publicRequest('/auth/signup', { method: "POST", body: JSON.stringify(input) });
   },
 
   login(input: { email: string; password: string; workspaceSlug?: string }): Promise<
     | AuthTokenBundle
     | { mfaRequired: true; challengeToken: string; expiresIn: number }
   > {
-    return publicRequest('/auth/login', { method: 'POST', body: JSON.stringify(input) });
+    return publicRequest('/auth/login', { method: "POST", body: JSON.stringify(input) });
   },
 
   completeMfa(input: { challengeToken: string; code: string }): Promise<AuthTokenBundle> {
     return publicRequest<AuthTokenBundle>('/auth/mfa/complete', {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify(input),
     });
   },
 
   verifyEmail(token: string): Promise<AuthTokenBundle> {
     return publicRequest<AuthTokenBundle>('/auth/verify-email', {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify({ token }),
     });
   },
@@ -413,21 +817,21 @@ export const api = {
     developmentVerificationToken?: string;
   }> {
     return publicRequest('/auth/verify-email/request', {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify({ email }),
     });
   },
 
   requestPasswordReset(email: string): Promise<{ accepted: true; developmentResetToken?: string }> {
     return publicRequest('/auth/password-reset/request', {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify({ email }),
     });
   },
 
   resetPassword(token: string, password: string): Promise<{ reset: true }> {
     return publicRequest('/auth/password-reset/complete', {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify({ token, password }),
     });
   },
@@ -436,7 +840,7 @@ export const api = {
     AuthTokenBundle | { mfaRequired: true; challengeToken: string; expiresIn: number }
   > {
     return publicRequest('/auth/invitations/accept', {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify(input),
     });
   },
@@ -452,14 +856,14 @@ export const api = {
       throw new ApiError('A managed login session is required', 401);
     }
     return request<AuthTokenBundle>('/auth/workspace/switch', {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify({ workspaceId, refreshToken }),
     });
   },
 
   logout(): Promise<{ loggedOut: true }> {
     return request('/auth/logout', {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify({}),
     });
   },
@@ -469,26 +873,26 @@ export const api = {
   },
 
   revokeLoginSession(sessionId: string): Promise<{ id: string; revoked: true }> {
-    return request(`/auth/sessions/${sessionId}`, { method: 'DELETE' });
+    return request(`/auth/sessions/${sessionId}`, { method: "DELETE" });
   },
 
   changePassword(currentPassword: string, newPassword: string): Promise<{ changed: true }> {
     return request('/auth/password', {
-      method: 'PATCH',
+      method: "PATCH",
       body: JSON.stringify({ currentPassword, newPassword }),
     });
   },
 
   setupMfa(): Promise<{ secret: string; otpauthUri: string; recoveryCodes: string[] }> {
-    return request('/auth/mfa/setup', { method: 'POST' });
+    return request('/auth/mfa/setup', { method: "POST" });
   },
 
   confirmMfa(code: string): Promise<{ enabled: true }> {
-    return request('/auth/mfa/confirm', { method: 'POST', body: JSON.stringify({ code }) });
+    return request('/auth/mfa/confirm', { method: "POST", body: JSON.stringify({ code }) });
   },
 
   disableMfa(code: string): Promise<{ enabled: false }> {
-    return request('/auth/mfa', { method: 'DELETE', body: JSON.stringify({ code }) });
+    return request('/auth/mfa', { method: "DELETE", body: JSON.stringify({ code }) });
   },
 
   listWorkspaces(): Promise<Array<{
@@ -511,7 +915,7 @@ export const api = {
 
   createWorkspace(input: { name: string; slug: string; timezone: string }): Promise<WorkspaceRecord> {
     return request('/workspaces', {
-      method: 'POST',
+      method: "POST",
       headers: { 'idempotency-key': crypto.randomUUID() },
       body: JSON.stringify(input),
     });
@@ -526,8 +930,8 @@ export const api = {
     input: Partial<Pick<WorkspaceRecord, 'name' | 'slug' | 'timezone' | 'settings'>>,
   ): Promise<WorkspaceRecord> {
     return request('/workspaces/current', {
-      method: 'PATCH',
-      headers: { 'if-match': String(version) },
+      method: "PATCH",
+      headers: { "if-match": String(version) },
       body: JSON.stringify(input),
     });
   },
@@ -538,13 +942,13 @@ export const api = {
 
   updateWorkspaceMemberRole(membershipId: string, role: WorkspaceRole): Promise<WorkspaceMember> {
     return request(`/workspaces/current/members/${membershipId}`, {
-      method: 'PATCH',
+      method: "PATCH",
       body: JSON.stringify({ role }),
     });
   },
 
   removeWorkspaceMember(membershipId: string): Promise<{ id: string; removed: true }> {
-    return request(`/workspaces/current/members/${membershipId}`, { method: 'DELETE' });
+    return request(`/workspaces/current/members/${membershipId}`, { method: "DELETE" });
   },
 
   listWorkspaceInvitations(): Promise<WorkspaceInvitation[]> {
@@ -553,14 +957,129 @@ export const api = {
 
   inviteWorkspaceMember(email: string, role: WorkspaceRole): Promise<WorkspaceInvitation> {
     return request('/workspaces/current/invitations', {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify({ email, role }),
     });
   },
 
   revokeWorkspaceInvitation(invitationId: string): Promise<{ id: string; revoked: true }> {
-    return request(`/workspaces/current/invitations/${invitationId}`, { method: 'DELETE' });
+    return request(`/workspaces/current/invitations/${invitationId}`, { method: "DELETE" });
   },
+
+  getWorkspaceAnalytics(input?: {
+    from?: string;
+    to?: string;
+  }): Promise<WorkspaceAnalytics> {
+    const params = new URLSearchParams();
+    if (input?.from) params.set("from", input.from);
+    if (input?.to) params.set("to", input.to);
+    const suffix = params.size ? `?${params.toString()}` : "";
+    return request(`/analytics/workspace${suffix}`);
+  },
+
+  getSessionAnalytics(id: string): Promise<SessionAnalytics> {
+    return request(`/analytics/sessions/${id}`);
+  },
+
+  listApiKeys(): Promise<ApiKeyRecord[]> {
+    return request("/api-keys");
+  },
+
+  createApiKey(input: {
+    name: string;
+    role: "HOST" | "MEMBER" | "ANALYST";
+    scopes: string[];
+    expiresAt?: string;
+  }): Promise<ApiKeyCreateResult> {
+    return request("/api-keys", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+
+  revokeApiKey(id: string): Promise<ApiKeyRecord & { revoked: true }> {
+    return request(`/api-keys/${id}`, { method: "DELETE" });
+  },
+
+  listCalendarConnections(): Promise<CalendarConnectionRecord[]> {
+    return request<CalendarConnectionRecord[]>('/calendar-integrations');
+  },
+
+  beginCalendarConnection(
+    provider: CalendarProvider,
+    returnUrl: string,
+  ): Promise<CalendarConnectResult> {
+    const params = new URLSearchParams({ returnUrl });
+    return request<CalendarConnectResult>(
+      `/calendar-integrations/${provider.toLowerCase()}/connect?${params.toString()}`,
+      { method: 'POST' },
+    );
+  },
+
+  disconnectCalendar(provider: CalendarProvider): Promise<{
+    provider: CalendarProvider;
+    disconnected: true;
+  }> {
+    return request(
+      `/calendar-integrations/${provider.toLowerCase()}`,
+      { method: 'DELETE' },
+    );
+  },
+
+  listWebhooks(): Promise<WebhookSubscriptionRecord[]> {
+    return request("/webhooks");
+  },
+
+  createWebhook(input: {
+    name: string;
+    url: string;
+    eventTypes: string[];
+  }): Promise<WebhookCreateResult> {
+    return request("/webhooks", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+
+  updateWebhook(
+    id: string,
+    version: number,
+    input: Partial<
+      Pick<WebhookSubscriptionRecord, "name" | "url" | "eventTypes" | "active">
+    >,
+  ): Promise<WebhookSubscriptionRecord> {
+    return request(`/webhooks/${id}`, {
+      method: "PATCH",
+      headers: { "if-match": String(version) },
+      body: JSON.stringify(input),
+    });
+  },
+
+  deleteWebhook(id: string): Promise<{ id: string; deleted: true }> {
+    return request(`/webhooks/${id}`, { method: "DELETE" });
+  },
+
+  rotateWebhookSecret(
+    id: string,
+  ): Promise<{
+    id: string;
+    version: number;
+    secret: string;
+    secretWarning: string;
+  }> {
+    return request(`/webhooks/${id}/rotate-secret`, { method: "POST" });
+  },
+
+  listWebhookDeliveries(id: string): Promise<WebhookDeliveryRecord[]> {
+    return request(`/webhooks/${id}/deliveries`);
+  },
+
+  replayWebhookDelivery(deliveryId: string): Promise<WebhookDeliveryRecord> {
+    return request(`/webhooks/deliveries/${deliveryId}/replay`, {
+      method: "POST",
+    });
+  },
+
   listRooms(): Promise<Room[]> {
     return request<Room[]>("/rooms");
   },
@@ -635,6 +1154,92 @@ export const api = {
     });
   },
 
+  generateAgendaDraft(
+    sessionId: string,
+    input: {
+      objective?: string;
+      audience?: string;
+      durationMinutes?: number;
+    },
+  ): Promise<AgendaDraft> {
+    return request<AgendaDraft>(`/sessions/${sessionId}/agenda-items/ai-draft`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+
+  applyAgendaDraft(
+    sessionId: string,
+    items: AgendaDraftItem[],
+  ): Promise<AgendaItem[]> {
+    return request<AgendaItem[]>(`/sessions/${sessionId}/agenda-items/ai-apply`, {
+      method: "POST",
+      body: JSON.stringify({ items }),
+    });
+  },
+
+  listAgendaTemplates(): Promise<AgendaTemplateRecord[]> {
+    return request<AgendaTemplateRecord[]>('/agenda-templates');
+  },
+
+  createAgendaTemplate(input: {
+    name: string;
+    description?: string;
+    items: AgendaDraftItem[];
+  }): Promise<AgendaTemplateRecord> {
+    return request<AgendaTemplateRecord>('/agenda-templates', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  updateAgendaTemplate(
+    templateId: string,
+    version: number,
+    input: {
+      name?: string;
+      description?: string;
+      items?: AgendaDraftItem[];
+    },
+  ): Promise<AgendaTemplateRecord> {
+    return request<AgendaTemplateRecord>(`/agenda-templates/${templateId}`, {
+      method: 'PATCH',
+      headers: { 'if-match': String(version) },
+      body: JSON.stringify(input),
+    });
+  },
+
+  deleteAgendaTemplate(templateId: string): Promise<{ id: string; deleted: true }> {
+    return request(`/agenda-templates/${templateId}`, { method: 'DELETE' });
+  },
+
+  saveSessionAgendaAsTemplate(
+    sessionId: string,
+    input: { name: string; description?: string },
+  ): Promise<AgendaTemplateRecord> {
+    return request<AgendaTemplateRecord>(
+      `/sessions/${sessionId}/agenda-items/save-template`,
+      {
+        method: 'POST',
+        body: JSON.stringify(input),
+      },
+    );
+  },
+
+  applyAgendaTemplate(
+    sessionId: string,
+    templateId: string,
+    replaceExisting = false,
+  ): Promise<AgendaItem[]> {
+    return request<AgendaItem[]>(
+      `/sessions/${sessionId}/agenda-items/apply-template/${templateId}`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ replaceExisting }),
+      },
+    );
+  },
+
   activateAgendaItem(sessionId: string, agendaItemId: string) {
     return request<{
       sessionId: string;
@@ -643,6 +1248,25 @@ export const api = {
     }>(`/sessions/${sessionId}/agenda-items/${agendaItemId}/activate`, {
       method: "POST",
     });
+  },
+
+  submitLiveTranscriptionChunk(
+    sessionId: string,
+    input: {
+      sequence: number;
+      startMs: number;
+      mimeType: string;
+      language?: string;
+      audioBase64: string;
+    },
+  ): Promise<LiveTranscriptionChunkResult> {
+    return request<LiveTranscriptionChunkResult>(
+      `/sessions/${sessionId}/transcription/chunks`,
+      {
+        method: 'POST',
+        body: JSON.stringify(input),
+      },
+    );
   },
 
   getRecordingConsent(sessionId: string): Promise<RecordingConsentStatus> {
@@ -712,6 +1336,55 @@ export const api = {
     });
   },
 
+  getEvent(eventId: string): Promise<EventRecord> {
+    return request<EventRecord>(`/events/${eventId}`);
+  },
+
+  listEventPresenters(eventId: string): Promise<EventPresenter[]> {
+    return request<EventPresenter[]>(`/events/${eventId}/presenters`);
+  },
+
+  createEventPresenter(
+    eventId: string,
+    input: CreateEventPresenterInput,
+  ): Promise<EventPresenter> {
+    return request<EventPresenter>(`/events/${eventId}/presenters`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  updateEventPresenter(
+    eventId: string,
+    presenterId: string,
+    input: Partial<{
+      role: Exclude<EventPresenterRole, 'ORGANIZER'>;
+      name: string;
+      email: string;
+      title: string | null;
+      bio: string | null;
+      avatarUrl: string | null;
+      position: number;
+    }>,
+  ): Promise<EventPresenter> {
+    return request<EventPresenter>(
+      `/events/${eventId}/presenters/${presenterId}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(input),
+      },
+    );
+  },
+
+  deleteEventPresenter(
+    eventId: string,
+    presenterId: string,
+  ): Promise<{ id: string; deleted: true }> {
+    return request(`/events/${eventId}/presenters/${presenterId}`, {
+      method: 'DELETE',
+    });
+  },
+
   publishEvent(eventId: string, version: number): Promise<EventRecord> {
     return request<EventRecord>(`/events/${eventId}/publish`, {
       method: "POST",
@@ -750,6 +1423,49 @@ export const api = {
     });
   },
 
+  listBookingReservations(bookingId: string): Promise<BookingReservationRecord[]> {
+    return request<BookingReservationRecord[]>(`/bookings/${bookingId}/reservations`);
+  },
+
+  rescheduleBookingReservation(
+    bookingId: string,
+    reservationId: string,
+    version: number,
+    input: { startsAt: string; timezone: string },
+  ): Promise<BookingReservationRecord> {
+    return request<BookingReservationRecord>(
+      `/bookings/${bookingId}/reservations/${reservationId}/reschedule`,
+      {
+        method: 'PATCH',
+        headers: { 'if-match': String(version) },
+        body: JSON.stringify(input),
+      },
+    );
+  },
+
+  cancelBookingReservation(
+    bookingId: string,
+    reservationId: string,
+    version: number,
+  ): Promise<BookingReservationRecord> {
+    return request<BookingReservationRecord>(
+      `/bookings/${bookingId}/reservations/${reservationId}/cancel`,
+      {
+        method: 'POST',
+        headers: { 'if-match': String(version) },
+      },
+    );
+  },
+
+  getBookingReservationCalendar(
+    bookingId: string,
+    reservationId: string,
+  ): Promise<CalendarInvitePayload> {
+    return request<CalendarInvitePayload>(
+      `/bookings/${bookingId}/reservations/${reservationId}/calendar`,
+    );
+  },
+
   listMemory(query?: string): Promise<Paginated<MemoryListItem>> {
     const search = query ? `?query=${encodeURIComponent(query)}` : "";
     return request<Paginated<MemoryListItem>>(`/memory${search}`);
@@ -757,6 +1473,93 @@ export const api = {
 
   getMemory(sessionId: string): Promise<MemoryDetail> {
     return request<MemoryDetail>(`/memory/${sessionId}`);
+  },
+
+  updateTranscriptSegment(
+    sessionId: string,
+    segmentId: string,
+    version: number,
+    input: { text: string; speakerLabel?: string | null },
+  ): Promise<TranscriptRecord> {
+    return request<TranscriptRecord>(
+      `/transcripts/${sessionId}/segments/${segmentId}`,
+      {
+        method: "PATCH",
+        headers: { "if-match": String(version) },
+        body: JSON.stringify(input),
+      },
+    );
+  },
+
+  updateMemorySummary(
+    sessionId: string,
+    version: number,
+    input: {
+      summaryText: string;
+      decisions?: AiDecisionRecord[];
+      actionItems?: AiActionItemRecord[];
+    },
+  ): Promise<MemorySummaryRecord> {
+    return request<MemorySummaryRecord>(`/memory/${sessionId}/summary`, {
+      method: "PATCH",
+      headers: { "if-match": String(version) },
+      body: JSON.stringify(input),
+    });
+  },
+
+  approveMemorySummary(
+    sessionId: string,
+    version: number,
+  ): Promise<MemorySummaryRecord> {
+    return request<MemorySummaryRecord>(
+      `/memory/${sessionId}/summary/approve`,
+      {
+        method: "POST",
+        headers: { "if-match": String(version) },
+      },
+    );
+  },
+
+  generateFollowUpDraft(sessionId: string): Promise<MemorySummaryRecord> {
+    return request<MemorySummaryRecord>(
+      `/memory/${sessionId}/follow-up/generate`,
+      { method: "POST" },
+    );
+  },
+
+  updateFollowUpDraft(
+    sessionId: string,
+    version: number,
+    input: { subject: string; body: string },
+  ): Promise<MemorySummaryRecord> {
+    return request<MemorySummaryRecord>(`/memory/${sessionId}/follow-up`, {
+      method: "PATCH",
+      headers: { "if-match": String(version) },
+      body: JSON.stringify(input),
+    });
+  },
+
+  approveFollowUpDraft(
+    sessionId: string,
+    version: number,
+  ): Promise<MemorySummaryRecord> {
+    return request<MemorySummaryRecord>(
+      `/memory/${sessionId}/follow-up/approve`,
+      {
+        method: "POST",
+        headers: { "if-match": String(version) },
+      },
+    );
+  },
+
+  sendFollowUpDraft(
+    sessionId: string,
+    recipients: string[],
+  ): Promise<EmailDeliveryRecord> {
+    return request<EmailDeliveryRecord>(`/memory/${sessionId}/follow-up/send`, {
+      method: "POST",
+      body: JSON.stringify({ recipients }),
+    });
   },
 
   retryMemory(
@@ -770,17 +1573,157 @@ export const api = {
     );
   },
 
+  getWhiteboard(sessionId: string): Promise<WhiteboardState> {
+    return request(`/sessions/${sessionId}/whiteboard`);
+  },
+
+  appendWhiteboardOperation(
+    sessionId: string,
+    input: {
+      operationId: string;
+      kind: WhiteboardOperationKind;
+      payload: Record<string, unknown>;
+    },
+  ): Promise<WhiteboardOperationRecord> {
+    return request(`/sessions/${sessionId}/whiteboard/operations`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+
+  saveWhiteboardSnapshot(
+    sessionId: string,
+    input: { baseVersion: number; snapshot: Record<string, unknown> },
+  ): Promise<WhiteboardState["document"]> {
+    return request(`/sessions/${sessionId}/whiteboard/snapshot`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+
+  listBreakouts(sessionId: string): Promise<BreakoutRoomRecord[]> {
+    return request(`/sessions/${sessionId}/breakouts`);
+  },
+
+  createBreakout(
+    sessionId: string,
+    input: { name: string; position: number },
+  ): Promise<BreakoutRoomRecord> {
+    return request(`/sessions/${sessionId}/breakouts`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+
+  assignBreakout(
+    sessionId: string,
+    breakoutRoomId: string,
+    userIds: string[],
+  ): Promise<BreakoutRoomRecord> {
+    return request(
+      `/sessions/${sessionId}/breakouts/${breakoutRoomId}/assignments`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ userIds }),
+      },
+    );
+  },
+
+  randomizeBreakouts(
+    sessionId: string,
+    userIds: string[],
+  ): Promise<{ sessionId: string; roomCount: number; participantCount: number }> {
+    return request(`/sessions/${sessionId}/breakouts/randomize`, {
+      method: "POST",
+      body: JSON.stringify({ userIds }),
+    });
+  },
+
+  startBreakouts(
+    sessionId: string,
+  ): Promise<{ sessionId: string; roomCount: number; status: "ACTIVE" }> {
+    return request(`/sessions/${sessionId}/breakouts/start`, {
+      method: "POST",
+    });
+  },
+
+  closeBreakouts(
+    sessionId: string,
+  ): Promise<{ sessionId: string; roomCount: number; status: "CLOSED" }> {
+    return request(`/sessions/${sessionId}/breakouts/close`, {
+      method: "POST",
+    });
+  },
+
+  broadcastBreakout(
+    sessionId: string,
+    message: string,
+  ): Promise<{
+    sessionId: string;
+    message: string;
+    sentByUserId: string;
+    sentByDisplayName: string;
+    sentAt: string;
+  }> {
+    return request(`/sessions/${sessionId}/breakouts/broadcast`, {
+      method: "POST",
+      body: JSON.stringify({ message }),
+    });
+  },
+
+  createBreakoutMediaToken(
+    sessionId: string,
+    breakoutRoomId: string,
+  ): Promise<MediaToken> {
+    return request(
+      `/sessions/${sessionId}/breakouts/${breakoutRoomId}/media-token`,
+      { method: "POST" },
+    );
+  },
+
   listChat(sessionId: string): Promise<ChatMessageRecord[]> {
     return request<ChatMessageRecord[]>(`/sessions/${sessionId}/chat-messages`);
   },
 
   createChat(
     sessionId: string,
-    input: { channel: ChatChannel; body: string },
+    input: { channel: ChatChannel; body: string; recipientUserId?: string },
   ): Promise<ChatMessageRecord> {
     return request<ChatMessageRecord>(`/sessions/${sessionId}/chat-messages`, {
       method: "POST",
       body: JSON.stringify(input),
+    });
+  },
+
+  sendReaction(
+    sessionId: string,
+    reaction: "👍" | "👏" | "❤️" | "😂" | "🎉",
+  ): Promise<{
+    sessionId: string;
+    userId: string;
+    displayName: string;
+    reaction: string;
+    occurredAt: string;
+  }> {
+    return request(`/sessions/${sessionId}/reactions`, {
+      method: "POST",
+      body: JSON.stringify({ reaction }),
+    });
+  },
+
+  setHandRaise(
+    sessionId: string,
+    raised: boolean,
+  ): Promise<{
+    sessionId: string;
+    userId: string;
+    displayName: string;
+    raised: boolean;
+    occurredAt: string;
+  }> {
+    return request(`/sessions/${sessionId}/hand-raise`, {
+      method: "POST",
+      body: JSON.stringify({ raised }),
     });
   },
 
