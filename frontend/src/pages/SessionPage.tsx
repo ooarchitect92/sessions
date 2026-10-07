@@ -138,9 +138,9 @@ export function SessionPage() {
         const response = await fetch(prepared.upload.url, {
           method: prepared.upload.method,
           body: agendaUploadFile,
-          headers: agendaUploadFile.type
-            ? { 'content-type': agendaUploadFile.type }
-            : undefined,
+          headers: {
+            'content-type': agendaUploadFile.type || 'application/octet-stream',
+          },
         });
         if (!response.ok) {
           throw new Error(`Secure upload failed with status ${response.status}`);
