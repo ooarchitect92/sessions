@@ -1,7 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { CreateBookingPageInput } from '@sessions/contracts';
+import type {
+  CreateBookingPageInput,
+  DynamicFormField,
+} from '@sessions/contracts';
 import { FormEvent, useState } from 'react';
 import { api, type BookingPageRecord } from '../api/client';
+import { DynamicFormBuilder } from '../components/DynamicFormBuilder';
 
 function toSlug(value: string): string {
   return value
@@ -25,6 +29,7 @@ export function BookingsPage() {
   const [slugEdited, setSlugEdited] = useState(false);
   const [durationMinutes, setDurationMinutes] = useState(30);
   const [minimumNoticeMinutes, setMinimumNoticeMinutes] = useState(120);
+  const [intakeFields, setIntakeFields] = useState<DynamicFormField[]>([]);
 
   const bookings = useQuery({ queryKey: ['bookings'], queryFn: () => api.listBookings() });
   const create = useMutation({
@@ -33,6 +38,7 @@ export function BookingsPage() {
       setTitle('');
       setSlug('');
       setSlugEdited(false);
+      setIntakeFields([]);
       await queryClient.invalidateQueries({ queryKey: ['bookings'] });
     },
   });
@@ -58,7 +64,7 @@ export function BookingsPage() {
       bufferBeforeMinutes: 10,
       bufferAfterMinutes: 10,
       availabilityRules: WEEKDAY_RULES,
-      intakeFields: [],
+      intakeFields,
     });
   };
 
@@ -148,6 +154,11 @@ export function BookingsPage() {
                 </select>
               </label>
             </div>
+            <DynamicFormBuilder
+              title="Intake form"
+              fields={intakeFields}
+              onChange={setIntakeFields}
+            />
             {create.error ? <div className="error-banner">{create.error.message}</div> : null}
             <button className="button primary full-width" disabled={create.isPending || !title.trim() || slug.length < 2}>
               {create.isPending ? 'Creating…' : 'Create booking page'}
