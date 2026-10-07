@@ -115,18 +115,19 @@ export class CalendarProviderClientService {
     const payload = (await response.json()) as Record<string, unknown>;
     if (provider === CalendarProvider.GOOGLE) {
       return {
-        id: typeof payload.sub === 'string' ? payload.sub : undefined,
-        email: typeof payload.email === 'string' ? payload.email : undefined,
+        ...(typeof payload.sub === 'string' ? { id: payload.sub } : {}),
+        ...(typeof payload.email === 'string' ? { email: payload.email } : {}),
       };
     }
+    const email =
+      typeof payload.mail === 'string'
+        ? payload.mail
+        : typeof payload.userPrincipalName === 'string'
+          ? payload.userPrincipalName
+          : null;
     return {
-      id: typeof payload.id === 'string' ? payload.id : undefined,
-      email:
-        typeof payload.mail === 'string'
-          ? payload.mail
-          : typeof payload.userPrincipalName === 'string'
-            ? payload.userPrincipalName
-            : undefined,
+      ...(typeof payload.id === 'string' ? { id: payload.id } : {}),
+      ...(email ? { email } : {}),
     };
   }
 
@@ -307,16 +308,16 @@ export class CalendarProviderClientService {
         : typeof payload.expires_in === 'string'
           ? Number(payload.expires_in)
           : undefined;
+    const refreshToken =
+      typeof payload.refresh_token === 'string' ? payload.refresh_token : null;
+    const expiresAt =
+      expiresIn && Number.isFinite(expiresIn)
+        ? new Date(Date.now() + Math.max(30, expiresIn - 60) * 1000)
+        : null;
     return {
       accessToken,
-      refreshToken:
-        typeof payload.refresh_token === 'string'
-          ? payload.refresh_token
-          : undefined,
-      expiresAt:
-        expiresIn && Number.isFinite(expiresIn)
-          ? new Date(Date.now() + Math.max(30, expiresIn - 60) * 1000)
-          : undefined,
+      ...(refreshToken ? { refreshToken } : {}),
+      ...(expiresAt ? { expiresAt } : {}),
       scopes:
         typeof payload.scope === 'string'
           ? payload.scope.split(/\s+/).filter(Boolean)
