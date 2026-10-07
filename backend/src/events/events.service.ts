@@ -767,7 +767,10 @@ export class EventsService {
         slug: eventSlug,
         status: { in: PUBLIC_EVENT_STATUSES },
       },
-      include: { _count: { select: { registrations: true } } },
+      include: {
+        presenters: { orderBy: { position: "asc" } },
+        _count: { select: { registrations: true } },
+      },
     });
     if (!event) throw new NotFoundException("Event not found");
     return event;
