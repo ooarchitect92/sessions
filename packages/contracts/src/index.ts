@@ -85,6 +85,29 @@ export const DynamicFormFieldSchema = z.object({
   options: z.array(z.string().trim().min(1).max(160)).max(50).optional(),
 });
 
+export const EventLandingSectionSchema = z.enum([
+  'ABOUT',
+  'PRESENTERS',
+  'DETAILS',
+]);
+
+export const EventBrandingSchema = z.object({
+  primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  eyebrow: z.string().trim().max(80).optional(),
+  heroHeadline: z.string().trim().max(180).optional(),
+  heroSubheadline: z.string().trim().max(500).optional(),
+  heroImageUrl: z.url().refine((value) => value.startsWith('https://'), {
+    message: 'Hero image URL must use HTTPS',
+  }).optional(),
+  aboutHeading: z.string().trim().max(120).optional(),
+  aboutBody: z.string().trim().max(5000).optional(),
+  ctaLabel: z.string().trim().min(1).max(80).optional(),
+  showPresenters: z.boolean().optional(),
+  showEventFacts: z.boolean().optional(),
+  sectionOrder: z.array(EventLandingSectionSchema).max(3).optional(),
+});
+
 const SlugSchema = z
   .string()
   .trim()
@@ -164,7 +187,7 @@ export const CreateEventSchema = z.object({
   timezone: z.string().trim().min(1).max(100),
   capacity: z.number().int().positive().max(100000).nullable().optional(),
   registrationFields: z.array(DynamicFormFieldSchema).max(50).default([]),
-  branding: z.record(z.string(), z.unknown()).default({}),
+  branding: EventBrandingSchema.default({}),
 });
 
 export const EventSchema = z.object({
@@ -181,7 +204,7 @@ export const EventSchema = z.object({
   capacity: z.number().int().nullable(),
   status: EventStatusSchema,
   registrationFields: z.array(DynamicFormFieldSchema),
-  branding: z.record(z.string(), z.unknown()),
+  branding: EventBrandingSchema,
   publishedAt: z.iso.datetime().nullable(),
   version: z.number().int().positive(),
   createdAt: z.iso.datetime(),
@@ -272,6 +295,8 @@ export const CreateQuestionSchema = z.object({
 export type WorkspaceRole = z.infer<typeof WorkspaceRoleSchema>;
 export type DynamicFormFieldType = z.infer<typeof DynamicFormFieldTypeSchema>;
 export type DynamicFormField = z.infer<typeof DynamicFormFieldSchema>;
+export type EventLandingSection = z.infer<typeof EventLandingSectionSchema>;
+export type EventBranding = z.infer<typeof EventBrandingSchema>;
 export type CreateRoomInput = z.infer<typeof CreateRoomSchema>;
 export type UpdateRoomInput = z.infer<typeof UpdateRoomSchema>;
 export type Room = z.infer<typeof RoomSchema>;
