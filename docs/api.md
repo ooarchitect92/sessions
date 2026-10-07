@@ -82,6 +82,8 @@ Access tokens are short-lived JWTs. Managed browser sessions use opaque, hashed 
 | `POST`  | `/v1/sessions/{id}/cancel`                         | cancel draft or scheduled session                       |
 | `GET`   | `/v1/sessions/{id}/agenda-items`                   | ordered agenda list                                     |
 | `POST`  | `/v1/sessions/{id}/agenda-items`                   | append an agenda item                                   |
+| `POST`  | `/v1/sessions/{id}/agenda-items/generate-draft`    | generate a provider-backed AI agenda draft for review   |
+| `POST`  | `/v1/sessions/{id}/agenda-items/apply-draft`       | explicitly append or replace with a reviewed AI draft   |
 | `PUT`   | `/v1/sessions/{id}/agenda-items/order`             | atomically reorder all items                            |
 | `POST`  | `/v1/sessions/{id}/agenda-items/{itemId}/activate` | make item current and emit event                        |
 | `POST`  | `/v1/sessions/{id}/media-token`                    | short-lived LiveKit room token                          |
@@ -137,6 +139,7 @@ Access tokens are short-lived JWTs. Managed browser sessions use opaque, hashed 
 | ------ | ------------------------------ | -------------------------------------------------------------------- |
 | `GET`  | `/v1/memory`                   | paginated memory library with optional title/transcript query        |
 | `GET`  | `/v1/memory/{sessionId}`       | agenda, artifacts, transcript segments, chat, polls, Q&A and summary |
+| `PATCH` | `/v1/memory/{sessionId}/summary` | human review/edit of a ready summary with `If-Match`                 |
 | `POST` | `/v1/memory/{sessionId}/retry` | requeue failed recording, transcript and summary artifacts           |
 | `GET`  | `/v1/recordings/{sessionId}`   | recording metadata and processing state                              |
 | `GET`  | `/v1/transcripts/{sessionId}`  | transcript metadata, text and ordered segments                       |
@@ -163,7 +166,7 @@ The following families define the remaining contract direction; they are not cla
 - `/v1/whiteboards`, `/breakout-rooms`, `/attendance`, `/engagement-events`
 - `/v1/integrations`, `/oauth/connections`, `/webhooks`, `/api-keys`
 - `/v1/analytics`, `/usage`, `/exports`
-- `/v1/ai/jobs`, `/agenda-drafts`, `/follow-ups`, `/evaluations`
+- `/v1/ai/jobs`, `/follow-ups`, `/evaluations`
 - `/v1/branding`, `/domains`, organization lifecycle and enterprise policy endpoints
 - `/v1/plans`, `/subscriptions`, `/entitlements`, `/usage-reservations`
 

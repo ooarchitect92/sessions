@@ -58,9 +58,10 @@
 - [x] object-storage access, signed playback and secure download paths
 - [x] provider-abstracted post-session STT worker with bounded media ingestion and durable transcript segments
 - [ ] PostgreSQL full-text index and optional vector retrieval with workspace filters
-- [ ] agenda generator
+- [x] provider-abstracted agenda generator with explicit human review/apply
 - [x] provider-abstracted post-session AI summary execution gateway
-- [ ] summary/action editor, follow-up approval and CRM write controls
+- [x] audited optimistic summary/action review editor
+- [ ] follow-up approval and CRM write controls
 - [ ] groundedness, privacy, prompt-injection, cost and latency evaluation suite
 
 ## Phase 5 — platform and enterprise
