@@ -3,6 +3,7 @@ import type { CreateEventInput, DynamicFormField } from '@sessions/contracts';
 import { FormEvent, useMemo, useState } from 'react';
 import { api, type EventRecord } from '../api/client';
 import { DynamicFormBuilder } from '../components/DynamicFormBuilder';
+import { EventLandingPageBuilder } from '../components/EventLandingPageBuilder';
 import { EventPresenterManager } from '../components/EventPresenterManager';
 
 function toSlug(value: string): string {
@@ -36,6 +37,7 @@ export function EventsPage() {
   const [capacity, setCapacity] = useState('250');
   const [registrationFields, setRegistrationFields] = useState<DynamicFormField[]>([]);
   const [presenterEventId, setPresenterEventId] = useState<string | null>(null);
+  const [landingEventId, setLandingEventId] = useState<string | null>(null);
 
   const events = useQuery({ queryKey: ['events'], queryFn: () => api.listEvents() });
   const create = useMutation({
@@ -90,7 +92,7 @@ export function EventsPage() {
         <div className="feature-state-card">
           <span>Implemented vertical slice</span>
           <strong>Event → registration → webinar</strong>
-          <small>Reminder delivery, speaker profiles, and the visual landing-page builder remain separate increments.</small>
+          <small>Typed registration, presenter roles, and visual landing-page composition are connected to the public journey.</small>
         </div>
       </section>
 
@@ -124,14 +126,29 @@ export function EventsPage() {
                   <button
                     className="button secondary"
                     type="button"
-                    onClick={() =>
+                    onClick={() => {
+                      setLandingEventId(null);
                       setPresenterEventId((current) =>
                         current === event.id ? null : event.id,
-                      )
-                    }
+                      );
+                    }}
                   >
                     {presenterEventId === event.id ? 'Hide team' : 'Presenters'}
                   </button>
+                  {event.status === 'DRAFT' ? (
+                    <button
+                      className="button secondary"
+                      type="button"
+                      onClick={() => {
+                        setPresenterEventId(null);
+                        setLandingEventId((current) =>
+                          current === event.id ? null : event.id,
+                        );
+                      }}
+                    >
+                      {landingEventId === event.id ? 'Hide builder' : 'Landing page'}
+                    </button>
+                  ) : null}
                   {event.status === 'DRAFT' ? (
                     <button className="button primary" onClick={() => publish.mutate(event)} disabled={publish.isPending}>Publish</button>
                   ) : null}
@@ -145,6 +162,14 @@ export function EventsPage() {
           {presenterEventId ? (
             <div className="presenter-manager-panel">
               <EventPresenterManager eventId={presenterEventId} />
+            </div>
+          ) : null}
+          {landingEventId ? (
+            <div className="landing-builder-panel">
+              <EventLandingPageBuilder
+                event={events.data?.find((item) => item.id === landingEventId)!}
+                onClose={() => setLandingEventId(null)}
+              />
             </div>
           ) : null}
         </section>
