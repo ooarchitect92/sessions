@@ -116,6 +116,9 @@ Access tokens are short-lived JWTs. Managed browser sessions use opaque, hashed 
 | `GET`   | `/v1/public/{orgSlug}/{workspaceSlug}/bookings/{bookingSlug}`              | public page metadata                                                 |
 | `GET`   | `/v1/public/{orgSlug}/{workspaceSlug}/bookings/{bookingSlug}/slots`        | generate available slots for a bounded date range                    |
 | `POST`  | `/v1/public/{orgSlug}/{workspaceSlug}/bookings/{bookingSlug}/reservations` | lock a slot and atomically create reservation plus scheduled session |
+| `POST`  | `/v1/public/{orgSlug}/{workspaceSlug}/bookings/{bookingSlug}/reservations/{reservationId}/reschedule` | token-authorized attendee reschedule with linked session update |
+| `POST`  | `/v1/public/{orgSlug}/{workspaceSlug}/bookings/{bookingSlug}/reservations/{reservationId}/cancel` | token-authorized attendee cancellation |
+| `POST`  | `/v1/public/{orgSlug}/{workspaceSlug}/bookings/{bookingSlug}/reservations/{reservationId}/calendar` | generate an RFC 5545 calendar invite for the reservation |
 
 ### Secure file uploads
 
