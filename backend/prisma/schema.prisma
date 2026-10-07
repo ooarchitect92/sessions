@@ -1328,8 +1328,10 @@ model WorkspaceInvitation {
 
 
 model MarketingLead {
-  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  kind       String   @db.VarChar(40)
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  submissionKey String   @unique @map("submission_key") @db.Uuid
+  requestHash   String   @map("request_hash") @db.VarChar(64)
+  kind          String   @db.VarChar(40)
   name       String?  @db.VarChar(160)
   email      String   @db.Citext
   company    String?  @db.VarChar(160)

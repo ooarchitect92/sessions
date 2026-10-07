@@ -5,6 +5,7 @@ import {
   type DynamicFieldDefinition,
 } from './DynamicPublicFormFields';
 import { publicApi } from './public-api';
+import { applyHead } from './site-head';
 
 interface PublicBookingPage {
   id: string;
@@ -101,6 +102,18 @@ export function PublicBookingPage({
       cancelled = true;
     };
   }, [bookingSlug, dateRange, organizationSlug, workspaceSlug]);
+
+  useEffect(() => {
+    if (!page) return;
+    applyHead({
+      title: `${page.title} — Sessions Booking`,
+      description:
+        page.description ??
+        `Choose an available ${page.durationMinutes}-minute time and reserve your session.`,
+      path: window.location.pathname,
+      index: true,
+    });
+  }, [page]);
 
   const submit = async (formEvent: FormEvent) => {
     formEvent.preventDefault();

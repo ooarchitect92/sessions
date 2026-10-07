@@ -5,6 +5,7 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  IsUUID,
   Length,
   MaxLength,
 } from 'class-validator';
@@ -13,6 +14,9 @@ export const MARKETING_LEAD_KINDS = ['DEMO', 'CONTACT', 'NEWSLETTER'] as const;
 export type MarketingLeadKind = (typeof MARKETING_LEAD_KINDS)[number];
 
 export class CreateMarketingLeadDto {
+  @IsUUID('4')
+  submissionKey!: string;
+
   @IsIn(MARKETING_LEAD_KINDS)
   kind!: MarketingLeadKind;
 
