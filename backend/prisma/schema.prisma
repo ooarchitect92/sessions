@@ -902,6 +902,7 @@ model MemorySummary {
   citations      Json           @default("[]")
   completedAt    DateTime?      @map("completed_at") @db.Timestamptz(6)
   failureCode    String?        @map("failure_code") @db.VarChar(160)
+  sourceTranscriptVersion Int?   @map("source_transcript_version")
   version        Int            @default(1)
   createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
