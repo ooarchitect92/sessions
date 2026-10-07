@@ -19,4 +19,24 @@ describe('AiProviderService', () => {
     expect(result.decisions).toEqual([]);
     expect(result.actionItems).toEqual([]);
   });
+
+  it('creates a deterministic reviewable agenda draft', async () => {
+    const service = new AiProviderService(
+      new ConfigService({ AI_PROVIDER: 'mock' }),
+    );
+
+    const result = await service.generateAgendaDraft({
+      title: 'Customer onboarding',
+      description: 'Review setup, blockers and next steps',
+      durationMinutes: 30,
+      prompt: 'Leave time for decisions.',
+    });
+
+    expect(result.provider).toBe('mock');
+    expect(result.items).toHaveLength(3);
+    expect(result.items[0]?.title).toContain('Welcome');
+    expect(
+      result.items.reduce((total, item) => total + item.durationSeconds, 0),
+    ).toBeGreaterThanOrEqual(300);
+  });
 });
