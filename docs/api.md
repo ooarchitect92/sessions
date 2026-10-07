@@ -87,6 +87,7 @@ Access tokens are short-lived JWTs. Managed browser sessions use opaque, hashed 
 | `PUT`   | `/v1/sessions/{id}/agenda-items/order`             | atomically reorder all items                            |
 | `POST`  | `/v1/sessions/{id}/agenda-items/{itemId}/activate` | make item current and emit event                        |
 | `POST`  | `/v1/sessions/{id}/media-token`                    | short-lived LiveKit room token                          |
+| `POST`  | `/v1/content/resolve-embed`                         | validate HTTPS content and return a sandboxed embed contract |
 
 ### Events and registrations
 
