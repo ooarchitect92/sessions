@@ -3,6 +3,7 @@ import type { CreateEventInput, DynamicFormField } from '@sessions/contracts';
 import { FormEvent, useMemo, useState } from 'react';
 import { api, type EventRecord } from '../api/client';
 import { DynamicFormBuilder } from '../components/DynamicFormBuilder';
+import { EventPresenterManager } from '../components/EventPresenterManager';
 
 function toSlug(value: string): string {
   return value
@@ -34,6 +35,7 @@ export function EventsPage() {
   const [durationMinutes, setDurationMinutes] = useState(60);
   const [capacity, setCapacity] = useState('250');
   const [registrationFields, setRegistrationFields] = useState<DynamicFormField[]>([]);
+  const [presenterEventId, setPresenterEventId] = useState<string | null>(null);
 
   const events = useQuery({ queryKey: ['events'], queryFn: () => api.listEvents() });
   const create = useMutation({
@@ -119,6 +121,17 @@ export function EventsPage() {
                   </div>
                 </div>
                 <div className="workflow-actions">
+                  <button
+                    className="button secondary"
+                    type="button"
+                    onClick={() =>
+                      setPresenterEventId((current) =>
+                        current === event.id ? null : event.id,
+                      )
+                    }
+                  >
+                    {presenterEventId === event.id ? 'Hide team' : 'Presenters'}
+                  </button>
                   {event.status === 'DRAFT' ? (
                     <button className="button primary" onClick={() => publish.mutate(event)} disabled={publish.isPending}>Publish</button>
                   ) : null}
@@ -129,6 +142,11 @@ export function EventsPage() {
               </article>
             ))}
           </div>
+          {presenterEventId ? (
+            <div className="presenter-manager-panel">
+              <EventPresenterManager eventId={presenterEventId} />
+            </div>
+          ) : null}
         </section>
 
         <aside className="panel workflow-create-panel">

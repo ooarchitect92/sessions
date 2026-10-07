@@ -19,6 +19,15 @@ interface PublicEvent {
   branding: Record<string, unknown>;
   status: 'PUBLISHED' | 'LIVE';
   registrationCount: number;
+  presenters: Array<{
+    id: string;
+    role: 'ORGANIZER' | 'HOST' | 'CO_HOST' | 'SPEAKER';
+    name: string;
+    title: string | null;
+    bio: string | null;
+    avatarUrl: string | null;
+    position: number;
+  }>;
 }
 
 interface Registration {
@@ -113,6 +122,35 @@ export function PublicEventPage({
           <p className="public-event-description">
             {event.description ?? 'Join a focused, interactive webinar with a shared agenda, live questions, and collaborative participation.'}
           </p>
+          {event.presenters.length ? (
+            <section className="public-presenter-section">
+              <span className="public-kicker">Presenter team</span>
+              <div className="public-presenter-grid">
+                {event.presenters.map((presenter) => (
+                  <article key={presenter.id}>
+                    {presenter.avatarUrl ? (
+                      <img src={presenter.avatarUrl} alt="" />
+                    ) : (
+                      <span className="public-presenter-avatar">
+                        {presenter.name.charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                    <div>
+                      <strong>{presenter.name}</strong>
+                      <small>
+                        {presenter.title ??
+                          (presenter.role === 'CO_HOST'
+                            ? 'Co-host'
+                            : presenter.role.charAt(0) +
+                              presenter.role.slice(1).toLowerCase())}
+                      </small>
+                      {presenter.bio ? <p>{presenter.bio}</p> : null}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          ) : null}
           <div className="public-event-facts">
             <article>
               <span>Date and time</span>
