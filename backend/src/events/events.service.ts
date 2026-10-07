@@ -6,12 +6,14 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import {
+  EventPresenterRole,
   EventStatus,
   Prisma,
   RegistrationStatus,
   SessionKind,
   SessionStatus,
   type Event,
+  type EventPresenter,
   type EventRegistration,
 } from "@prisma/client";
 import { createHash, randomUUID } from "node:crypto";
@@ -35,8 +37,10 @@ import { WorkerPrismaService } from "../database/worker-prisma.service";
 import { OutboxService } from "../outbox/outbox.service";
 import { NotificationSchedulerService } from "../notifications/notification-scheduler.service";
 import { CreateEventDto } from "./dto/create-event.dto";
+import { CreateEventPresenterDto } from "./dto/create-event-presenter.dto";
 import { RegisterEventDto } from "./dto/register-event.dto";
 import { UpdateEventDto } from "./dto/update-event.dto";
+import { UpdateEventPresenterDto } from "./dto/update-event-presenter.dto";
 
 const PUBLIC_EVENT_STATUSES: EventStatus[] = [
   EventStatus.PUBLISHED,
@@ -118,6 +122,18 @@ export class EventsService {
           branding: input.branding as Prisma.InputJsonValue,
         },
       });
+      await transaction.eventPresenter.create({
+        data: {
+          organizationId: principal.organizationId,
+          workspaceId: principal.workspaceId,
+          eventId: event.id,
+          userId: principal.userId,
+          role: EventPresenterRole.ORGANIZER,
+          name: principal.displayName,
+          email: principal.email.toLowerCase(),
+          position: 0,
+        },
+      });
       const response = this.toJson(event);
       await this.audit.record(transaction, principal, {
         action: "event.created",
@@ -151,9 +167,9 @@ export class EventsService {
       transaction.event.findMany({
         orderBy: [{ startsAt: "asc" }, { createdAt: "desc" }],
         include: {
-        workspace: { select: { name: true, settings: true } },
-        _count: { select: { registrations: true } },
-      },
+          presenters: { orderBy: [{ position: "asc" }, { createdAt: "asc" }] },
+          _count: { select: { registrations: true } },
+        },
       }),
     );
   }
@@ -164,6 +180,7 @@ export class EventsService {
         where: { id },
         include: {
           session: true,
+          presenters: { orderBy: [{ position: "asc" }, { createdAt: "asc" }] },
           _count: { select: { registrations: true } },
         },
       });
@@ -422,6 +439,187 @@ export class EventsService {
     });
   }
 
+  async listPresenters(
+    principal: Principal,
+    eventId: string,
+  ): Promise<EventPresenter[]> {
+    this.assertHost(principal);
+    return this.database.run(principal, async (transaction) => {
+      const event = await transaction.event.findUnique({
+        where: { id: eventId },
+        select: { id: true },
+      });
+      if (!event) throw new NotFoundException("Event not found");
+      return transaction.eventPresenter.findMany({
+        where: { eventId },
+        orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+      });
+    });
+  }
+
+  async createPresenter(
+    principal: Principal,
+    eventId: string,
+    input: CreateEventPresenterDto,
+  ): Promise<EventPresenter> {
+    this.assertHost(principal);
+    if (input.role === EventPresenterRole.ORGANIZER) {
+      throw new BadRequestException("The event creator is the organizer");
+    }
+    return this.database.run(principal, async (transaction) => {
+      const event = await transaction.event.findUnique({
+        where: { id: eventId },
+        select: { id: true, status: true },
+      });
+      if (!event) throw new NotFoundException("Event not found");
+      if (event.status === EventStatus.CANCELLED || event.status === EventStatus.ENDED) {
+        throw new ConflictException("Presenters cannot be changed for a terminal event");
+      }
+      const email = input.email.toLowerCase();
+      const existing = await transaction.eventPresenter.findUnique({
+        where: { eventId_email: { eventId, email } },
+      });
+      if (existing) {
+        throw new ConflictException("This email is already on the presenter team");
+      }
+      const membership = await transaction.workspaceMembership.findFirst({
+        where: {
+          workspaceId: principal.workspaceId,
+          user: { email },
+        },
+        select: { userId: true },
+      });
+      const presenter = await transaction.eventPresenter.create({
+        data: {
+          organizationId: principal.organizationId,
+          workspaceId: principal.workspaceId,
+          eventId,
+          userId: membership?.userId ?? null,
+          role: input.role,
+          name: input.name.trim(),
+          email,
+          title: input.title?.trim() || null,
+          bio: input.bio?.trim() || null,
+          avatarUrl: input.avatarUrl?.trim() || null,
+          position: input.position ?? 0,
+        },
+      });
+      await this.audit.record(transaction, principal, {
+        action: "event.presenter.created",
+        resourceType: "event_presenter",
+        resourceId: presenter.id,
+        metadata: { eventId, role: presenter.role },
+      });
+      await this.outbox.enqueue(transaction, principal, {
+        aggregateType: "event_presenter",
+        aggregateId: presenter.id,
+        eventType: "event.presenter.created",
+        payload: this.toJson(presenter),
+      });
+      return presenter;
+    });
+  }
+
+  async updatePresenter(
+    principal: Principal,
+    eventId: string,
+    presenterId: string,
+    input: UpdateEventPresenterDto,
+  ): Promise<EventPresenter> {
+    this.assertHost(principal);
+    if (Object.keys(input).length === 0) {
+      throw new BadRequestException("At least one presenter field must be supplied");
+    }
+    return this.database.run(principal, async (transaction) => {
+      const presenter = await transaction.eventPresenter.findFirst({
+        where: { id: presenterId, eventId },
+      });
+      if (!presenter) throw new NotFoundException("Presenter not found");
+      if (presenter.role === EventPresenterRole.ORGANIZER && input.role !== undefined) {
+        throw new BadRequestException("The organizer role cannot be changed");
+      }
+      if (input.role === EventPresenterRole.ORGANIZER) {
+        throw new BadRequestException("Only the event creator can be the organizer");
+      }
+      const email = input.email?.toLowerCase();
+      let userId = presenter.userId;
+      if (email !== undefined && email !== presenter.email.toLowerCase()) {
+        const duplicate = await transaction.eventPresenter.findUnique({
+          where: { eventId_email: { eventId, email } },
+        });
+        if (duplicate) {
+          throw new ConflictException("This email is already on the presenter team");
+        }
+        const membership = await transaction.workspaceMembership.findFirst({
+          where: {
+            workspaceId: principal.workspaceId,
+            user: { email },
+          },
+          select: { userId: true },
+        });
+        userId = membership?.userId ?? null;
+      }
+      const updated = await transaction.eventPresenter.update({
+        where: { id: presenterId },
+        data: {
+          ...(input.role !== undefined ? { role: input.role } : {}),
+          ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+          ...(email !== undefined ? { email, userId } : {}),
+          ...(input.title !== undefined ? { title: input.title?.trim() || null } : {}),
+          ...(input.bio !== undefined ? { bio: input.bio?.trim() || null } : {}),
+          ...(input.avatarUrl !== undefined
+            ? { avatarUrl: input.avatarUrl?.trim() || null }
+            : {}),
+          ...(input.position !== undefined ? { position: input.position } : {}),
+        },
+      });
+      await this.audit.record(transaction, principal, {
+        action: "event.presenter.updated",
+        resourceType: "event_presenter",
+        resourceId: presenterId,
+        metadata: { eventId, fromRole: presenter.role, toRole: updated.role },
+      });
+      await this.outbox.enqueue(transaction, principal, {
+        aggregateType: "event_presenter",
+        aggregateId: presenterId,
+        eventType: "event.presenter.updated",
+        payload: this.toJson(updated),
+      });
+      return updated;
+    });
+  }
+
+  async deletePresenter(
+    principal: Principal,
+    eventId: string,
+    presenterId: string,
+  ): Promise<{ id: string; deleted: true }> {
+    this.assertHost(principal);
+    return this.database.run(principal, async (transaction) => {
+      const presenter = await transaction.eventPresenter.findFirst({
+        where: { id: presenterId, eventId },
+      });
+      if (!presenter) throw new NotFoundException("Presenter not found");
+      if (presenter.role === EventPresenterRole.ORGANIZER) {
+        throw new BadRequestException("The event organizer cannot be removed");
+      }
+      await transaction.eventPresenter.delete({ where: { id: presenterId } });
+      await this.audit.record(transaction, principal, {
+        action: "event.presenter.deleted",
+        resourceType: "event_presenter",
+        resourceId: presenterId,
+        metadata: { eventId, role: presenter.role },
+      });
+      await this.outbox.enqueue(transaction, principal, {
+        aggregateType: "event_presenter",
+        aggregateId: presenterId,
+        eventType: "event.presenter.deleted",
+        payload: { eventId, presenterId },
+      });
+      return { id: presenterId, deleted: true };
+    });
+  }
+
   async getPublished(
     organizationSlug: string,
     workspaceSlug: string,
@@ -448,6 +646,15 @@ export class EventsService {
       }),
       status: event.status,
       registrationCount: event._count.registrations,
+      presenters: event.presenters.map((presenter) => ({
+        id: presenter.id,
+        role: presenter.role,
+        name: presenter.name,
+        title: presenter.title,
+        bio: presenter.bio,
+        avatarUrl: presenter.avatarUrl,
+        position: presenter.position,
+      })),
     };
   }
 
@@ -545,6 +752,7 @@ export class EventsService {
       },
       include: {
         workspace: { select: { name: true, settings: true } },
+        presenters: { orderBy: [{ position: "asc" }, { createdAt: "asc" }] },
         _count: { select: { registrations: true } },
       },
     });
