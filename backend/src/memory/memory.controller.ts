@@ -15,6 +15,7 @@ import { CurrentPrincipal } from '../common/auth/current-principal.decorator';
 import type { Principal } from '../common/auth/principal';
 import { ListMemoryQuery } from './dto/list-memory.query';
 import { UpdateMemorySummaryDto } from './dto/update-memory-summary.dto';
+import { UpdateTranscriptDto } from './dto/update-transcript.dto';
 import { MemoryService } from './memory.service';
 
 function parseVersion(value: string | undefined): number {
@@ -45,6 +46,44 @@ export class MemoryController {
     return this.memory.getBySession(principal, sessionId);
   }
 
+
+  @Get(':sessionId/transcript/revisions')
+  listTranscriptRevisions(
+    @CurrentPrincipal() principal: Principal,
+    @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
+  ) {
+    return this.memory.listTranscriptRevisions(principal, sessionId);
+  }
+
+  @Patch(':sessionId/transcript')
+  updateTranscript(
+    @CurrentPrincipal() principal: Principal,
+    @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
+    @Headers('if-match') ifMatch: string | undefined,
+    @Body() body: UpdateTranscriptDto,
+  ) {
+    return this.memory.updateTranscript(
+      principal,
+      sessionId,
+      parseVersion(ifMatch),
+      body,
+    );
+  }
+
+  @Post(':sessionId/transcript/revisions/:revisionId/restore')
+  restoreTranscriptRevision(
+    @CurrentPrincipal() principal: Principal,
+    @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
+    @Param('revisionId', new ParseUUIDPipe({ version: '4' })) revisionId: string,
+    @Headers('if-match') ifMatch: string | undefined,
+  ) {
+    return this.memory.restoreTranscriptRevision(
+      principal,
+      sessionId,
+      revisionId,
+      parseVersion(ifMatch),
+    );
+  }
 
   @Patch(':sessionId/summary')
   updateSummary(
