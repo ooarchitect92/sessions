@@ -13,6 +13,7 @@ import {
   QuestionStatus,
   SessionKind,
   SessionStatus,
+  WorkspaceRole,
 } from "@prisma/client";
 import { AuditService } from "../audit/audit.service";
 import {
@@ -28,6 +29,7 @@ import { CreatePollDto } from "./dto/create-poll.dto";
 import { CreateQuestionDto } from "./dto/create-question.dto";
 import { ModerateQuestionDto } from "./dto/moderate-question.dto";
 import { SubmitPollAnswerDto } from "./dto/submit-poll-answer.dto";
+import { ToggleChatReactionDto } from "./dto/toggle-chat-reaction.dto";
 
 const ACTIVE_SESSION_STATUSES: SessionStatus[] = [
   SessionStatus.DRAFT,
@@ -70,9 +72,26 @@ export class CollaborationService {
         where: {
           sessionId,
           deletedAt: null,
-          ...(!host ? { channel: ChatChannel.EVERYONE } : {}),
+          OR: [
+            { channel: ChatChannel.EVERYONE },
+            ...(host ? [{ channel: ChatChannel.HOSTS }] : []),
+            {
+              channel: ChatChannel.DIRECT,
+              OR: [
+                { authorUserId: principal.userId },
+                { recipientUserId: principal.userId },
+              ],
+            },
+          ],
         },
-        include: { author: { select: { displayName: true, avatarUrl: true } } },
+        include: {
+          author: { select: { displayName: true, avatarUrl: true } },
+          recipient: { select: { id: true, displayName: true, avatarUrl: true } },
+          reactions: {
+            select: { id: true, userId: true, emoji: true, createdAt: true },
+            orderBy: { createdAt: "asc" },
+          },
+        },
         orderBy: { createdAt: "asc" },
         take: 500,
       });
@@ -92,18 +111,52 @@ export class CollaborationService {
         "Only hosts can send messages to the host channel",
       );
     }
-    const message = await this.database.run(principal, async (transaction) => {
+    if (input.channel === ChatChannel.DIRECT && !input.recipientUserId) {
+      throw new BadRequestException("A recipient is required for direct messages");
+    }
+    if (input.channel !== ChatChannel.DIRECT && input.recipientUserId) {
+      throw new BadRequestException(
+        "A recipient can only be provided for direct messages",
+      );
+    }
+    if (input.recipientUserId === principal.userId) {
+      throw new BadRequestException("Direct messages must target another user");
+    }
+
+    const result = await this.database.run(principal, async (transaction) => {
       await this.assertSessionActive(transaction, sessionId);
+
+      if (input.channel === ChatChannel.DIRECT) {
+        const recipient = await transaction.workspaceMembership.findUnique({
+          where: {
+            workspaceId_userId: {
+              workspaceId: principal.workspaceId,
+              userId: input.recipientUserId!,
+            },
+          },
+          select: { userId: true },
+        });
+        if (!recipient) throw new NotFoundException("Message recipient not found");
+      }
+
       const created = await transaction.chatMessage.create({
         data: {
           organizationId: principal.organizationId,
           workspaceId: principal.workspaceId,
           sessionId,
           authorUserId: principal.userId,
+          recipientUserId:
+            input.channel === ChatChannel.DIRECT ? input.recipientUserId : null,
           channel: input.channel,
           body: input.body.trim(),
         },
-        include: { author: { select: { displayName: true, avatarUrl: true } } },
+        include: {
+          author: { select: { displayName: true, avatarUrl: true } },
+          recipient: { select: { id: true, displayName: true, avatarUrl: true } },
+          reactions: {
+            select: { id: true, userId: true, emoji: true, createdAt: true },
+          },
+        },
       });
       await this.outbox.enqueue(transaction, principal, {
         aggregateType: "chat_message",
@@ -111,14 +164,157 @@ export class CollaborationService {
         eventType: "chat.message.created",
         payload: this.toJson(created),
       });
-      return created;
+
+      let audienceUserIds: string[] | null = null;
+      if (input.channel === ChatChannel.DIRECT) {
+        audienceUserIds = [principal.userId, input.recipientUserId!];
+      } else if (input.channel === ChatChannel.HOSTS) {
+        const hosts = await transaction.workspaceMembership.findMany({
+          where: {
+            workspaceId: principal.workspaceId,
+            role: {
+              in: [
+                WorkspaceRole.OWNER,
+                WorkspaceRole.ADMIN,
+                WorkspaceRole.HOST,
+              ],
+            },
+          },
+          select: { userId: true },
+        });
+        audienceUserIds = hosts.map((membership) => membership.userId);
+      }
+
+      return { created, audienceUserIds };
     });
-    this.realtime.publishSessionEvent({
-      sessionId,
-      eventName: "chat.message.created",
-      payload: message,
+
+    if (result.audienceUserIds) {
+      this.realtime.publishUserEvent({
+        userIds: result.audienceUserIds,
+        eventName: "chat.message.created",
+        payload: result.created,
+      });
+    } else {
+      this.realtime.publishSessionEvent({
+        sessionId,
+        eventName: "chat.message.created",
+        payload: result.created,
+      });
+    }
+    return result.created;
+  }
+
+  async toggleChatReaction(
+    principal: Principal,
+    sessionId: string,
+    messageId: string,
+    input: ToggleChatReactionDto,
+  ) {
+    const result = await this.database.run(principal, async (transaction) => {
+      const message = await transaction.chatMessage.findFirst({
+        where: {
+          id: messageId,
+          sessionId,
+          deletedAt: null,
+          OR: [
+            { channel: ChatChannel.EVERYONE },
+            ...(hasAnyRole(principal, HOST_ROLES)
+              ? [{ channel: ChatChannel.HOSTS }]
+              : []),
+            {
+              channel: ChatChannel.DIRECT,
+              OR: [
+                { authorUserId: principal.userId },
+                { recipientUserId: principal.userId },
+              ],
+            },
+          ],
+        },
+      });
+      if (!message) throw new NotFoundException("Chat message not found");
+
+      const existing = await transaction.chatReaction.findUnique({
+        where: {
+          messageId_userId_emoji: {
+            messageId,
+            userId: principal.userId,
+            emoji: input.emoji,
+          },
+        },
+      });
+
+      if (existing) {
+        await transaction.chatReaction.delete({ where: { id: existing.id } });
+      } else {
+        await transaction.chatReaction.create({
+          data: {
+            organizationId: principal.organizationId,
+            workspaceId: principal.workspaceId,
+            sessionId,
+            messageId,
+            userId: principal.userId,
+            emoji: input.emoji,
+          },
+        });
+      }
+
+      const reactions = await transaction.chatReaction.findMany({
+        where: { messageId },
+        select: { id: true, userId: true, emoji: true, createdAt: true },
+        orderBy: { createdAt: "asc" },
+      });
+      const payload = {
+        sessionId,
+        messageId,
+        reactions,
+      };
+
+      await this.outbox.enqueue(transaction, principal, {
+        aggregateType: "chat_message",
+        aggregateId: messageId,
+        eventType: "chat.reaction.updated",
+        payload: this.toJson(payload),
+      });
+
+      let audienceUserIds: string[] | null = null;
+      if (message.channel === ChatChannel.DIRECT) {
+        audienceUserIds = [
+          message.authorUserId,
+          ...(message.recipientUserId ? [message.recipientUserId] : []),
+        ];
+      } else if (message.channel === ChatChannel.HOSTS) {
+        const hosts = await transaction.workspaceMembership.findMany({
+          where: {
+            workspaceId: principal.workspaceId,
+            role: {
+              in: [
+                WorkspaceRole.OWNER,
+                WorkspaceRole.ADMIN,
+                WorkspaceRole.HOST,
+              ],
+            },
+          },
+          select: { userId: true },
+        });
+        audienceUserIds = hosts.map((membership) => membership.userId);
+      }
+      return { payload, audienceUserIds };
     });
-    return message;
+
+    if (result.audienceUserIds) {
+      this.realtime.publishUserEvent({
+        userIds: result.audienceUserIds,
+        eventName: "chat.reaction.updated",
+        payload: result.payload,
+      });
+    } else {
+      this.realtime.publishSessionEvent({
+        sessionId,
+        eventName: "chat.reaction.updated",
+        payload: result.payload,
+      });
+    }
+    return result.payload;
   }
 
   async listPolls(principal: Principal, sessionId: string) {
