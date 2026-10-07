@@ -33,6 +33,7 @@ const ALLOWED_PLACEHOLDERS = new Set([
   'timezone',
   'brand_name',
   'status_message',
+  'join_url',
 ]);
 
 const PLACEHOLDER_PATTERN = /\{\{\s*([a-z_]+)\s*\}\}/g;
