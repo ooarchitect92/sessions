@@ -70,3 +70,16 @@ No provider-dependent workflow is marked production-ready until credentials, fai
 - LiveKit webinar grants now distinguish moderator roles, speaker publishing rights and attendee subscribe-only behavior
 - organizer/host/co-host receive room-admin rights; speakers can publish without moderation rights
 - guest registration-to-authenticated attendee admission and large-audience broadcast qualification remain separate follow-on work
+
+
+### Webinar attendee admission increment
+- confirmed registrations receive a cryptographically random opaque admission credential
+- only the SHA-256 digest and expiry are persisted on the registration; raw credentials are returned once and embedded in already-rendered lifecycle emails
+- public registration/admin projections never expose the stored credential digest
+- public attendee admission is restricted to the matching organization/workspace/event/registration tuple
+- admission opens 30 minutes before the webinar and closes one hour after the scheduled end
+- successful admission marks the registration attended/checked-in
+- LiveKit attendee grants are subscribe/data-only with no room-admin or camera/microphone publishing rights
+- public website includes a dedicated attendee stage that connects directly to LiveKit and renders presenter media
+- confirmation plus 24h/1h reminder messages include the secure join URL
+- production webinar load, attendee realtime Q&A/polls and waiting-room moderation remain follow-on work
