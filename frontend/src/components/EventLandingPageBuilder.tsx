@@ -3,7 +3,7 @@ import type {
   EventBranding,
   EventLandingSection,
 } from '@sessions/contracts';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import { api, type EventRecord } from '../api/client';
 
 const DEFAULT_ORDER: EventLandingSection[] = [
@@ -67,7 +67,7 @@ export function EventLandingPageBuilder({
       ({
         '--landing-primary': branding.primaryColor ?? '#183f38',
         '--landing-accent': branding.accentColor ?? '#dcefe8',
-      }) as React.CSSProperties,
+      }) as CSSProperties,
     [branding.accentColor, branding.primaryColor],
   );
 
