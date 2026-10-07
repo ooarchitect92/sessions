@@ -25,6 +25,7 @@ import { RecordingsModule } from "./recordings/recordings.module";
 import { RoomsModule } from "./rooms/rooms.module";
 import { SessionsModule } from "./sessions/sessions.module";
 import { TranscriptionModule } from "./transcription/transcription.module";
+import { UploadsModule } from "./uploads/uploads.module";
 import { WhiteboardsModule } from "./whiteboards/whiteboards.module";
 import { WorkspacesModule } from "./workspaces/workspaces.module";
 
@@ -46,6 +47,7 @@ import { WorkspacesModule } from "./workspaces/workspaces.module";
     MemoryModule,
     RecordingsModule,
     TranscriptionModule,
+    UploadsModule,
     SessionsModule,
     RoomsModule,
     AgendasModule,

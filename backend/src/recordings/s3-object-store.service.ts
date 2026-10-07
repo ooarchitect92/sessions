@@ -8,6 +8,45 @@ type QueryValue = string | number | boolean;
 export class S3ObjectStoreService {
   constructor(private readonly config: ConfigService) {}
 
+  createUploadUrl(
+    objectKey: string,
+    expiresInSeconds: number,
+    now = new Date(),
+  ): string {
+    return this.createPresignedUrl(
+      'PUT',
+      objectKey,
+      expiresInSeconds,
+      {},
+      now,
+      true,
+    );
+  }
+
+  async headObject(
+    objectKey: string,
+  ): Promise<{ sizeBytes: number; contentType: string | null }> {
+    const url = this.createPresignedUrl(
+      'HEAD',
+      objectKey,
+      60,
+      {},
+      new Date(),
+      false,
+    );
+    const response = await fetch(url, { method: 'HEAD' });
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error('object_not_found');
+      }
+      throw new Error(`Object metadata lookup failed with ${response.status}`);
+    }
+    return {
+      sizeBytes: Number(response.headers.get('content-length') ?? 0),
+      contentType: response.headers.get('content-type'),
+    };
+  }
+
   createDownloadUrl(
     objectKey: string,
     filename: string,
@@ -83,12 +122,12 @@ export class S3ObjectStoreService {
   }
 
   createPresignedUrl(
-    method: 'GET' | 'DELETE',
+    method: 'GET' | 'PUT' | 'HEAD' | 'DELETE',
     objectKey: string,
     expiresInSeconds: number,
     extraQuery: Record<string, QueryValue> = {},
     now = new Date(),
-    usePublicEndpoint = method === 'GET',
+    usePublicEndpoint = method === 'GET' || method === 'PUT',
   ): string {
     const internalEndpoint = this.config.getOrThrow<string>('S3_ENDPOINT');
     const endpoint = new URL(

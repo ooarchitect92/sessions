@@ -117,6 +117,17 @@ Access tokens are short-lived JWTs. Managed browser sessions use opaque, hashed 
 | `GET`   | `/v1/public/{orgSlug}/{workspaceSlug}/bookings/{bookingSlug}/slots`        | generate available slots for a bounded date range                    |
 | `POST`  | `/v1/public/{orgSlug}/{workspaceSlug}/bookings/{bookingSlug}/reservations` | lock a slot and atomically create reservation plus scheduled session |
 
+### Secure file uploads
+
+| Method | Path | Purpose |
+| ------ | ---- | ------- |
+| `POST` | `/v1/uploads` | create a tenant-scoped quarantine asset and short-lived presigned PUT URL |
+| `POST` | `/v1/uploads/{id}/complete` | verify uploaded object metadata and enqueue malware scanning |
+| `GET` | `/v1/uploads/{id}` | read scan state and safe asset metadata |
+| `GET` | `/v1/uploads/{id}/download` | issue a short-lived download grant only after a clean scan |
+
+Upload object keys are namespaced by organization/workspace and start in a quarantine prefix. Browsers never receive storage credentials. Completion requires the declared byte size to match the object metadata. A bounded worker downloads the object, computes SHA-256, optionally verifies a client checksum, and scans the bytes before the asset can enter `READY`. Rejected objects are deleted. Production configuration forbids the local mock scanner and requires the ClamAV provider.
+
 ### In-session collaboration
 
 | Method  | Path                                            | Purpose                                             |

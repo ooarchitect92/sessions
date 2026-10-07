@@ -27,7 +27,7 @@
 - [x] collaborative whiteboard with persisted operations, snapshots and automatic compaction
 - [x] breakout assignment, assignment-aware media-room transition and host broadcast
 - [x] HTTPS agenda content blocks, provider normalization and sandboxed embed resolver
-- [ ] upload quarantine, malware scan and signed downloads
+- [x] upload quarantine, malware scan and signed downloads
 - [x] recording, transcript and summary artifact state models
 - [x] post-session artifact requests, audit evidence and retry controls
 - [x] LiveKit egress orchestration and recording finalization worker

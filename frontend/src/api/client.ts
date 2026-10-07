@@ -237,6 +237,47 @@ export interface BreakoutState {
   }>;
 }
 
+export type UploadStatus =
+  | 'AWAITING_UPLOAD'
+  | 'PENDING_SCAN'
+  | 'SCANNING'
+  | 'READY'
+  | 'REJECTED'
+  | 'FAILED'
+  | 'DELETED';
+
+export type UploadPurpose =
+  | 'SESSION_RESOURCE'
+  | 'AGENDA_RESOURCE'
+  | 'EVENT_RESOURCE';
+
+export interface UploadAssetRecord {
+  id: string;
+  sessionId: string | null;
+  purpose: UploadPurpose;
+  status: UploadStatus;
+  filename: string;
+  mimeType: string;
+  expectedSizeBytes: number;
+  actualSizeBytes: number | null;
+  checksumSha256: string | null;
+  scanProvider: string | null;
+  scanResult: string | null;
+  scannedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateUploadResponse {
+  asset: UploadAssetRecord;
+  upload: {
+    method: 'PUT';
+    url: string;
+    expiresAt: string;
+    maxBytes: number;
+  };
+}
+
 export interface EventRecord extends PlatformEvent {
   _count?: { registrations: number };
 }
@@ -803,6 +844,43 @@ export const api = {
     }>(`/sessions/${sessionId}/agenda-items/${agendaItemId}/activate`, {
       method: "POST",
     });
+  },
+
+  createUpload(input: {
+    filename: string;
+    mimeType: string;
+    sizeBytes: number;
+    purpose: UploadPurpose;
+    sessionId?: string;
+  }): Promise<CreateUploadResponse> {
+    return request<CreateUploadResponse>('/uploads', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  completeUpload(
+    uploadId: string,
+    checksumSha256?: string,
+  ): Promise<UploadAssetRecord> {
+    return request<UploadAssetRecord>(`/uploads/${uploadId}/complete`, {
+      method: 'POST',
+      body: JSON.stringify(
+        checksumSha256 ? { checksumSha256 } : {},
+      ),
+    });
+  },
+
+  getUpload(uploadId: string): Promise<UploadAssetRecord> {
+    return request<UploadAssetRecord>(`/uploads/${uploadId}`);
+  },
+
+  createUploadDownloadGrant(uploadId: string): Promise<{
+    asset: UploadAssetRecord;
+    url: string;
+    expiresIn: number;
+  }> {
+    return request(`/uploads/${uploadId}/download`);
   },
 
   resolveEmbed(url: string): Promise<ResolvedEmbed> {

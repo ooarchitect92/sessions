@@ -51,6 +51,13 @@ const environmentSchema = z
     S3_ACCESS_KEY: z.string().min(1),
     S3_SECRET_KEY: z.string().min(1),
     S3_FORCE_PATH_STYLE: optionalBoolean.default(true),
+    UPLOAD_MAX_BYTES: z.coerce.number().int().min(1024).max(500 * 1024 * 1024).default(25 * 1024 * 1024),
+    UPLOAD_URL_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(300),
+    UPLOAD_DOWNLOAD_TTL_SECONDS: z.coerce.number().int().min(30).max(3600).default(300),
+    UPLOAD_SCAN_PROVIDER: z.enum(['mock', 'clamav']).default('mock'),
+    CLAMAV_HOST: z.string().min(1).default('127.0.0.1'),
+    CLAMAV_PORT: z.coerce.number().int().min(1).max(65535).default(3310),
+    CLAMAV_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120000).default(15000),
     STT_PROVIDER: z.enum(['disabled', 'mock', 'openai']).default('disabled'),
     STT_OPENAI_API_KEY: z.string().min(1).optional(),
     STT_OPENAI_ENDPOINT: z
@@ -136,6 +143,12 @@ const environmentSchema = z
       issue(
         'LIVEKIT_API_SECRET',
         'Development LiveKit credentials cannot be used in production',
+      );
+    }
+    if (value.UPLOAD_SCAN_PROVIDER === 'mock') {
+      issue(
+        'UPLOAD_SCAN_PROVIDER',
+        'UPLOAD_SCAN_PROVIDER=mock is forbidden in production',
       );
     }
     if (value.STT_PROVIDER === 'mock') {
