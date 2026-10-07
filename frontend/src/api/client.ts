@@ -1102,6 +1102,18 @@ export const api = {
     );
   },
 
+  updateEvent(
+    eventId: string,
+    version: number,
+    input: Partial<CreateEventInput>,
+  ): Promise<EventRecord> {
+    return request<EventRecord>(`/events/${eventId}`, {
+      method: 'PATCH',
+      headers: { 'if-match': String(version) },
+      body: JSON.stringify(input),
+    });
+  },
+
   publishEvent(eventId: string, version: number): Promise<EventRecord> {
     return request<EventRecord>(`/events/${eventId}/publish`, {
       method: "POST",
