@@ -5,7 +5,7 @@ import { useSearchParams } from 'react-router-dom';
 import { api, type WorkspaceMember } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 
-const TABS = ['workspace', 'members', 'workspaces', 'security'] as const;
+const TABS = ['workspace', 'members', 'workspaces', 'integrations', 'security'] as const;
 type SettingsTab = (typeof TABS)[number];
 
 const MEMBER_ROLES: WorkspaceRole[] = ['ADMIN', 'HOST', 'MEMBER', 'ANALYST', 'GUEST'];
@@ -63,7 +63,9 @@ export function SettingsPage() {
                     ? '◎'
                     : item === 'workspaces'
                       ? '▦'
-                      : '⌾'}
+                      : item === 'integrations'
+                        ? '⛓'
+                        : '⌾'}
               </span>
               {item === 'workspace'
                 ? 'Workspace profile'
@@ -71,7 +73,9 @@ export function SettingsPage() {
                   ? 'Members and invites'
                   : item === 'workspaces'
                     ? 'Your workspaces'
-                    : 'Security'}
+                    : item === 'integrations'
+                      ? 'Integrations'
+                      : 'Security'}
             </button>
           ))}
         </nav>
@@ -79,6 +83,7 @@ export function SettingsPage() {
           {tab === 'workspace' ? <WorkspaceProfile /> : null}
           {tab === 'members' ? <MembersAndInvitations /> : null}
           {tab === 'workspaces' ? <WorkspaceDirectory /> : null}
+          {tab === 'integrations' ? <IntegrationsSettings /> : null}
           {tab === 'security' ? <SecuritySettings /> : null}
         </section>
       </div>
@@ -545,6 +550,167 @@ function WorkspaceDirectory() {
             </button>
           </div>
         </form>
+      </section>
+    </div>
+  );
+}
+
+function IntegrationsSettings() {
+  const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const connections = useQuery({
+    queryKey: ['calendar-connections'],
+    queryFn: () => api.listCalendarConnections(),
+  });
+
+  const connect = useMutation({
+    mutationFn: (provider: 'GOOGLE' | 'MICROSOFT') =>
+      api.startCalendarOAuth(provider),
+    onSuccess: (result) => {
+      window.location.assign(result.authorizationUrl);
+    },
+  });
+
+  const update = useMutation({
+    mutationFn: ({
+      id,
+      syncEnabled,
+    }: {
+      id: string;
+      syncEnabled: boolean;
+    }) => api.updateCalendarConnection(id, { syncEnabled }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['calendar-connections'] });
+    },
+  });
+
+  const disconnect = useMutation({
+    mutationFn: (id: string) => api.disconnectCalendar(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['calendar-connections'] });
+    },
+  });
+
+  useEffect(() => {
+    if (!searchParams.get('calendar')) return;
+    void queryClient.invalidateQueries({ queryKey: ['calendar-connections'] });
+    const next = new URLSearchParams(searchParams);
+    next.delete('calendar');
+    next.delete('reason');
+    setSearchParams(next, { replace: true });
+  }, [queryClient, searchParams, setSearchParams]);
+
+  const byProvider = new Map(
+    (connections.data ?? []).map((connection) => [
+      connection.provider,
+      connection,
+    ]),
+  );
+
+  return (
+    <div className="settings-stack">
+      <section className="panel settings-panel">
+        <div className="settings-panel-heading">
+          <div>
+            <span className="eyebrow">Availability synchronization</span>
+            <h2>Connected calendars</h2>
+            <p>
+              Connect Google or Microsoft Calendar so public booking slots automatically
+              exclude busy time. Access and refresh tokens are encrypted before persistence.
+            </p>
+          </div>
+        </div>
+
+        {connections.isLoading ? <SettingsLoading /> : null}
+        {connections.error ? <SettingsError message={connections.error.message} /> : null}
+
+        <div className="workspace-directory-grid">
+          {(['GOOGLE', 'MICROSOFT'] as const).map((provider) => {
+            const connection = byProvider.get(provider);
+            const label = provider === 'GOOGLE' ? 'Google Calendar' : 'Microsoft Calendar';
+            return (
+              <article className="workspace-directory-card" key={provider}>
+                <span>{provider === 'GOOGLE' ? 'Google' : 'Microsoft 365'}</span>
+                <h3>{label}</h3>
+                {connection ? (
+                  <>
+                    <p>
+                      {connection.externalAccountEmail ?? 'Connected account'} ·{' '}
+                      {connection.status.toLowerCase()}
+                    </p>
+                    <small>
+                      {connection.lastSyncAt
+                        ? `Last checked ${formatDate(connection.lastSyncAt)}`
+                        : 'Busy-time synchronization has not run yet.'}
+                    </small>
+                    {connection.lastError ? (
+                      <div className="error-banner">{connection.lastError}</div>
+                    ) : null}
+                    <label className="settings-toggle-row">
+                      <input
+                        type="checkbox"
+                        checked={connection.syncEnabled}
+                        disabled={update.isPending || connection.status === 'REVOKED'}
+                        onChange={(event) =>
+                          update.mutate({
+                            id: connection.id,
+                            syncEnabled: event.target.checked,
+                          })
+                        }
+                      />
+                      <span>
+                        <strong>Use for booking availability</strong>
+                        <small>Busy intervals will be excluded from public slots.</small>
+                      </span>
+                    </label>
+                    <button
+                      type="button"
+                      className="button secondary"
+                      disabled={disconnect.isPending}
+                      onClick={() => {
+                        if (window.confirm(`Disconnect ${label}?`)) {
+                          disconnect.mutate(connection.id);
+                        }
+                      }}
+                    >
+                      Disconnect
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p>No account connected in this workspace.</p>
+                    <button
+                      type="button"
+                      className="button primary"
+                      disabled={connect.isPending}
+                      onClick={() => connect.mutate(provider)}
+                    >
+                      Connect {label}
+                    </button>
+                  </>
+                )}
+              </article>
+            );
+          })}
+        </div>
+
+        {connect.error ? <div className="error-banner">{connect.error.message}</div> : null}
+        {update.error ? <div className="error-banner">{update.error.message}</div> : null}
+        {disconnect.error ? <div className="error-banner">{disconnect.error.message}</div> : null}
+      </section>
+
+      <section className="panel settings-panel">
+        <div className="settings-panel-heading compact-settings-heading">
+          <div>
+            <span className="eyebrow">Conflict policy</span>
+            <h2>How availability is calculated</h2>
+          </div>
+        </div>
+        <p>
+          Booking availability combines workspace booking rules, minimum notice, buffers,
+          existing reservations, and busy intervals returned by each active connected
+          calendar. A slot must pass every check before it can be reserved.
+        </p>
       </section>
     </div>
   );
