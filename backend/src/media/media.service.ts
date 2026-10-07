@@ -8,6 +8,7 @@ import {
   type Principal,
 } from '../common/auth/principal';
 import { BreakoutsService } from '../breakouts/breakouts.service';
+import { EventsService } from '../events/events.service';
 import { RecordingsService } from '../recordings/recordings.service';
 import { SessionsService } from '../sessions/sessions.service';
 
@@ -24,6 +25,7 @@ export class MediaService {
     private readonly sessions: SessionsService,
     private readonly recordings: RecordingsService,
     private readonly breakouts: BreakoutsService,
+    private readonly events: EventsService,
   ) {}
 
   async createJoinToken(
@@ -49,11 +51,21 @@ export class MediaService {
       : null;
     const targetRoomName = breakout?.livekitRoomName ?? session.livekitRoomName;
 
+    const webinarPermissions =
+      session.kind === SessionKind.WEBINAR
+        ? await this.events.getWebinarMediaPermissions(principal, sessionId)
+        : null;
     const canPublish =
-      isHost ||
-      (session.kind === SessionKind.MEETING &&
-        !principal.roles.includes('ANALYST') &&
-        !principal.roles.includes('GUEST'));
+      webinarPermissions?.applies === true
+        ? webinarPermissions.canPublish
+        : isHost ||
+          (session.kind === SessionKind.MEETING &&
+            !principal.roles.includes('ANALYST') &&
+            !principal.roles.includes('GUEST'));
+    const roomAdmin =
+      webinarPermissions?.applies === true
+        ? webinarPermissions.roomAdmin
+        : isHost;
     const expiresIn = this.config.getOrThrow<number>('LIVEKIT_TOKEN_TTL_SECONDS');
 
     const accessToken = new AccessToken(
@@ -69,13 +81,14 @@ export class MediaService {
           sessionId,
           breakoutRoomId: breakout?.id ?? null,
           roles: principal.roles,
+          presenterRole: webinarPermissions?.presenterRole ?? null,
         }),
       },
     );
     accessToken.addGrant({
       room: targetRoomName,
       roomJoin: true,
-      roomAdmin: isHost,
+      roomAdmin,
       canPublish,
       canSubscribe: true,
       canPublishData: true,
