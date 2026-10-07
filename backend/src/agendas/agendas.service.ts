@@ -12,6 +12,7 @@ import {
   hasAnyRole,
   type Principal,
 } from '../common/auth/principal';
+import { EmbedResolverService } from '../content/embed-resolver.service';
 import { TenantDatabaseService } from '../database/tenant-database.service';
 import { RealtimeEventsService } from '../infrastructure/realtime-events.service';
 import { OutboxService } from '../outbox/outbox.service';
@@ -35,6 +36,7 @@ export class AgendasService {
   constructor(
     private readonly database: TenantDatabaseService,
     private readonly ai: AiProviderService,
+    private readonly embeds: EmbedResolverService,
     private readonly audit: AuditService,
     private readonly outbox: OutboxService,
     private readonly realtimeEvents: RealtimeEventsService,
@@ -56,6 +58,7 @@ export class AgendasService {
     input: CreateAgendaItemDto,
   ): Promise<AgendaItem> {
     this.assertHost(principal);
+    this.assertEmbeddableContent(input);
     return this.database.run(principal, async (transaction) => {
       await this.assertSessionEditable(transaction, sessionId);
       await transaction.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${sessionId}, 0))`;
@@ -154,6 +157,7 @@ export class AgendasService {
     input: ApplyAgendaDraftDto,
   ): Promise<AgendaItem[]> {
     this.assertHost(principal);
+    for (const item of input.items) this.assertEmbeddableContent(item);
 
     return this.database.run(principal, async (transaction) => {
       await this.assertSessionEditable(transaction, sessionId);
@@ -302,6 +306,19 @@ export class AgendasService {
     });
     this.realtimeEvents.publishAgendaActivated(result);
     return result;
+  }
+
+  private assertEmbeddableContent(input: {
+    type: string;
+    content: Record<string, unknown>;
+  }): void {
+    if (!['WEBSITE', 'VIDEO', 'PRESENTATION'].includes(input.type)) return;
+    const url = input.content.url;
+    if (url === undefined) return;
+    if (typeof url !== 'string' || !url.trim()) {
+      throw new BadRequestException('Agenda content URL must be a non-empty HTTPS URL');
+    }
+    this.embeds.resolve(url);
   }
 
   private async assertSessionEditable(

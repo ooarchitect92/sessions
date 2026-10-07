@@ -7,6 +7,7 @@ import { AiModule } from "./ai/ai.module";
 import { AuthModule } from "./auth/auth.module";
 import { BookingsModule } from "./bookings/bookings.module";
 import { CollaborationModule } from "./collaboration/collaboration.module";
+import { ContentModule } from "./content/content.module";
 import { PrincipalGuard } from "./common/auth/principal.guard";
 import { validateEnvironment } from "./common/config/env.validation";
 import { ApiEnvelopeInterceptor } from "./common/http/api-envelope.interceptor";
@@ -49,6 +50,7 @@ import { WorkspacesModule } from "./workspaces/workspaces.module";
     EventsModule,
     BookingsModule,
     CollaborationModule,
+    ContentModule,
     MediaModule,
     RealtimeModule,
   ],

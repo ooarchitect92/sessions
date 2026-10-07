@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FormEvent, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api, type MediaToken } from '../api/client';
+import { AgendaContentStage } from '../components/AgendaContentStage';
 import { SessionCollaborationPanel } from '../components/SessionCollaborationPanel';
 import { useSessionRealtime } from '../hooks/use-session-realtime';
 
@@ -24,7 +25,9 @@ export function SessionPage() {
     ReturnType<typeof api.generateAgendaDraft>
   > | null>(null);
   const [agendaTitle, setAgendaTitle] = useState('');
+  const [agendaContentUrl, setAgendaContentUrl] = useState('');
   const [agendaDuration, setAgendaDuration] = useState(10);
+  const [stageMode, setStageMode] = useState<'media' | 'content'>('media');
   const [agendaType, setAgendaType] = useState<
     | 'TEXT'
     | 'PRESENTATION'
@@ -114,10 +117,13 @@ export function SessionPage() {
         title: agendaTitle,
         durationSeconds: agendaDuration * 60,
         type: agendaType,
-        content: {},
+        content: agendaContentUrl.trim()
+          ? { url: agendaContentUrl.trim() }
+          : {},
       }),
     onSuccess: async () => {
       setAgendaTitle('');
+      setAgendaContentUrl('');
       setAgendaDuration(10);
       setAgendaType('TEXT');
       setAgendaEditorOpen(false);
@@ -148,6 +154,13 @@ export function SessionPage() {
   }
 
   const current = session.data;
+  const activeAgendaItem =
+    current.agendaItems.find((item) => item.id === current.currentAgendaItemId) ?? null;
+  const hasSharedContent =
+    Boolean(activeAgendaItem) &&
+    ['WEBSITE', 'VIDEO', 'PRESENTATION'].includes(activeAgendaItem?.type ?? '') &&
+    typeof activeAgendaItem?.content.url === 'string' &&
+    activeAgendaItem.content.url.trim().length > 0;
   const canStart = ['DRAFT', 'SCHEDULED'].includes(current.status);
   const canEnd = current.status === 'LIVE';
   const consentGranted =
@@ -360,6 +373,19 @@ export function SessionPage() {
                   placeholder="Product walkthrough"
                 />
               </label>
+              {['WEBSITE', 'VIDEO', 'PRESENTATION'].includes(agendaType) ? (
+                <label>
+                  HTTPS content URL
+                  <input
+                    type="url"
+                    required
+                    maxLength={2048}
+                    value={agendaContentUrl}
+                    onChange={(event) => setAgendaContentUrl(event.target.value)}
+                    placeholder="https://..."
+                  />
+                </label>
+              ) : null}
               <div className="agenda-form-grid">
                 <label>
                   Minutes
@@ -435,7 +461,28 @@ export function SessionPage() {
         </aside>
 
         <section className="meeting-stage">
-          {media ? (
+          {hasSharedContent ? (
+            <div className="stage-mode-switch" role="tablist" aria-label="Meeting stage mode">
+              <button
+                type="button"
+                className={stageMode === 'content' ? 'active' : ''}
+                onClick={() => setStageMode('content')}
+              >
+                Shared content
+              </button>
+              <button
+                type="button"
+                className={stageMode === 'media' ? 'active' : ''}
+                onClick={() => setStageMode('media')}
+              >
+                Media
+              </button>
+            </div>
+          ) : null}
+
+          {hasSharedContent && stageMode === 'content' && activeAgendaItem ? (
+            <AgendaContentStage item={activeAgendaItem} />
+          ) : media ? (
             <LiveKitRoom
               token={media.token}
               serverUrl={media.url}
@@ -459,6 +506,15 @@ export function SessionPage() {
                 handles camera, microphone, screen sharing, adaptive subscriptions, and
                 reconnect behavior.
               </p>
+              {hasSharedContent ? (
+                <button
+                  type="button"
+                  className="button secondary large"
+                  onClick={() => setStageMode('content')}
+                >
+                  Show shared content
+                </button>
+              ) : null}
               <button
                 className="button primary large"
                 onClick={() => join.mutate()}
