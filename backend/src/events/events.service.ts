@@ -17,6 +17,8 @@ import {
   type EventRegistration,
 } from "@prisma/client";
 import { createHash, randomUUID } from "node:crypto";
+import { ConfigService } from "@nestjs/config";
+import { SecurityService } from "../auth/security.service";
 import { AuditService } from "../audit/audit.service";
 import {
   HOST_ROLES,
@@ -60,6 +62,8 @@ export class EventsService {
     private readonly audit: AuditService,
     private readonly outbox: OutboxService,
     private readonly notifications: NotificationSchedulerService,
+    private readonly security: SecurityService,
+    private readonly config: ConfigService,
   ) {}
 
   async create(
@@ -394,10 +398,11 @@ export class EventsService {
         where: { id: eventId },
       });
       if (!event) throw new NotFoundException("Event not found");
-      return transaction.eventRegistration.findMany({
+      const registrations = await transaction.eventRegistration.findMany({
         where: { eventId },
         orderBy: { registeredAt: "desc" },
       });
+      return registrations.map((registration) => this.registrationProjection(registration));
     });
   }
 
@@ -435,7 +440,7 @@ export class EventsService {
         eventType: "event.registration.updated",
         payload: this.toJson(updated),
       });
-      return updated;
+      return this.registrationProjection(updated);
     });
   }
 
@@ -663,7 +668,7 @@ export class EventsService {
     workspaceSlug: string,
     eventSlug: string,
     input: RegisterEventDto,
-  ): Promise<EventRegistration> {
+  ) {
     const event = await this.findPublicEvent(
       organizationSlug,
       workspaceSlug,
@@ -692,8 +697,14 @@ export class EventsService {
         event.capacity !== null && confirmedCount >= event.capacity
           ? RegistrationStatus.WAITLISTED
           : RegistrationStatus.REGISTERED;
+      const registrationId = randomUUID();
+      const admission = this.security.createOpaqueToken(registrationId);
+      const admissionTokenExpiresAt = new Date(
+        event.startsAt.getTime() + (event.durationMinutes + 24 * 60) * 60_000,
+      );
       const registration = await transaction.eventRegistration.create({
         data: {
+          id: registrationId,
           organizationId: event.organizationId,
           workspaceId: event.workspaceId,
           eventId: event.id,
@@ -701,8 +712,24 @@ export class EventsService {
           email: input.email.toLowerCase(),
           answers: normalizedAnswers as Prisma.InputJsonValue,
           status,
+          ...(status === RegistrationStatus.REGISTERED
+            ? {
+                admissionTokenHash: admission.tokenHash,
+                admissionTokenExpiresAt,
+              }
+            : {}),
         },
       });
+      const joinUrl =
+        status === RegistrationStatus.REGISTERED
+          ? this.eventJoinUrl(
+              organizationSlug,
+              workspaceSlug,
+              eventSlug,
+              registration.id,
+              admission.token,
+            )
+          : null;
       await this.outbox.enqueue(
         transaction,
         {
@@ -713,15 +740,54 @@ export class EventsService {
           aggregateType: "event_registration",
           aggregateId: registration.id,
           eventType: "event.registration.created",
-          payload: this.toJson(registration),
+          payload: this.toJson(this.registrationProjection(registration)),
         },
       );
       await this.notifications.queueEventRegistrationEmails(transaction, {
         event,
         registration,
+        joinUrl: joinUrl ?? undefined,
       });
-      return registration;
+      return {
+        ...this.registrationProjection(registration),
+        ...(joinUrl
+          ? {
+              admissionToken: admission.token,
+              joinUrl,
+              admissionTokenExpiresAt: admissionTokenExpiresAt.toISOString(),
+            }
+          : {}),
+      };
     });
+  }
+
+  private eventJoinUrl(
+    organizationSlug: string,
+    workspaceSlug: string,
+    eventSlug: string,
+    registrationId: string,
+    admissionToken: string,
+  ): string {
+    const base = this.config.getOrThrow<string>("PUBLIC_SITE_URL").replace(/\/$/, "");
+    return `${base}/events/${encodeURIComponent(organizationSlug)}/${encodeURIComponent(
+      workspaceSlug,
+    )}/${encodeURIComponent(eventSlug)}/join/${encodeURIComponent(
+      registrationId,
+    )}?token=${encodeURIComponent(admissionToken)}`;
+  }
+
+  private registrationProjection(registration: EventRegistration) {
+    return {
+      id: registration.id,
+      eventId: registration.eventId,
+      name: registration.name,
+      email: registration.email,
+      answers: registration.answers,
+      status: registration.status,
+      registeredAt: registration.registeredAt,
+      checkedInAt: registration.checkedInAt,
+      updatedAt: registration.updatedAt,
+    };
   }
 
   private async findPublicEvent(
