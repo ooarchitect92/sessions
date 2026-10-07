@@ -43,6 +43,13 @@ services:
     volumes:
       - minio-data:/data
 
+  clamav:
+    image: clamav/clamav:stable
+    ports:
+      - "3310:3310"
+    volumes:
+      - clamav-data:/var/lib/clamav
+
   minio-create-bucket:
     image: minio/mc:latest
     depends_on:
@@ -117,6 +124,9 @@ services:
       LIVEKIT_API_URL: http://livekit:7880
       LIVEKIT_EGRESS_ENABLED: "true"
       S3_ENDPOINT: http://minio:9000
+      UPLOAD_SCAN_PROVIDER: clamav
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: "3310"
     ports:
       - "4000:4000"
     depends_on:
@@ -127,6 +137,8 @@ services:
       livekit:
         condition: service_started
       egress:
+        condition: service_started
+      clamav:
         condition: service_started
 
   app:
@@ -161,3 +173,4 @@ volumes:
   postgres-data:
   redis-data:
   minio-data:
+  clamav-data:
