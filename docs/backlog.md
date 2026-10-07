@@ -45,7 +45,7 @@
 - [x] public event page, registration, capacity and waitlist handling
 - [x] dynamic registration and intake form renderer
 - [x] webinar stage roles and speaker profiles
-- [ ] visual webinar landing-page builder
+- [x] visual webinar landing-page builder
 - [ ] notification templates, reminder jobs and delivery reconciliation
 - [ ] durable attendance intervals and engagement event model
 
