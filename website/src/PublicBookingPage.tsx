@@ -22,8 +22,13 @@ interface Reservation {
   id: string;
   startsAt: string;
   endsAt: string;
-  status: 'CONFIRMED';
+  timezone: string;
+  status: 'CONFIRMED' | 'CANCELLED' | 'COMPLETED' | 'NO_SHOW';
+  version: number;
+  cancelledAt: string | null;
+  rescheduledAt: string | null;
   session: { id: string; title: string } | null;
+  managementToken: string;
 }
 
 function calendarDate(value: Date): string {
@@ -56,6 +61,8 @@ export function PublicBookingPage({
   const [email, setEmail] = useState('');
   const [reservation, setReservation] = useState<Reservation | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [managing, setManaging] = useState(false);
+  const [rescheduleStartsAt, setRescheduleStartsAt] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -118,6 +125,89 @@ export function PublicBookingPage({
     }
   };
 
+  const bookingBasePath = `/public/${encodeURIComponent(
+    organizationSlug,
+  )}/${encodeURIComponent(workspaceSlug)}/bookings/${encodeURIComponent(
+    bookingSlug,
+  )}`;
+
+  const downloadCalendar = async () => {
+    if (!reservation) return;
+    setManaging(true);
+    setError(null);
+    try {
+      const invite = await publicApi<{
+        filename: string;
+        contentType: string;
+        content: string;
+      }>(`${bookingBasePath}/reservations/${reservation.id}/calendar`, {
+        method: 'POST',
+        body: JSON.stringify({ managementToken: reservation.managementToken }),
+      });
+      const url = URL.createObjectURL(
+        new Blob([invite.content], { type: invite.contentType }),
+      );
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = invite.filename;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (caught: unknown) {
+      setError(caught instanceof Error ? caught.message : 'Calendar invite could not be created');
+    } finally {
+      setManaging(false);
+    }
+  };
+
+  const cancelReservation = async () => {
+    if (!reservation) return;
+    if (!window.confirm('Cancel this booking?')) return;
+    setManaging(true);
+    setError(null);
+    try {
+      const updated = await publicApi<Omit<Reservation, 'managementToken'>>(
+        `${bookingBasePath}/reservations/${reservation.id}/cancel`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            managementToken: reservation.managementToken,
+            reason: 'Cancelled by attendee',
+          }),
+        },
+      );
+      setReservation({ ...updated, managementToken: reservation.managementToken });
+    } catch (caught: unknown) {
+      setError(caught instanceof Error ? caught.message : 'The booking could not be cancelled');
+    } finally {
+      setManaging(false);
+    }
+  };
+
+  const rescheduleReservation = async () => {
+    if (!reservation || !rescheduleStartsAt) return;
+    setManaging(true);
+    setError(null);
+    try {
+      const updated = await publicApi<Omit<Reservation, 'managementToken'>>(
+        `${bookingBasePath}/reservations/${reservation.id}/reschedule`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            managementToken: reservation.managementToken,
+            startsAt: rescheduleStartsAt,
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          }),
+        },
+      );
+      setReservation({ ...updated, managementToken: reservation.managementToken });
+      setRescheduleStartsAt('');
+    } catch (caught: unknown) {
+      setError(caught instanceof Error ? caught.message : 'The booking could not be rescheduled');
+    } finally {
+      setManaging(false);
+    }
+  };
+
   if (loading) return <PublicBookingState title="Loading availability…" />;
   if (error && !page) return <PublicBookingState title="Booking page unavailable" message={error} />;
   if (!page) return <PublicBookingState title="Booking page unavailable" />;
@@ -158,7 +248,56 @@ export function PublicBookingPage({
                   timeStyle: 'short',
                 }).format(new Date(reservation.startsAt))}
               </p>
-              <small>The scheduled session and reservation were created atomically.</small>
+              <small>
+                {reservation.status === 'CANCELLED'
+                  ? 'This reservation has been cancelled.'
+                  : reservation.rescheduledAt
+                    ? 'Your meeting was rescheduled and the linked session was updated atomically.'
+                    : 'The scheduled session and reservation were created atomically.'}
+              </small>
+              {reservation.status === 'CONFIRMED' ? (
+                <div className="booking-management-actions">
+                  <button type="button" onClick={downloadCalendar} disabled={managing}>
+                    Download calendar invite
+                  </button>
+                  <label>
+                    Move to another time
+                    <select
+                      value={rescheduleStartsAt}
+                      onChange={(event) => setRescheduleStartsAt(event.target.value)}
+                    >
+                      <option value="">Choose another slot</option>
+                      {slots
+                        .filter((slot) => slot.startsAt !== reservation.startsAt)
+                        .slice(0, 60)
+                        .map((slot) => (
+                          <option key={slot.startsAt} value={slot.startsAt}>
+                            {new Intl.DateTimeFormat(undefined, {
+                              dateStyle: 'medium',
+                              timeStyle: 'short',
+                            }).format(new Date(slot.startsAt))}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={rescheduleReservation}
+                    disabled={managing || !rescheduleStartsAt}
+                  >
+                    Reschedule
+                  </button>
+                  <button
+                    type="button"
+                    className="danger-action"
+                    onClick={cancelReservation}
+                    disabled={managing}
+                  >
+                    Cancel booking
+                  </button>
+                </div>
+              ) : null}
+              {error ? <div className="public-error">{error}</div> : null}
             </div>
           </section>
         ) : (
