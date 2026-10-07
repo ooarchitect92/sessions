@@ -313,6 +313,9 @@ export class AnalyticsService {
       );
 
       const first = rows[0];
+      if (!first) {
+        throw new Error('attendance_group_invariant');
+      }
       return {
         userId,
         displayName: first.user.displayName,
