@@ -122,7 +122,8 @@ Access tokens are short-lived JWTs. Managed browser sessions use opaque, hashed 
 | Method  | Path                                            | Purpose                                             |
 | ------- | ----------------------------------------------- | --------------------------------------------------- |
 | `GET`   | `/v1/sessions/{id}/chat-messages`               | list authorized durable messages                    |
-| `POST`  | `/v1/sessions/{id}/chat-messages`               | persist and broadcast a message                     |
+| `POST`  | `/v1/sessions/{id}/chat-messages`               | persist public, host-only or direct message          |
+| `POST`  | `/v1/sessions/{id}/chat-messages/{messageId}/reactions` | toggle an allowed emoji reaction              |
 | `GET`   | `/v1/sessions/{id}/polls`                       | list polls, options and response counts             |
 | `POST`  | `/v1/sessions/{id}/polls`                       | create poll                                         |
 | `POST`  | `/v1/sessions/{id}/polls/{pollId}/launch`       | launch the only active poll                         |
