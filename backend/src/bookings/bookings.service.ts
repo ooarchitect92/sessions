@@ -237,11 +237,14 @@ export class BookingsService {
         select: { id: true },
       });
       if (!page) throw new NotFoundException('Booking page not found');
-      return transaction.bookingReservation.findMany({
+      const reservations = await transaction.bookingReservation.findMany({
         where: { bookingPageId },
         orderBy: { startsAt: 'asc' },
         include: { session: true },
       });
+      return reservations.map((reservation) =>
+        this.hostReservationShape(reservation),
+      );
     });
   }
 
@@ -751,6 +754,155 @@ export class BookingsService {
       hour: Number(values.hour),
       minute: Number(values.minute),
     };
+  }
+
+  private publicReservationShape(
+    reservation: {
+      id: string;
+      startsAt: Date;
+      endsAt: Date;
+      timezone: string;
+      status: BookingStatus;
+      version: number;
+      cancelledAt: Date | null;
+      rescheduledAt: Date | null;
+      session: { id: string; title: string } | null;
+    },
+    managementToken?: string,
+  ) {
+    return {
+      id: reservation.id,
+      startsAt: reservation.startsAt,
+      endsAt: reservation.endsAt,
+      timezone: reservation.timezone,
+      status: reservation.status,
+      version: reservation.version,
+      cancelledAt: reservation.cancelledAt,
+      rescheduledAt: reservation.rescheduledAt,
+      session: reservation.session,
+      ...(managementToken ? { managementToken } : {}),
+    };
+  }
+
+  private hostReservationShape(reservation: {
+    id: string;
+    bookingPageId: string;
+    sessionId: string | null;
+    name: string;
+    email: string;
+    startsAt: Date;
+    endsAt: Date;
+    timezone: string;
+    answers: Prisma.JsonValue;
+    status: BookingStatus;
+    cancellationReason: string | null;
+    cancelledAt: Date | null;
+    rescheduledAt: Date | null;
+    version: number;
+    createdAt: Date;
+    updatedAt: Date;
+    session: unknown;
+  }) {
+    return {
+      id: reservation.id,
+      bookingPageId: reservation.bookingPageId,
+      sessionId: reservation.sessionId,
+      name: reservation.name,
+      email: reservation.email,
+      startsAt: reservation.startsAt,
+      endsAt: reservation.endsAt,
+      timezone: reservation.timezone,
+      answers: reservation.answers,
+      status: reservation.status,
+      cancellationReason: reservation.cancellationReason,
+      cancelledAt: reservation.cancelledAt,
+      rescheduledAt: reservation.rescheduledAt,
+      version: reservation.version,
+      createdAt: reservation.createdAt,
+      updatedAt: reservation.updatedAt,
+      session: reservation.session,
+    };
+  }
+
+  private hashManagementToken(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
+  }
+
+  private assertManagementToken(expectedHash: string, token: string): void {
+    const actualHash = this.hashManagementToken(token);
+    const expected = Buffer.from(expectedHash, 'hex');
+    const actual = Buffer.from(actualHash, 'hex');
+    if (
+      expected.length !== actual.length ||
+      !timingSafeEqual(expected, actual)
+    ) {
+      throw new ForbiddenException('Reservation management token is invalid');
+    }
+  }
+
+  private buildIcs(
+    page: BookingPage,
+    reservation: {
+      id: string;
+      name: string;
+      email: string;
+      startsAt: Date;
+      endsAt: Date;
+      status: BookingStatus;
+      version: number;
+      updatedAt: Date;
+      session: { id: string; title: string } | null;
+    },
+  ): string {
+    const format = (date: Date) =>
+      date
+        .toISOString()
+        .replace(/[-:]/g, '')
+        .replace(/\.\d{3}Z$/, 'Z');
+    const escape = (value: string) =>
+      value
+        .replace(/\\/g, '\\\\')
+        .replace(/;/g, '\\;')
+        .replace(/,/g, '\\,')
+        .replace(/\r?\n/g, '\\n');
+
+    const summary = reservation.session?.title ?? page.title;
+    const lines = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Sessions//Booking Calendar//EN',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      'BEGIN:VEVENT',
+      `UID:${reservation.id}@sessions`,
+      `DTSTAMP:${format(reservation.updatedAt)}`,
+      `DTSTART:${format(reservation.startsAt)}`,
+      `DTEND:${format(reservation.endsAt)}`,
+      `SEQUENCE:${Math.max(0, reservation.version - 1)}`,
+      `STATUS:${
+        reservation.status === BookingStatus.CANCELLED
+          ? 'CANCELLED'
+          : 'CONFIRMED'
+      }`,
+      `SUMMARY:${escape(summary)}`,
+      `DESCRIPTION:${escape(page.description ?? 'Scheduled with Sessions')}`,
+      `ATTENDEE;CN=${escape(reservation.name)}:mailto:${reservation.email}`,
+      'END:VEVENT',
+      'END:VCALENDAR',
+      '',
+    ];
+    return lines.join('\r\n');
+  }
+
+  private slugify(value: string): string {
+    return (
+      value
+        .normalize('NFKD')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 80) || 'meeting'
+    );
   }
 
   private assertAvailabilityRules(rules: AvailabilityRuleDto[]): void {
