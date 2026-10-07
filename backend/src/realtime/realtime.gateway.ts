@@ -16,6 +16,7 @@ import type { Server, Socket } from "socket.io";
 import type { Subscription } from "rxjs";
 import { z } from "zod";
 import { AgendasService } from "../agendas/agendas.service";
+import { AnalyticsService } from "../analytics/analytics.service";
 import { AuthService } from "../auth/auth.service";
 import type { AccessTokenClaims, Principal } from "../common/auth/principal";
 import { RealtimeEventsService } from "../infrastructure/realtime-events.service";
@@ -74,6 +75,7 @@ export class RealtimeGateway
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly auth: AuthService,
+    private readonly analytics: AnalyticsService,
     private readonly sessions: SessionsService,
     private readonly agendas: AgendasService,
     private readonly realtimeEvents: RealtimeEventsService,
@@ -130,10 +132,17 @@ export class RealtimeGateway
     }
   }
 
-  handleDisconnect(client: AuthenticatedSocket): void {
+  async handleDisconnect(client: AuthenticatedSocket): Promise<void> {
     const principal = client.data.principal;
     if (!principal) return;
     for (const sessionId of client.data.sessionIds ?? []) {
+      try {
+        await this.analytics.closeAttendance(principal, sessionId, client.id);
+      } catch (error: unknown) {
+        this.logger.warn(
+          `Failed to close attendance interval for ${principal.userId} in ${sessionId}: ${error instanceof Error ? error.message : "unknown"}`,
+        );
+      }
       client.to(this.roomName(sessionId)).emit("participant.left", {
         sessionId,
         userId: principal.userId,
@@ -150,6 +159,7 @@ export class RealtimeGateway
     const principal = this.requirePrincipal(client);
     const { sessionId } = joinSchema.parse(payload);
     await this.sessions.getById(principal, sessionId);
+    await this.analytics.openAttendance(principal, sessionId, client.id);
     await client.join(this.roomName(sessionId));
     client.data.sessionIds?.add(sessionId);
     client.to(this.roomName(sessionId)).emit("participant.joined", {

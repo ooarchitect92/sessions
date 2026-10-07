@@ -168,6 +168,14 @@ enum EventReminderKind {
   EVENT_REMINDER_1H
 }
 
+enum EngagementEventKind {
+  CHAT_MESSAGE
+  CHAT_REACTION
+  POLL_RESPONSE
+  QUESTION_SUBMITTED
+  QUESTION_VOTE
+}
+
 enum CalendarProvider {
   GOOGLE
   MICROSOFT
@@ -218,6 +226,8 @@ model Organization {
   notificationDeliveries NotificationDelivery[]
   eventNotificationTemplates EventNotificationTemplate[]
   eventNotificationDeliveries EventNotificationDelivery[]
+  attendanceIntervals AttendanceInterval[]
+  engagementEvents EngagementEvent[]
   calendarConnections CalendarConnection[]
   calendarOAuthStates CalendarOAuthState[]
 
@@ -267,6 +277,8 @@ model Workspace {
   notificationDeliveries NotificationDelivery[]
   eventNotificationTemplates EventNotificationTemplate[]
   eventNotificationDeliveries EventNotificationDelivery[]
+  attendanceIntervals AttendanceInterval[]
+  engagementEvents EngagementEvent[]
   calendarConnections CalendarConnection[]
   calendarOAuthStates CalendarOAuthState[]
 
@@ -310,6 +322,8 @@ model User {
   sentInvitations         WorkspaceInvitation[]    @relation("InvitationSender")
   acceptedInvitations     WorkspaceInvitation[]    @relation("InvitationAcceptor")
   recordingConsents       RecordingConsent[]
+  attendanceIntervals      AttendanceInterval[]
+  engagementEvents         EngagementEvent[]
   calendarConnections      CalendarConnection[]
   calendarOAuthStates      CalendarOAuthState[]
 
@@ -395,6 +409,8 @@ model Session {
   uploads              UploadAsset[]
   polls                Poll[]
   questions            Question[]
+  attendanceIntervals  AttendanceInterval[]
+  engagementEvents     EngagementEvent[]
 
   @@index([organizationId, workspaceId, startsAt])
   @@index([workspaceId, status, startsAt])
@@ -498,6 +514,7 @@ model EventRegistration {
   workspace      Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   event          Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
   notificationDeliveries EventNotificationDelivery[]
+  attendanceIntervals AttendanceInterval[]
 
   @@unique([eventId, email])
   @@index([organizationId, workspaceId, eventId])
@@ -642,6 +659,55 @@ model EventNotificationDelivery {
   @@index([status, nextAttemptAt, scheduledFor])
   @@index([organizationId, workspaceId, createdAt])
   @@map("event_notification_deliveries")
+}
+
+model AttendanceInterval {
+  id                  String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId      String             @map("organization_id") @db.Uuid
+  workspaceId         String             @map("workspace_id") @db.Uuid
+  sessionId           String             @map("session_id") @db.Uuid
+  userId              String             @map("user_id") @db.Uuid
+  eventRegistrationId String?            @map("event_registration_id") @db.Uuid
+  connectionId        String             @map("connection_id") @db.VarChar(120)
+  joinedAt            DateTime           @map("joined_at") @db.Timestamptz(6)
+  leftAt              DateTime?          @map("left_at") @db.Timestamptz(6)
+  lastSeenAt          DateTime           @map("last_seen_at") @db.Timestamptz(6)
+  createdAt           DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization        Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace           Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  session             Session            @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user                User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  eventRegistration   EventRegistration? @relation(fields: [eventRegistrationId], references: [id], onDelete: SetNull)
+
+  @@unique([sessionId, connectionId])
+  @@index([organizationId, workspaceId, sessionId])
+  @@index([sessionId, userId, joinedAt])
+  @@index([eventRegistrationId, joinedAt])
+  @@map("attendance_intervals")
+}
+
+model EngagementEvent {
+  id             String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String              @map("organization_id") @db.Uuid
+  workspaceId    String              @map("workspace_id") @db.Uuid
+  sessionId      String              @map("session_id") @db.Uuid
+  userId         String              @map("user_id") @db.Uuid
+  kind           EngagementEventKind
+  referenceType  String?             @map("reference_type") @db.VarChar(80)
+  referenceId    String?             @map("reference_id") @db.Uuid
+  metadata       Json                @default("{}")
+  occurredAt     DateTime            @default(now()) @map("occurred_at") @db.Timestamptz(6)
+  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  session        Session             @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user           User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, workspaceId, sessionId, occurredAt])
+  @@index([sessionId, userId, occurredAt])
+  @@index([sessionId, kind, occurredAt])
+  @@map("engagement_events")
 }
 
 model CalendarConnection {

@@ -47,7 +47,7 @@
 - [x] webinar stage roles and speaker profiles
 - [x] visual webinar landing-page builder
 - [x] notification templates, reminder jobs and delivery reconciliation
-- [ ] durable attendance intervals and engagement event model
+- [x] durable attendance intervals and engagement event model
 
 ## Phase 4 — memory and AI
 

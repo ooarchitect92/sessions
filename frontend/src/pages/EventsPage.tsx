@@ -3,6 +3,7 @@ import type { CreateEventInput, DynamicFormField } from '@sessions/contracts';
 import { FormEvent, useMemo, useState } from 'react';
 import { api, type EventRecord } from '../api/client';
 import { DynamicFormBuilder } from '../components/DynamicFormBuilder';
+import { EventAnalyticsPanel } from '../components/EventAnalyticsPanel';
 import { EventLandingPageBuilder } from '../components/EventLandingPageBuilder';
 import { EventPresenterManager } from '../components/EventPresenterManager';
 import { EventReminderManager } from '../components/EventReminderManager';
@@ -40,6 +41,7 @@ export function EventsPage() {
   const [presenterEventId, setPresenterEventId] = useState<string | null>(null);
   const [landingEventId, setLandingEventId] = useState<string | null>(null);
   const [reminderEventId, setReminderEventId] = useState<string | null>(null);
+  const [analyticsEventId, setAnalyticsEventId] = useState<string | null>(null);
 
   const events = useQuery({ queryKey: ['events'], queryFn: () => api.listEvents() });
   const create = useMutation({
@@ -132,6 +134,7 @@ export function EventsPage() {
                     onClick={() => {
                       setLandingEventId(null);
                       setReminderEventId(null);
+                      setAnalyticsEventId(null);
                       setPresenterEventId((current) =>
                         current === event.id ? null : event.id,
                       );
@@ -146,6 +149,7 @@ export function EventsPage() {
                       onClick={() => {
                         setPresenterEventId(null);
                         setReminderEventId(null);
+                        setAnalyticsEventId(null);
                         setLandingEventId((current) =>
                           current === event.id ? null : event.id,
                         );
@@ -160,12 +164,27 @@ export function EventsPage() {
                     onClick={() => {
                       setPresenterEventId(null);
                       setLandingEventId(null);
+                      setAnalyticsEventId(null);
                       setReminderEventId((current) =>
                         current === event.id ? null : event.id,
                       );
                     }}
                   >
                     {reminderEventId === event.id ? 'Hide reminders' : 'Reminders'}
+                  </button>
+                  <button
+                    className="button secondary"
+                    type="button"
+                    onClick={() => {
+                      setPresenterEventId(null);
+                      setLandingEventId(null);
+                      setReminderEventId(null);
+                      setAnalyticsEventId((current) =>
+                        current === event.id ? null : event.id,
+                      );
+                    }}
+                  >
+                    {analyticsEventId === event.id ? 'Hide analytics' : 'Analytics'}
                   </button>
                   {event.status === 'DRAFT' ? (
                     <button className="button primary" onClick={() => publish.mutate(event)} disabled={publish.isPending}>Publish</button>
@@ -195,6 +214,14 @@ export function EventsPage() {
               <EventReminderManager
                 eventId={reminderEventId}
                 onClose={() => setReminderEventId(null)}
+              />
+            </div>
+          ) : null}
+          {analyticsEventId ? (
+            <div className="event-analytics-manager-panel">
+              <EventAnalyticsPanel
+                eventId={analyticsEventId}
+                onClose={() => setAnalyticsEventId(null)}
               />
             </div>
           ) : null}

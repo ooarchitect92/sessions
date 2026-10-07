@@ -277,3 +277,15 @@ Published events use two tenant-scoped reminder templates: `EVENT_REMINDER_24H` 
 - `POST /v1/notifications/events/deliveries/{deliveryId}/retry` requeues a failed/dead-letter delivery.
 
 The reminder worker materializes deliveries only for registered attendees whose registration existed before the reminder instant, snapshots rendered subject/body text, recovers stale claims, cancels stale deliveries after event/registration/template changes, refreshes pending snapshots when templates change, retries provider failures with exponential backoff, and records delivered/dead-letter outbox events.
+
+
+### Attendance and engagement analytics
+
+Authenticated realtime joins now create durable attendance intervals keyed by the session and socket connection. Disconnects close those intervals. For webinars, a join is matched to an event registration by attendee email when possible; the registration is marked `ATTENDED` and `checkedInAt` is set on first join.
+
+Persisted engagement events are recorded for chat messages, chat reactions, poll responses, submitted questions, and question votes. These events are tenant-scoped and designed for downstream aggregation.
+
+- `GET /v1/analytics/sessions/{sessionId}` returns host/analyst-visible session attendance and engagement counts.
+- `GET /v1/analytics/events/{eventId}` returns registrations by status, webinar attendance, participant durations, current active attendees, and engagement counts.
+
+Attendance duration aggregation merges overlapping intervals per user so multiple tabs or reconnect overlap are not double-counted.

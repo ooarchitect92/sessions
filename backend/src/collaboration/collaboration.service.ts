@@ -7,6 +7,7 @@ import {
 } from "@nestjs/common";
 import {
   ChatChannel,
+  EngagementEventKind,
   PollStatus,
   PollType,
   Prisma,
@@ -158,6 +159,18 @@ export class CollaborationService {
           },
         },
       });
+      await transaction.engagementEvent.create({
+        data: {
+          organizationId: principal.organizationId,
+          workspaceId: principal.workspaceId,
+          sessionId,
+          userId: principal.userId,
+          kind: EngagementEventKind.CHAT_MESSAGE,
+          referenceType: "chat_message",
+          referenceId: created.id,
+          metadata: { channel: created.channel },
+        },
+      });
       await this.outbox.enqueue(transaction, principal, {
         aggregateType: "chat_message",
         aggregateId: created.id,
@@ -257,6 +270,22 @@ export class CollaborationService {
           },
         });
       }
+
+      await transaction.engagementEvent.create({
+        data: {
+          organizationId: principal.organizationId,
+          workspaceId: principal.workspaceId,
+          sessionId,
+          userId: principal.userId,
+          kind: EngagementEventKind.CHAT_REACTION,
+          referenceType: "chat_message",
+          referenceId: messageId,
+          metadata: {
+            emoji: input.emoji,
+            action: existing ? "removed" : "added",
+          },
+        },
+      });
 
       const reactions = await transaction.chatReaction.findMany({
         where: { messageId },
@@ -535,6 +564,22 @@ export class CollaborationService {
           textAnswer: input.textAnswer?.trim() || null,
         },
       });
+      await transaction.engagementEvent.create({
+        data: {
+          organizationId: principal.organizationId,
+          workspaceId: principal.workspaceId,
+          sessionId,
+          userId: principal.userId,
+          kind: EngagementEventKind.POLL_RESPONSE,
+          referenceType: "poll",
+          referenceId: pollId,
+          metadata: {
+            pollType: poll.type,
+            selectedOptionCount: input.selectedOptionIds.length,
+            hasTextAnswer: Boolean(input.textAnswer?.trim()),
+          },
+        },
+      });
       await this.outbox.enqueue(transaction, principal, {
         aggregateType: "poll",
         aggregateId: pollId,
@@ -650,6 +695,21 @@ export class CollaborationService {
         },
         include: { _count: { select: { votes: true } } },
       });
+      await transaction.engagementEvent.create({
+        data: {
+          organizationId: principal.organizationId,
+          workspaceId: principal.workspaceId,
+          sessionId,
+          userId: principal.userId,
+          kind: EngagementEventKind.QUESTION_SUBMITTED,
+          referenceType: "question",
+          referenceId: created.id,
+          metadata: {
+            anonymous: created.isAnonymous,
+            initialStatus: created.status,
+          },
+        },
+      });
       await this.outbox.enqueue(transaction, principal, {
         aggregateType: "question",
         aggregateId: created.id,
@@ -696,6 +756,18 @@ export class CollaborationService {
           },
         });
       }
+      await transaction.engagementEvent.create({
+        data: {
+          organizationId: principal.organizationId,
+          workspaceId: principal.workspaceId,
+          sessionId,
+          userId: principal.userId,
+          kind: EngagementEventKind.QUESTION_VOTE,
+          referenceType: "question",
+          referenceId: questionId,
+          metadata: { action: existing ? "removed" : "added" },
+        },
+      });
       const voteCount = await transaction.questionVote.count({
         where: { questionId },
       });
