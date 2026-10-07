@@ -19,6 +19,7 @@ import { HealthModule } from "./health/health.module";
 import { InfrastructureModule } from "./infrastructure/infrastructure.module";
 import { MediaModule } from "./media/media.module";
 import { MemoryModule } from "./memory/memory.module";
+import { NotificationsModule } from "./notifications/notifications.module";
 import { OutboxModule } from "./outbox/outbox.module";
 import { RealtimeModule } from "./realtime/realtime.module";
 import { RecordingsModule } from "./recordings/recordings.module";
@@ -45,6 +46,7 @@ import { WorkspacesModule } from "./workspaces/workspaces.module";
     HealthModule,
     OutboxModule,
     MemoryModule,
+    NotificationsModule,
     RecordingsModule,
     TranscriptionModule,
     UploadsModule,
