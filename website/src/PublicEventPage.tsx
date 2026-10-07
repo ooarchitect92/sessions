@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useState, type CSSProperties } from 'react';
 import {
   DynamicPublicFormFields,
   dynamicAnswersComplete,
@@ -134,7 +134,7 @@ export function PublicEventPage({
           {
             '--event-primary': event.branding.primaryColor ?? '#183f38',
             '--event-accent': event.branding.accentColor ?? '#dcefe8',
-          } as React.CSSProperties
+          } as CSSProperties
         }
       >
         <section className="public-event-story">
