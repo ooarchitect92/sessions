@@ -70,6 +70,6 @@ export function MarketingLeadForm({
     {!newsletter?<label>What would you like to improve?<textarea maxLength={4000} placeholder="Tell us about your meeting, webinar, scheduling, or collaboration workflow." value={form.message} onChange={(e)=>set('message',e.target.value)}/></label>:null}
     <label className="consent-row"><input required type="checkbox" checked={form.consent} onChange={(e)=>set('consent',e.target.checked)}/><span>{newsletter?'I agree that Sessions can use this email to send product updates.':'I agree that Sessions can use these details to respond to this request.'}</span></label>
     {status==='error'?<div className="form-error" role="alert">{error}</div>:null}
-    <button className="button primary wide" disabled={status==='sending'||!form.email.trim()||!form.consent||(!newsletter&&!form.name.trim())}>{status==='sending'?'Submitting…':submitLabel??(newsletter?'Join updates':'Request a demo')}</button>
+    <button className="btn primary wide" disabled={status==='sending'||!form.email.trim()||!form.consent||(!newsletter&&!form.name.trim())}>{status==='sending'?'Submitting…':submitLabel??(newsletter?'Join updates':'Request a demo')}</button>
   </form>;
 }
