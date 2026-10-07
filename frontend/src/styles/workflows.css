@@ -1070,7 +1070,9 @@
 
 .event-presenter-form {
   display: grid;
-  grid-template-columns: 130px minmax(150px, 1fr) minmax(180px, 1fr) minmax(150px, 1fr) auto;
+  grid-template-columns:
+    130px minmax(150px, 1fr) minmax(180px, 1fr) minmax(150px, 1fr)
+    auto;
   gap: 8px;
   align-items: end;
 }
