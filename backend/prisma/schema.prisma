@@ -180,6 +180,8 @@ model Workspace {
   memorySummaries     MemorySummary[]
   chatMessages        ChatMessage[]
   chatReactions       ChatReaction[]
+  whiteboards         Whiteboard[]
+  whiteboardOperations WhiteboardOperation[]
   polls               Poll[]
   pollOptions         PollOption[]
   pollAnswers         PollAnswer[]
