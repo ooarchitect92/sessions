@@ -224,3 +224,13 @@ Validation details must never leak secrets or cross-tenant resource existence. P
 - `DELETE /v1/recordings/:sessionId` schedules permanent object deletion and is restricted to host roles.
 
 LiveKit egress lifecycle changes are performed by the bounded recording worker. Provider job IDs and object keys remain server-side; the browser receives only expiring access grants.
+
+
+### Booking reminder operations
+
+| Method | Path | Purpose |
+| ------ | ---- | ------- |
+| `GET` | `/v1/notifications/bookings/{reservationId}` | host-visible reminder delivery history for a booking reservation |
+| `POST` | `/v1/notifications/{deliveryId}/retry` | manually requeue a failed/dead-letter reminder |
+
+The booking reminder worker materializes 24-hour and 1-hour reminders for confirmed reservations, retries failures with exponential backoff, cancels stale reminders after cancellation/rescheduling, and records provider delivery identifiers for reconciliation.
