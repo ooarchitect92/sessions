@@ -189,7 +189,6 @@ model Organization {
   questions           Question[]
   questionVotes       QuestionVote[]
   authSessions        AuthSession[]
-  notificationDeliveries NotificationDelivery[]
   authChallenges      AuthChallenge[]
   workspaceInvitations WorkspaceInvitation[]
   notificationDeliveries NotificationDelivery[]
@@ -236,6 +235,7 @@ model Workspace {
   authSessions        AuthSession[]
   authChallenges      AuthChallenge[]
   workspaceInvitations WorkspaceInvitation[]
+  notificationDeliveries NotificationDelivery[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
