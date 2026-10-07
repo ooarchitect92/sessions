@@ -22,7 +22,9 @@ function normalizedBranding(event: EventRecord): EventBranding {
       event.branding.heroSubheadline ??
       event.description ??
       'Join a focused, interactive webinar built around useful participation.',
-    heroImageUrl: event.branding.heroImageUrl,
+    ...(event.branding.heroImageUrl
+      ? { heroImageUrl: event.branding.heroImageUrl }
+      : {}),
     aboutHeading: event.branding.aboutHeading ?? 'About this event',
     aboutBody:
       event.branding.aboutBody ??
