@@ -24,6 +24,7 @@ const ALLOWED_MIME_PREFIXES = [
 
 const ALLOWED_EXACT_MIME_TYPES = new Set([
   'application/pdf',
+  'application/octet-stream',
   'application/json',
   'application/zip',
   'application/vnd.ms-powerpoint',
