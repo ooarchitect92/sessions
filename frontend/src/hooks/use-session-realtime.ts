@@ -43,6 +43,11 @@ export function useSessionRealtime(sessionId: string): void {
       socket.on('whiteboard.operation.appended', () => {
         void queryClient.invalidateQueries({ queryKey: ['whiteboard', sessionId] });
       });
+      for (const eventName of ['breakouts.updated', 'breakouts.announcement']) {
+        socket.on(eventName, () => {
+          void queryClient.invalidateQueries({ queryKey: ['breakouts', sessionId] });
+        });
+      }
       for (const eventName of [
         'poll.created',
         'poll.launched',
