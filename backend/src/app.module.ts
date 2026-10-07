@@ -3,6 +3,7 @@ import { ConfigModule } from "@nestjs/config";
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from "@nestjs/core";
 import { ScheduleModule } from "@nestjs/schedule";
 import { AgendasModule } from "./agendas/agendas.module";
+import { AiModule } from "./ai/ai.module";
 import { AuthModule } from "./auth/auth.module";
 import { BookingsModule } from "./bookings/bookings.module";
 import { CollaborationModule } from "./collaboration/collaboration.module";
@@ -21,6 +22,7 @@ import { RealtimeModule } from "./realtime/realtime.module";
 import { RecordingsModule } from "./recordings/recordings.module";
 import { RoomsModule } from "./rooms/rooms.module";
 import { SessionsModule } from "./sessions/sessions.module";
+import { TranscriptionModule } from "./transcription/transcription.module";
 import { WorkspacesModule } from "./workspaces/workspaces.module";
 
 @Module({
@@ -33,12 +35,14 @@ import { WorkspacesModule } from "./workspaces/workspaces.module";
     ScheduleModule.forRoot(),
     PrismaModule,
     InfrastructureModule,
+    AiModule,
     AuthModule,
     WorkspacesModule,
     HealthModule,
     OutboxModule,
     MemoryModule,
     RecordingsModule,
+    TranscriptionModule,
     SessionsModule,
     RoomsModule,
     AgendasModule,

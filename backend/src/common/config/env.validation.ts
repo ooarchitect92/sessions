@@ -51,38 +51,71 @@ const environmentSchema = z
     S3_ACCESS_KEY: z.string().min(1),
     S3_SECRET_KEY: z.string().min(1),
     S3_FORCE_PATH_STYLE: optionalBoolean.default(true),
+    STT_PROVIDER: z.enum(['disabled', 'mock', 'openai']).default('disabled'),
+    STT_OPENAI_API_KEY: z.string().min(1).optional(),
+    STT_OPENAI_ENDPOINT: z
+      .string()
+      .url()
+      .default('https://api.openai.com/v1/audio/transcriptions'),
+    STT_OPENAI_MODEL: z.string().min(1).max(160).default('whisper-1'),
+    STT_MAX_MEDIA_BYTES: z.coerce
+      .number()
+      .int()
+      .min(1024)
+      .max(500 * 1024 * 1024)
+      .default(25 * 1024 * 1024),
+    AI_PROVIDER: z.enum(['disabled', 'mock', 'openai']).default('disabled'),
+    AI_OPENAI_API_KEY: z.string().min(1).optional(),
+    AI_OPENAI_ENDPOINT: z
+      .string()
+      .url()
+      .default('https://api.openai.com/v1/chat/completions'),
+    AI_OPENAI_MODEL: z.string().min(1).max(160).default('gpt-4o-mini'),
     OUTBOX_POLL_MS: z.coerce.number().int().min(250).max(60000).default(1000),
   })
   .superRefine((value, context) => {
-    if (value.NODE_ENV !== 'production') return;
-
-    const productionIssue = (path: keyof typeof value, message: string) => {
+    const issue = (path: keyof typeof value, message: string) => {
       context.addIssue({ code: 'custom', path: [path], message });
     };
 
+    if (value.STT_PROVIDER === 'openai' && !value.STT_OPENAI_API_KEY) {
+      issue(
+        'STT_OPENAI_API_KEY',
+        'STT_OPENAI_API_KEY is required when STT_PROVIDER=openai',
+      );
+    }
+    if (value.AI_PROVIDER === 'openai' && !value.AI_OPENAI_API_KEY) {
+      issue(
+        'AI_OPENAI_API_KEY',
+        'AI_OPENAI_API_KEY is required when AI_PROVIDER=openai',
+      );
+    }
+
+    if (value.NODE_ENV !== 'production') return;
+
     if (value.AUTH_MODE === 'development') {
-      productionIssue('AUTH_MODE', 'AUTH_MODE=development is forbidden in production');
+      issue('AUTH_MODE', 'AUTH_MODE=development is forbidden in production');
     }
     if (
       value.AUTH_MODE === 'local' &&
       value.AUTH_REQUIRE_EMAIL_VERIFICATION !== true
     ) {
-      productionIssue(
+      issue(
         'AUTH_REQUIRE_EMAIL_VERIFICATION',
         'Local production authentication requires email verification',
       );
     }
     if (!value.WORKER_DATABASE_URL) {
-      productionIssue(
+      issue(
         'WORKER_DATABASE_URL',
         'A dedicated worker database URL is required in production',
       );
     }
     if (value.JWT_SECRET.startsWith('replace-with')) {
-      productionIssue('JWT_SECRET', 'The example JWT secret cannot be used in production');
+      issue('JWT_SECRET', 'The example JWT secret cannot be used in production');
     }
     if (value.AUTH_IP_HASH_PEPPER.startsWith('replace-with')) {
-      productionIssue(
+      issue(
         'AUTH_IP_HASH_PEPPER',
         'The example IP hashing pepper cannot be used in production',
       );
@@ -91,7 +124,7 @@ const environmentSchema = z
       value.AUTH_ENCRYPTION_KEY ===
       '0000000000000000000000000000000000000000000000000000000000000000'
     ) {
-      productionIssue(
+      issue(
         'AUTH_ENCRYPTION_KEY',
         'The example auth encryption key cannot be used in production',
       );
@@ -100,28 +133,34 @@ const environmentSchema = z
       value.LIVEKIT_API_KEY === 'devkey' ||
       value.LIVEKIT_API_SECRET.startsWith('devsecret')
     ) {
-      productionIssue(
+      issue(
         'LIVEKIT_API_SECRET',
         'Development LiveKit credentials cannot be used in production',
       );
     }
+    if (value.STT_PROVIDER === 'mock') {
+      issue('STT_PROVIDER', 'STT_PROVIDER=mock is forbidden in production');
+    }
+    if (value.AI_PROVIDER === 'mock') {
+      issue('AI_PROVIDER', 'AI_PROVIDER=mock is forbidden in production');
+    }
     if (!value.PUBLIC_API_URL.startsWith('https://')) {
-      productionIssue('PUBLIC_API_URL', 'PUBLIC_API_URL must use HTTPS in production');
+      issue('PUBLIC_API_URL', 'PUBLIC_API_URL must use HTTPS in production');
     }
     if (!value.LIVEKIT_URL.startsWith('wss://')) {
-      productionIssue('LIVEKIT_URL', 'LIVEKIT_URL must use WSS in production');
+      issue('LIVEKIT_URL', 'LIVEKIT_URL must use WSS in production');
     }
     if (!value.LIVEKIT_API_URL.startsWith('https://')) {
-      productionIssue(
+      issue(
         'LIVEKIT_API_URL',
         'LIVEKIT_API_URL must use HTTPS in production',
       );
     }
     if (!value.S3_ENDPOINT.startsWith('https://')) {
-      productionIssue('S3_ENDPOINT', 'S3_ENDPOINT must use HTTPS in production');
+      issue('S3_ENDPOINT', 'S3_ENDPOINT must use HTTPS in production');
     }
     if (!value.S3_PUBLIC_ENDPOINT.startsWith('https://')) {
-      productionIssue(
+      issue(
         'S3_PUBLIC_ENDPOINT',
         'S3_PUBLIC_ENDPOINT must use HTTPS in production',
       );

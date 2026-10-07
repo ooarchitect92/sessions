@@ -42,6 +42,35 @@ export class S3ObjectStoreService {
     );
   }
 
+  async downloadObject(objectKey: string, maxBytes: number): Promise<Buffer> {
+    const url = this.createPresignedUrl(
+      'GET',
+      objectKey,
+      120,
+      {},
+      new Date(),
+      false,
+    );
+    const response = await fetch(url);
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      throw new Error(
+        `Object download failed with ${response.status}${body ? `: ${body.slice(0, 500)}` : ''}`,
+      );
+    }
+
+    const contentLength = Number(response.headers.get('content-length') ?? 0);
+    if (contentLength > 0 && contentLength > maxBytes) {
+      throw new Error(`object_exceeds_max_bytes:${contentLength}`);
+    }
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.byteLength > maxBytes) {
+      throw new Error(`object_exceeds_max_bytes:${buffer.byteLength}`);
+    }
+    return buffer;
+  }
+
   async deleteObject(objectKey: string): Promise<void> {
     const url = this.createPresignedUrl('DELETE', objectKey, 60);
     const response = await fetch(url, { method: 'DELETE' });
@@ -59,10 +88,11 @@ export class S3ObjectStoreService {
     expiresInSeconds: number,
     extraQuery: Record<string, QueryValue> = {},
     now = new Date(),
+    usePublicEndpoint = method === 'GET',
   ): string {
     const internalEndpoint = this.config.getOrThrow<string>('S3_ENDPOINT');
     const endpoint = new URL(
-      method === 'GET'
+      usePublicEndpoint
         ? this.config.get<string>('S3_PUBLIC_ENDPOINT', internalEndpoint)
         : internalEndpoint,
     );
