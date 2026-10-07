@@ -23,6 +23,18 @@ export function MemoryDetailPage() {
   const queryClient = useQueryClient();
   const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
   const [editingSummary, setEditingSummary] = useState(false);
+  const [editingTranscript, setEditingTranscript] = useState(false);
+  const [showTranscriptHistory, setShowTranscriptHistory] = useState(false);
+  const [transcriptLanguage, setTranscriptLanguage] = useState('');
+  const [transcriptReason, setTranscriptReason] = useState('');
+  const [transcriptSegments, setTranscriptSegments] = useState<
+    Array<{
+      startMs: number;
+      endMs: number;
+      speakerLabel: string;
+      text: string;
+    }>
+  >([]);
   const [summaryText, setSummaryText] = useState('');
   const [decisions, setDecisions] = useState<Array<{ text: string }>>([]);
   const [actionItems, setActionItems] = useState<
@@ -33,6 +45,12 @@ export function MemoryDetailPage() {
     queryFn: () => api.getMemory(sessionId),
     enabled: Boolean(sessionId),
   });
+  const transcriptRevisions = useQuery({
+    queryKey: ['transcript-revisions', sessionId],
+    queryFn: () => api.listTranscriptRevisions(sessionId),
+    enabled: Boolean(sessionId && showTranscriptHistory),
+  });
+
   const retry = useMutation({
     mutationFn: () => api.retryMemory(sessionId),
     onSuccess: async () =>
@@ -71,6 +89,55 @@ export function MemoryDetailPage() {
       setEditingSummary(false);
       await queryClient.invalidateQueries({
         queryKey: ['memory-detail', sessionId],
+      });
+      await queryClient.invalidateQueries({ queryKey: ['memory'] });
+    },
+  });
+
+  const updateTranscript = useMutation({
+    mutationFn: () => {
+      const transcript = memory.data?.transcript;
+      if (!transcript) throw new Error('Transcript is unavailable');
+      return api.updateTranscript(sessionId, transcript.version, {
+        language: transcriptLanguage.trim(),
+        reason: transcriptReason.trim() || undefined,
+        segments: transcriptSegments.map((segment) => ({
+          startMs: segment.startMs,
+          endMs: segment.endMs,
+          speakerLabel: segment.speakerLabel.trim() || null,
+          text: segment.text.trim(),
+        })),
+      });
+    },
+    onSuccess: async () => {
+      setEditingTranscript(false);
+      setTranscriptReason('');
+      await queryClient.invalidateQueries({
+        queryKey: ['memory-detail', sessionId],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ['transcript-revisions', sessionId],
+      });
+      await queryClient.invalidateQueries({ queryKey: ['memory'] });
+    },
+  });
+
+  const restoreTranscriptRevision = useMutation({
+    mutationFn: (revisionId: string) => {
+      const transcript = memory.data?.transcript;
+      if (!transcript) throw new Error('Transcript is unavailable');
+      return api.restoreTranscriptRevision(
+        sessionId,
+        revisionId,
+        transcript.version,
+      );
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ['memory-detail', sessionId],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ['transcript-revisions', sessionId],
       });
       await queryClient.invalidateQueries({ queryKey: ['memory'] });
     },
@@ -115,6 +182,22 @@ export function MemoryDetailPage() {
       })),
     );
     setEditingSummary(true);
+  };
+
+  const beginTranscriptReview = () => {
+    const transcript = item.transcript;
+    if (!transcript?.segments?.length) return;
+    setTranscriptLanguage(transcript.language ?? 'en');
+    setTranscriptReason('');
+    setTranscriptSegments(
+      transcript.segments.map((segment) => ({
+        startMs: segment.startMs,
+        endMs: segment.endMs,
+        speakerLabel: segment.speakerLabel ?? '',
+        text: segment.text,
+      })),
+    );
+    setEditingTranscript(true);
   };
 
   const hasFailure = [
@@ -438,9 +521,163 @@ export function MemoryDetailPage() {
           </section>
 
           <section className="panel transcript-panel">
-            <span className="eyebrow">Speaker-aware timeline</span>
-            <h2>Transcript</h2>
-            {item.transcript?.segments?.length ? (
+            <div className="transcript-panel-heading">
+              <div>
+                <span className="eyebrow">Speaker-aware timeline</span>
+                <h2>Transcript</h2>
+                {item.transcript ? (
+                  <small>
+                    Language {item.transcript.language ?? 'unknown'} · version{' '}
+                    {item.transcript.version}
+                  </small>
+                ) : null}
+              </div>
+              {item.transcript?.status === 'READY' ? (
+                <div className="transcript-panel-actions">
+                  {!editingTranscript ? (
+                    <button
+                      type="button"
+                      className="button secondary"
+                      onClick={beginTranscriptReview}
+                    >
+                      Review & correct
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="button secondary"
+                    onClick={() => setShowTranscriptHistory((value) => !value)}
+                  >
+                    {showTranscriptHistory ? 'Hide history' : 'Revision history'}
+                  </button>
+                </div>
+              ) : null}
+            </div>
+
+            {editingTranscript ? (
+              <div className="transcript-review-editor">
+                <div className="transcript-review-meta">
+                  <label>
+                    Language tag
+                    <input
+                      value={transcriptLanguage}
+                      maxLength={32}
+                      placeholder="en-US"
+                      onChange={(event) => setTranscriptLanguage(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Correction reason
+                    <input
+                      value={transcriptReason}
+                      maxLength={500}
+                      placeholder="Speaker labels corrected"
+                      onChange={(event) => setTranscriptReason(event.target.value)}
+                    />
+                  </label>
+                </div>
+
+                <div className="transcript-edit-list">
+                  {transcriptSegments.map((segment, index) => (
+                    <article className="transcript-edit-card" key={index}>
+                      <div className="transcript-edit-meta">
+                        <label>
+                          Speaker
+                          <input
+                            value={segment.speakerLabel}
+                            maxLength={160}
+                            onChange={(event) =>
+                              setTranscriptSegments((segments) =>
+                                segments.map((item, itemIndex) =>
+                                  itemIndex === index
+                                    ? { ...item, speakerLabel: event.target.value }
+                                    : item,
+                                ),
+                              )
+                            }
+                          />
+                        </label>
+                        <label>
+                          Start ms
+                          <input
+                            type="number"
+                            min={0}
+                            value={segment.startMs}
+                            onChange={(event) =>
+                              setTranscriptSegments((segments) =>
+                                segments.map((item, itemIndex) =>
+                                  itemIndex === index
+                                    ? { ...item, startMs: Number(event.target.value) }
+                                    : item,
+                                ),
+                              )
+                            }
+                          />
+                        </label>
+                        <label>
+                          End ms
+                          <input
+                            type="number"
+                            min={segment.startMs}
+                            value={segment.endMs}
+                            onChange={(event) =>
+                              setTranscriptSegments((segments) =>
+                                segments.map((item, itemIndex) =>
+                                  itemIndex === index
+                                    ? { ...item, endMs: Number(event.target.value) }
+                                    : item,
+                                ),
+                              )
+                            }
+                          />
+                        </label>
+                      </div>
+                      <textarea
+                        value={segment.text}
+                        maxLength={10000}
+                        onChange={(event) =>
+                          setTranscriptSegments((segments) =>
+                            segments.map((item, itemIndex) =>
+                              itemIndex === index
+                                ? { ...item, text: event.target.value }
+                                : item,
+                            ),
+                          )
+                        }
+                      />
+                    </article>
+                  ))}
+                </div>
+
+                {updateTranscript.error ? (
+                  <div className="error-banner">{updateTranscript.error.message}</div>
+                ) : null}
+                <div className="summary-review-actions">
+                  <button
+                    type="button"
+                    className="button secondary"
+                    onClick={() => setEditingTranscript(false)}
+                    disabled={updateTranscript.isPending}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="button primary"
+                    onClick={() => updateTranscript.mutate()}
+                    disabled={
+                      updateTranscript.isPending ||
+                      !transcriptLanguage.trim() ||
+                      transcriptSegments.some((segment) => !segment.text.trim())
+                    }
+                  >
+                    {updateTranscript.isPending
+                      ? 'Saving transcript…'
+                      : 'Save corrected transcript'}
+                  </button>
+                </div>
+              </div>
+            ) : item.transcript?.segments?.length ? (
               <div className="transcript-segments">
                 {item.transcript.segments.map((segment) => (
                   <article key={segment.id}>
@@ -457,6 +694,70 @@ export function MemoryDetailPage() {
                 Transcript segments will appear after the configured STT worker completes.
               </div>
             )}
+
+            {showTranscriptHistory ? (
+              <div className="transcript-history">
+                <div className="review-list-heading">
+                  <h3>Revision history</h3>
+                  <span>
+                    Every correction stores the previous transcript before applying changes.
+                  </span>
+                </div>
+                {transcriptRevisions.isLoading ? (
+                  <div className="artifact-placeholder">Loading revisions…</div>
+                ) : transcriptRevisions.error ? (
+                  <div className="error-banner">
+                    {transcriptRevisions.error.message}
+                  </div>
+                ) : transcriptRevisions.data?.length ? (
+                  <div className="transcript-history-list">
+                    {transcriptRevisions.data.map((revision) => (
+                      <article key={revision.id}>
+                        <div>
+                          <strong>Revision {revision.revisionNumber}</strong>
+                          <span>
+                            {revision.editor.displayName} ·{' '}
+                            {new Intl.DateTimeFormat(undefined, {
+                              dateStyle: 'medium',
+                              timeStyle: 'short',
+                            }).format(new Date(revision.createdAt))}
+                          </span>
+                          <small>
+                            {revision.language ?? 'unknown language'}
+                            {revision.reason ? ` · ${revision.reason}` : ''}
+                          </small>
+                        </div>
+                        <button
+                          type="button"
+                          className="button secondary"
+                          disabled={restoreTranscriptRevision.isPending}
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                `Restore transcript revision ${revision.revisionNumber}? The current transcript will be preserved as a new revision first.`,
+                              )
+                            ) {
+                              restoreTranscriptRevision.mutate(revision.id);
+                            }
+                          }}
+                        >
+                          Restore
+                        </button>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="artifact-placeholder">
+                    No transcript corrections have been saved yet.
+                  </div>
+                )}
+                {restoreTranscriptRevision.error ? (
+                  <div className="error-banner">
+                    {restoreTranscriptRevision.error.message}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </section>
         </div>
       </main>
