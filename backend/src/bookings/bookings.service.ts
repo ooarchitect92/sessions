@@ -105,7 +105,7 @@ export class BookingsService {
           bufferBeforeMinutes: input.bufferBeforeMinutes,
           bufferAfterMinutes: input.bufferAfterMinutes,
           availabilityRules: input.availabilityRules as unknown as Prisma.InputJsonValue,
-          intakeFields: input.intakeFields as Prisma.InputJsonValue,
+          intakeFields: input.intakeFields as unknown as Prisma.InputJsonValue,
         },
       });
       const response = this.toJson(page);
@@ -213,7 +213,7 @@ export class BookingsService {
               }
             : {}),
           ...(input.intakeFields !== undefined
-            ? { intakeFields: input.intakeFields as Prisma.InputJsonValue }
+            ? { intakeFields: input.intakeFields as unknown as Prisma.InputJsonValue }
             : {}),
           ...(input.active !== undefined ? { active: input.active } : {}),
         },
