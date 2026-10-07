@@ -167,6 +167,24 @@ export interface SessionDetail extends Session {
   agendaItems: AgendaItem[];
 }
 
+export interface ResolvedEmbed {
+  provider:
+    | 'youtube'
+    | 'vimeo'
+    | 'google'
+    | 'figma'
+    | 'miro'
+    | 'canva'
+    | 'notion'
+    | 'generic';
+  sourceUrl: string;
+  embedUrl: string;
+  hostname: string;
+  sandbox: string;
+  allow: string;
+  referrerPolicy: 'no-referrer';
+}
+
 export interface MediaToken {
   url: string;
   token: string;
@@ -691,6 +709,13 @@ export const api = {
       activatedAt: string;
     }>(`/sessions/${sessionId}/agenda-items/${agendaItemId}/activate`, {
       method: "POST",
+    });
+  },
+
+  resolveEmbed(url: string): Promise<ResolvedEmbed> {
+    return request<ResolvedEmbed>('/content/resolve-embed', {
+      method: 'POST',
+      body: JSON.stringify({ url }),
     });
   },
 
