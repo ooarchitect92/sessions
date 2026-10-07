@@ -8,6 +8,7 @@ CREATE TYPE "NotificationStatus" AS ENUM (
   'SENDING',
   'DELIVERED',
   'FAILED',
+  'DEAD_LETTER',
   'CANCELLED'
 );
 
