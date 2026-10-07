@@ -57,3 +57,16 @@ No provider-dependent workflow is marked production-ready until credentials, fai
 - brand name from workspace branding is available as a template variable
 - defaults remain in place for every message type when no custom override is configured
 - focused validation/rendering unit tests added
+
+
+### Webinar presenter-role increment
+- tenant-scoped EventPresenter model with forced PostgreSQL RLS
+- explicit ORGANIZER, HOST, CO_HOST and SPEAKER roles
+- event creator automatically becomes the protected organizer
+- host-side presenter create/update/delete/list APIs with audit and outbox events
+- presenter identity links to an existing workspace member when the email matches
+- host UI for managing webinar presenter teams and role changes
+- public event pages now show presenter/speaker profiles without exposing private email/user identifiers
+- LiveKit webinar grants now distinguish moderator roles, speaker publishing rights and attendee subscribe-only behavior
+- organizer/host/co-host receive room-admin rights; speakers can publish without moderation rights
+- guest registration-to-authenticated attendee admission and large-audience broadcast qualification remain separate follow-on work
