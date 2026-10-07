@@ -53,6 +53,25 @@ describe('collaboration command validation', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
+  it('requires a recipient for direct messages', async () => {
+    await expect(
+      createService().createChat(member, '10000000-0000-4000-8000-000000000005', {
+        channel: ChatChannel.DIRECT,
+        body: 'Private note',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('prevents direct messages to the sender', async () => {
+    await expect(
+      createService().createChat(member, '10000000-0000-4000-8000-000000000005', {
+        channel: ChatChannel.DIRECT,
+        recipientUserId: member.userId,
+        body: 'Private note',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
   it('prevents members from writing to the host-only chat channel', async () => {
     await expect(
       createService().createChat(member, '10000000-0000-4000-8000-000000000005', {
