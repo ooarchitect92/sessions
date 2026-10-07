@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { CreateMarketingLeadDto } from './dto/create-marketing-lead.dto';
@@ -27,7 +28,7 @@ export class MarketingService {
         message: input.message?.trim() || null,
         sourcePath: input.sourcePath?.trim() || null,
         consent: input.consent,
-        metadata: input.metadata,
+        metadata: input.metadata as Prisma.InputJsonValue,
       },
       select: { id: true, kind: true, createdAt: true },
     });
