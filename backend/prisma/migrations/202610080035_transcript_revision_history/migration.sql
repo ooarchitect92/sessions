@@ -1,3 +1,6 @@
+ALTER TABLE "memory_summaries"
+  ADD COLUMN "source_transcript_version" INTEGER;
+
 CREATE TABLE "transcript_revisions" (
   "id" UUID NOT NULL DEFAULT gen_random_uuid(),
   "organization_id" UUID NOT NULL,
