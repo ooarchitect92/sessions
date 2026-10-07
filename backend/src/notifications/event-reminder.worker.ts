@@ -74,7 +74,12 @@ export class EventReminderWorker {
             timezone: true,
             registrations: {
               where: { status: RegistrationStatus.REGISTERED },
-              select: { id: true, name: true, email: true },
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                registeredAt: true,
+              },
               take: 5000,
               orderBy: { registeredAt: 'asc' },
             },
@@ -101,6 +106,8 @@ export class EventReminderWorker {
       );
 
       for (const registration of template.event.registrations) {
+        if (scheduledFor <= registration.registeredAt) continue;
+
         const variables = {
           event_title: template.event.title,
           attendee_name: registration.name,
@@ -148,7 +155,8 @@ export class EventReminderWorker {
         if (
           existing.templateVersion !== template.version &&
           (existing.status === NotificationStatus.PENDING ||
-            existing.status === NotificationStatus.FAILED)
+            existing.status === NotificationStatus.FAILED ||
+            existing.status === NotificationStatus.CANCELLED)
         ) {
           await this.prisma.eventNotificationDelivery.update({
             where: { id: existing.id },
