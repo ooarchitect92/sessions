@@ -141,6 +141,8 @@ model Organization {
   memorySummaries     MemorySummary[]
   chatMessages        ChatMessage[]
   chatReactions       ChatReaction[]
+  whiteboards         Whiteboard[]
+  whiteboardOperations WhiteboardOperation[]
   polls               Poll[]
   pollOptions         PollOption[]
   pollAnswers         PollAnswer[]
@@ -212,6 +214,7 @@ model User {
   chatMessages            ChatMessage[]            @relation("ChatMessageAuthor")
   receivedChatMessages    ChatMessage[]            @relation("ChatMessageRecipient")
   chatReactions           ChatReaction[]
+  whiteboardOperations    WhiteboardOperation[]
   createdPolls            Poll[]                   @relation("PollCreator")
   submittedQuestions      Question[]               @relation("QuestionAuthor")
   authSessions            AuthSession[]
@@ -297,6 +300,8 @@ model Session {
   memorySummary        MemorySummary?
   chatMessages         ChatMessage[]
   chatReactions        ChatReaction[]
+  whiteboard           Whiteboard?
+  whiteboardOperations WhiteboardOperation[]
   polls                Poll[]
   questions            Question[]
 
@@ -603,6 +608,48 @@ model ChatReaction {
   @@unique([messageId, userId, emoji])
   @@index([organizationId, workspaceId, sessionId, createdAt])
   @@map("chat_reactions")
+}
+
+model Whiteboard {
+  id               String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String                @map("organization_id") @db.Uuid
+  workspaceId      String                @map("workspace_id") @db.Uuid
+  sessionId        String                @unique @map("session_id") @db.Uuid
+  snapshot         Json                  @default("{\"objects\":{}}")
+  snapshotSequence Int                   @default(0) @map("snapshot_sequence")
+  version          Int                   @default(0)
+  createdAt        DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization     Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace        Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  session          Session               @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  operations       WhiteboardOperation[]
+
+  @@index([organizationId, workspaceId, sessionId])
+  @@map("whiteboards")
+}
+
+model WhiteboardOperation {
+  id                String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId    String       @map("organization_id") @db.Uuid
+  workspaceId       String       @map("workspace_id") @db.Uuid
+  sessionId         String       @map("session_id") @db.Uuid
+  whiteboardId      String       @map("whiteboard_id") @db.Uuid
+  actorUserId       String       @map("actor_user_id") @db.Uuid
+  clientOperationId String       @unique @map("client_operation_id") @db.Uuid
+  sequence          Int
+  kind              String       @db.VarChar(40)
+  payload           Json
+  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace         Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  session           Session      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  whiteboard        Whiteboard   @relation(fields: [whiteboardId], references: [id], onDelete: Cascade)
+  actor             User         @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@unique([whiteboardId, sequence])
+  @@index([organizationId, workspaceId, sessionId, sequence])
+  @@map("whiteboard_operations")
 }
 
 model Poll {
