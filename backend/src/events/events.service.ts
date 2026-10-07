@@ -7,6 +7,7 @@ import {
 } from "@nestjs/common";
 import {
   EventPresenterRole,
+  EventReminderKind,
   EventStatus,
   Prisma,
   RegistrationStatus,
@@ -127,6 +128,28 @@ export class EventsService {
           position: 0,
           isPublic: true,
         },
+      });
+      await transaction.eventNotificationTemplate.createMany({
+        data: [
+          {
+            organizationId: principal.organizationId,
+            workspaceId: principal.workspaceId,
+            eventId: event.id,
+            kind: EventReminderKind.EVENT_REMINDER_24H,
+            subject: "Reminder: {{event_title}} starts tomorrow",
+            bodyText:
+              "Hi {{attendee_name}},\n\n{{event_title}} starts in 24 hours.\n\nTime: {{event_time}} ({{event_timezone}})\n\nWe look forward to seeing you.",
+          },
+          {
+            organizationId: principal.organizationId,
+            workspaceId: principal.workspaceId,
+            eventId: event.id,
+            kind: EventReminderKind.EVENT_REMINDER_1H,
+            subject: "Reminder: {{event_title}} starts in 1 hour",
+            bodyText:
+              "Hi {{attendee_name}},\n\n{{event_title}} starts in 1 hour.\n\nTime: {{event_time}} ({{event_timezone}})\n\nYour event is coming up soon.",
+          },
+        ],
       });
       const response = this.toJson(event);
       await this.audit.record(transaction, principal, {
