@@ -146,7 +146,7 @@ export class CollaborationService {
           sessionId,
           authorUserId: principal.userId,
           recipientUserId:
-            input.channel === ChatChannel.DIRECT ? input.recipientUserId : null,
+            input.channel === ChatChannel.DIRECT ? input.recipientUserId! : null,
           channel: input.channel,
           body: input.body.trim(),
         },
