@@ -66,6 +66,25 @@ export const PollTypeSchema = z.enum([
 export const PollStatusSchema = z.enum(['DRAFT', 'LIVE', 'CLOSED']);
 export const QuestionStatusSchema = z.enum(['PENDING', 'APPROVED', 'ANSWERED', 'HIDDEN']);
 
+export const DynamicFormFieldTypeSchema = z.enum([
+  'TEXT',
+  'TEXTAREA',
+  'SELECT',
+  'MULTI_SELECT',
+  'CHECKBOX',
+  'NUMBER',
+  'CONSENT',
+]);
+
+export const DynamicFormFieldSchema = z.object({
+  key: z.string().min(1).max(80).regex(/^[a-z][a-z0-9_]*$/),
+  label: z.string().trim().min(1).max(160),
+  type: DynamicFormFieldTypeSchema,
+  required: z.boolean().default(false),
+  placeholder: z.string().max(240).optional(),
+  options: z.array(z.string().trim().min(1).max(160)).max(50).optional(),
+});
+
 const SlugSchema = z
   .string()
   .trim()
@@ -144,7 +163,7 @@ export const CreateEventSchema = z.object({
   durationMinutes: z.number().int().min(5).max(1440),
   timezone: z.string().trim().min(1).max(100),
   capacity: z.number().int().positive().max(100000).nullable().optional(),
-  registrationFields: z.array(z.record(z.string(), z.unknown())).default([]),
+  registrationFields: z.array(DynamicFormFieldSchema).max(50).default([]),
   branding: z.record(z.string(), z.unknown()).default({}),
 });
 
@@ -161,7 +180,7 @@ export const EventSchema = z.object({
   timezone: z.string(),
   capacity: z.number().int().nullable(),
   status: EventStatusSchema,
-  registrationFields: z.array(z.record(z.string(), z.unknown())),
+  registrationFields: z.array(DynamicFormFieldSchema),
   branding: z.record(z.string(), z.unknown()),
   publishedAt: z.iso.datetime().nullable(),
   version: z.number().int().positive(),
@@ -191,7 +210,7 @@ export const CreateBookingPageSchema = z.object({
   bufferBeforeMinutes: z.number().int().min(0).max(1440).default(0),
   bufferAfterMinutes: z.number().int().min(0).max(1440).default(0),
   availabilityRules: z.array(AvailabilityRuleSchema).min(1),
-  intakeFields: z.array(z.record(z.string(), z.unknown())).default([]),
+  intakeFields: z.array(DynamicFormFieldSchema).max(50).default([]),
 });
 
 export const BookingPageSchema = z.object({
@@ -207,7 +226,7 @@ export const BookingPageSchema = z.object({
   bufferBeforeMinutes: z.number().int(),
   bufferAfterMinutes: z.number().int(),
   availabilityRules: z.array(AvailabilityRuleSchema),
-  intakeFields: z.array(z.record(z.string(), z.unknown())),
+  intakeFields: z.array(DynamicFormFieldSchema),
   active: z.boolean(),
   version: z.number().int().positive(),
   createdAt: z.iso.datetime(),
@@ -251,6 +270,8 @@ export const CreateQuestionSchema = z.object({
 });
 
 export type WorkspaceRole = z.infer<typeof WorkspaceRoleSchema>;
+export type DynamicFormFieldType = z.infer<typeof DynamicFormFieldTypeSchema>;
+export type DynamicFormField = z.infer<typeof DynamicFormFieldSchema>;
 export type CreateRoomInput = z.infer<typeof CreateRoomSchema>;
 export type UpdateRoomInput = z.infer<typeof UpdateRoomSchema>;
 export type Room = z.infer<typeof RoomSchema>;

@@ -1,8 +1,10 @@
+import { Type } from 'class-transformer';
 import {
   IsArray,
   IsInt,
   IsISO8601,
   IsObject,
+  ValidateNested,
   IsOptional,
   IsString,
   Length,
@@ -10,6 +12,7 @@ import {
   Max,
   Min,
 } from 'class-validator';
+import { DynamicFormFieldDto } from '../../common/forms/dynamic-form';
 
 export class UpdateEventDto {
   @IsOptional()
@@ -51,8 +54,9 @@ export class UpdateEventDto {
 
   @IsOptional()
   @IsArray()
-  @IsObject({ each: true })
-  registrationFields?: Record<string, unknown>[];
+  @ValidateNested({ each: true })
+  @Type(() => DynamicFormFieldDto)
+  registrationFields?: DynamicFormFieldDto[];
 
   @IsOptional()
   @IsObject()

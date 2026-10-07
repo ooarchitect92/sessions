@@ -1,4 +1,9 @@
 import { FormEvent, useEffect, useState } from 'react';
+import {
+  DynamicPublicFormFields,
+  dynamicAnswersComplete,
+  type DynamicFieldDefinition,
+} from './DynamicPublicFormFields';
 import { publicApi } from './public-api';
 
 interface PublicEvent {
@@ -10,7 +15,7 @@ interface PublicEvent {
   durationMinutes: number;
   timezone: string;
   capacity: number | null;
-  registrationFields: Array<Record<string, unknown>>;
+  registrationFields: DynamicFieldDefinition[];
   branding: Record<string, unknown>;
   status: 'PUBLISHED' | 'LIVE';
   registrationCount: number;
@@ -36,6 +41,7 @@ export function PublicEventPage({
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [registration, setRegistration] = useState<Registration | null>(null);
+  const [answers, setAnswers] = useState<Record<string, unknown>>({});
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -72,7 +78,7 @@ export function PublicEventPage({
         )}/events/${encodeURIComponent(eventSlug)}/registrations`,
         {
           method: 'POST',
-          body: JSON.stringify({ name, email, answers: {} }),
+          body: JSON.stringify({ name, email, answers }),
         },
       );
       setRegistration(result);
@@ -177,14 +183,20 @@ export function PublicEventPage({
                     autoComplete="email"
                   />
                 </label>
-                {event.registrationFields.length > 0 ? (
-                  <div className="public-form-note">
-                    This event has {event.registrationFields.length} additional organizer-defined
-                    fields. The full dynamic form renderer is the next form-builder increment.
-                  </div>
-                ) : null}
+                <DynamicPublicFormFields
+                  fields={event.registrationFields}
+                  answers={answers}
+                  onChange={setAnswers}
+                />
                 {error ? <div className="public-error">{error}</div> : null}
-                <button disabled={submitting || !name.trim() || !email.trim()}>
+                <button
+                  disabled={
+                    submitting ||
+                    !name.trim() ||
+                    !email.trim() ||
+                    !dynamicAnswersComplete(event.registrationFields, answers)
+                  }
+                >
                   {submitting ? 'Registering…' : 'Register now'}
                 </button>
               </form>

@@ -1,4 +1,9 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import {
+  DynamicPublicFormFields,
+  dynamicAnswersComplete,
+  type DynamicFieldDefinition,
+} from './DynamicPublicFormFields';
 import { publicApi } from './public-api';
 
 interface PublicBookingPage {
@@ -10,7 +15,7 @@ interface PublicBookingPage {
   timezone: string;
   minimumNoticeMinutes: number;
   availabilityRules: Array<Record<string, unknown>>;
-  intakeFields: Array<Record<string, unknown>>;
+  intakeFields: DynamicFieldDefinition[];
 }
 
 interface Slot {
@@ -60,6 +65,7 @@ export function PublicBookingPage({
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [reservation, setReservation] = useState<Reservation | null>(null);
+  const [answers, setAnswers] = useState<Record<string, unknown>>({});
   const [submitting, setSubmitting] = useState(false);
   const [managing, setManaging] = useState(false);
   const [rescheduleStartsAt, setRescheduleStartsAt] = useState('');
@@ -113,7 +119,7 @@ export function PublicBookingPage({
             email,
             startsAt: selected.startsAt,
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            answers: {},
+            answers,
           }),
         },
       );
@@ -374,14 +380,21 @@ export function PublicBookingPage({
                     autoComplete="email"
                   />
                 </label>
-                {page.intakeFields.length > 0 ? (
-                  <div className="public-form-note">
-                    {page.intakeFields.length} additional intake fields are configured. Their
-                    dynamic renderer follows in the form-builder increment.
-                  </div>
-                ) : null}
+                <DynamicPublicFormFields
+                  fields={page.intakeFields}
+                  answers={answers}
+                  onChange={setAnswers}
+                />
                 {error ? <div className="public-error">{error}</div> : null}
-                <button disabled={submitting || !selected || !name.trim() || !email.trim()}>
+                <button
+                  disabled={
+                    submitting ||
+                    !selected ||
+                    !name.trim() ||
+                    !email.trim() ||
+                    !dynamicAnswersComplete(page.intakeFields, answers)
+                  }
+                >
                   {submitting ? 'Scheduling…' : 'Schedule meeting'}
                 </button>
               </form>

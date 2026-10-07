@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { CreateEventInput } from '@sessions/contracts';
+import type { CreateEventInput, DynamicFormField } from '@sessions/contracts';
 import { FormEvent, useMemo, useState } from 'react';
 import { api, type EventRecord } from '../api/client';
+import { DynamicFormBuilder } from '../components/DynamicFormBuilder';
 
 function toSlug(value: string): string {
   return value
@@ -32,6 +33,7 @@ export function EventsPage() {
   const [startsAt, setStartsAt] = useState(defaultStart);
   const [durationMinutes, setDurationMinutes] = useState(60);
   const [capacity, setCapacity] = useState('250');
+  const [registrationFields, setRegistrationFields] = useState<DynamicFormField[]>([]);
 
   const events = useQuery({ queryKey: ['events'], queryFn: () => api.listEvents() });
   const create = useMutation({
@@ -40,6 +42,7 @@ export function EventsPage() {
       setTitle('');
       setSlug('');
       setSlugEdited(false);
+      setRegistrationFields([]);
       await queryClient.invalidateQueries({ queryKey: ['events'] });
     },
   });
@@ -66,7 +69,7 @@ export function EventsPage() {
       durationMinutes,
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       capacity: capacity.trim() ? Number(capacity) : null,
-      registrationFields: [],
+      registrationFields,
       branding: {},
     });
   };
@@ -160,6 +163,11 @@ export function EventsPage() {
                 <input type="number" min={1} max={100000} value={capacity} onChange={(event) => setCapacity(event.target.value)} />
               </label>
             </div>
+            <DynamicFormBuilder
+              title="Registration form"
+              fields={registrationFields}
+              onChange={setRegistrationFields}
+            />
             {create.error ? <div className="error-banner">{create.error.message}</div> : null}
             <button className="button primary full-width" disabled={create.isPending || !title.trim() || slug.length < 2}>
               {create.isPending ? 'Creating…' : 'Create event draft'}

@@ -120,6 +120,10 @@ Access tokens are short-lived JWTs. Managed browser sessions use opaque, hashed 
 | `POST`  | `/v1/public/{orgSlug}/{workspaceSlug}/bookings/{bookingSlug}/reservations/{reservationId}/cancel` | token-authorized attendee cancellation |
 | `POST`  | `/v1/public/{orgSlug}/{workspaceSlug}/bookings/{bookingSlug}/reservations/{reservationId}/calendar` | generate an RFC 5545 calendar invite for the reservation |
 
+### Dynamic public forms
+
+Event `registrationFields` and booking-page `intakeFields` use one typed field contract with stable keys and these supported controls: `TEXT`, `TEXTAREA`, `SELECT`, `MULTI_SELECT`, `CHECKBOX`, `NUMBER`, and `CONSENT`. Host create/update commands validate unique keys and select-option definitions. Public registration/reservation commands reject unknown answer keys, missing required values, invalid options, oversized text, non-numeric number values, and unaccepted consent before normalized answers are persisted.
+
 ### Secure file uploads
 
 | Method | Path | Purpose |

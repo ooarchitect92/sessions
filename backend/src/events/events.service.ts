@@ -21,6 +21,11 @@ import {
   hasAnyRole,
   type Principal,
 } from "../common/auth/principal";
+import {
+  assertDynamicFormDefinition,
+  type DynamicFormField,
+  validateDynamicFormAnswers,
+} from "../common/forms/dynamic-form";
 import { TenantDatabaseService } from "../database/tenant-database.service";
 import { WorkerPrismaService } from "../database/worker-prisma.service";
 import { OutboxService } from "../outbox/outbox.service";
@@ -54,6 +59,7 @@ export class EventsService {
   ): Promise<Event | Prisma.JsonObject> {
     this.assertHost(principal);
     this.assertTimeZone(input.timezone);
+    assertDynamicFormDefinition(input.registrationFields);
     const requestHash = createHash("sha256")
       .update(JSON.stringify({ operation: "event.create", input }))
       .digest("hex");
@@ -102,7 +108,7 @@ export class EventsService {
           durationMinutes: input.durationMinutes,
           timezone: input.timezone,
           capacity: input.capacity ?? null,
-          registrationFields: input.registrationFields as Prisma.InputJsonValue,
+          registrationFields: input.registrationFields as unknown as Prisma.InputJsonValue,
           branding: input.branding as Prisma.InputJsonValue,
         },
       });
@@ -170,6 +176,9 @@ export class EventsService {
       );
     }
     if (input.timezone !== undefined) this.assertTimeZone(input.timezone);
+    if (input.registrationFields !== undefined) {
+      assertDynamicFormDefinition(input.registrationFields);
+    }
 
     return this.database.run(principal, async (transaction) => {
       if (input.slug !== undefined) {
@@ -205,7 +214,7 @@ export class EventsService {
           ...(input.registrationFields !== undefined
             ? {
                 registrationFields:
-                  input.registrationFields as Prisma.InputJsonValue,
+                  input.registrationFields as unknown as Prisma.InputJsonValue,
               }
             : {}),
           ...(input.branding !== undefined
@@ -441,6 +450,10 @@ export class EventsService {
       workspaceSlug,
       eventSlug,
     );
+    const answers = validateDynamicFormAnswers(
+      event.registrationFields as unknown as DynamicFormField[],
+      input.answers,
+    );
     return this.publicDatabase.$transaction(async (transaction) => {
       await transaction.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${event.id}, 0))`;
       const duplicate = await transaction.eventRegistration.findUnique({
@@ -467,7 +480,7 @@ export class EventsService {
           eventId: event.id,
           name: input.name.trim(),
           email: input.email.toLowerCase(),
-          answers: input.answers as Prisma.InputJsonValue,
+          answers: answers as Prisma.InputJsonValue,
           status,
         },
       });

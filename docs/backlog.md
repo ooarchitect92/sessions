@@ -43,7 +43,7 @@
 - [x] Google and Microsoft calendar OAuth and busy-time synchronization
 - [x] webinar/event draft, publish and cancellation lifecycle
 - [x] public event page, registration, capacity and waitlist handling
-- [ ] dynamic registration and intake form renderer
+- [x] dynamic registration and intake form renderer
 - [ ] webinar stage roles, speaker profiles and landing-page builder
 - [ ] notification templates, reminder jobs and delivery reconciliation
 - [ ] durable attendance intervals and engagement event model
