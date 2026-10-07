@@ -505,8 +505,10 @@ model EventRegistration {
   name           String             @db.VarChar(160)
   email          String             @db.Citext
   answers        Json               @default("{}")
-  status         RegistrationStatus @default(REGISTERED)
-  registeredAt   DateTime           @default(now()) @map("registered_at") @db.Timestamptz(6)
+  status                  RegistrationStatus @default(REGISTERED)
+  admissionTokenHash      String?            @map("admission_token_hash") @db.VarChar(64)
+  admissionTokenExpiresAt DateTime?          @map("admission_token_expires_at") @db.Timestamptz(6)
+  registeredAt            DateTime           @default(now()) @map("registered_at") @db.Timestamptz(6)
   checkedInAt    DateTime?          @map("checked_in_at") @db.Timestamptz(6)
   updatedAt      DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
   organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
