@@ -1,6 +1,7 @@
 import {
   CanActivate,
   ExecutionContext,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -10,6 +11,7 @@ import { JwtService } from '@nestjs/jwt';
 import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { AuthService } from '../../auth/auth.service';
+import { IntegrationsService } from '../../integrations/integrations.service';
 import { IS_PUBLIC_KEY } from './public.decorator';
 import type { AccessTokenClaims, Principal } from './principal';
 
@@ -32,6 +34,7 @@ export class PrincipalGuard implements CanActivate {
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly auth: AuthService,
+    private readonly integrations: IntegrationsService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -50,6 +53,13 @@ export class PrincipalGuard implements CanActivate {
     }
 
     const token = authorization.slice('Bearer '.length).trim();
+
+    if (token.startsWith('sk_sessions_')) {
+      request.principal = await this.integrations.authenticateApiKey(token);
+      this.assertApiKeyScope(request, request.principal);
+      return true;
+    }
+
     try {
       const claims = await this.jwt.verifyAsync<AccessTokenClaims>(token, {
         issuer: this.config.getOrThrow<string>('JWT_ISSUER'),
@@ -61,6 +71,32 @@ export class PrincipalGuard implements CanActivate {
     } catch (error: unknown) {
       if (error instanceof UnauthorizedException) throw error;
       throw new UnauthorizedException('The access token is invalid or expired');
+    }
+  }
+
+  private assertApiKeyScope(request: FastifyRequest, principal: Principal): void {
+    const path = request.url.split('?')[0].replace(/^\/v1\//, '');
+    const resource = path.split('/')[0];
+    const method = request.method.toUpperCase();
+    const access = method === 'GET' || method === 'HEAD' ? 'read' : 'write';
+    const resourceMap: Record<string, string> = {
+      sessions: 'sessions',
+      rooms: 'rooms',
+      events: 'events',
+      bookings: 'bookings',
+      memory: 'memory',
+      recordings: 'memory',
+      transcripts: 'memory',
+      analytics: 'analytics',
+    };
+    const scopeResource = resourceMap[resource];
+    if (!scopeResource) {
+      throw new ForbiddenException('API keys cannot access this endpoint');
+    }
+
+    const requiredScope = scopeResource + ':' + access;
+    if (!principal.apiScopes?.includes(requiredScope)) {
+      throw new ForbiddenException('The API key does not include the required scope');
     }
   }
 }
