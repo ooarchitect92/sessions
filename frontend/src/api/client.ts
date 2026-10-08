@@ -125,6 +125,43 @@ export interface CalendarConnectionRecord {
   updatedAt: string;
 }
 
+export interface ApiKeyRecord {
+  id: string;
+  name: string;
+  key_prefix: string;
+  scopes: string[];
+  last_used_at: string | null;
+  expires_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+  secret?: string;
+}
+
+export interface WebhookSubscriptionRecord {
+  id: string;
+  name: string;
+  endpoint_url: string;
+  event_types: string[];
+  active: boolean;
+  last_success_at: string | null;
+  last_failure_at: string | null;
+  created_at: string;
+  updated_at: string;
+  signingSecret?: string;
+}
+
+export interface WebhookDeliveryRecord {
+  id: string;
+  subscription_id: string;
+  event_type: string;
+  status: string;
+  attempts: number;
+  response_status: number | null;
+  last_error: string | null;
+  delivered_at: string | null;
+  dead_lettered_at: string | null;
+  created_at: string;
+}
 export interface WorkspaceInvitation {
   id: string;
   email: string;
@@ -1353,6 +1390,56 @@ export const api = {
     return request<BookingPageRecord[]>("/bookings");
   },
 
+  listApiKeys(): Promise<ApiKeyRecord[]> {
+    return request<ApiKeyRecord[]>('/integrations/api-keys');
+  },
+
+  createApiKey(input: { name: string; scopes: string[]; expiresInDays?: number }): Promise<ApiKeyRecord> {
+    return request<ApiKeyRecord>('/integrations/api-keys', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  revokeApiKey(apiKeyId: string): Promise<ApiKeyRecord> {
+    return request<ApiKeyRecord>(`/integrations/api-keys/${apiKeyId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  listWebhooks(): Promise<WebhookSubscriptionRecord[]> {
+    return request<WebhookSubscriptionRecord[]>('/integrations/webhooks');
+  },
+
+  createWebhook(input: { name: string; endpointUrl: string; eventTypes: string[] }): Promise<WebhookSubscriptionRecord> {
+    return request<WebhookSubscriptionRecord>('/integrations/webhooks', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  deleteWebhook(webhookId: string): Promise<{ id: string; deleted: true }> {
+    return request(`/integrations/webhooks/${webhookId}`, { method: 'DELETE' });
+  },
+
+  reconcileWebhook(webhookId: string, hours = 24): Promise<{ subscriptionId: string; hours: number; inserted: number }> {
+    return request(`/integrations/webhooks/${webhookId}/reconcile`, {
+      method: 'POST',
+      body: JSON.stringify({ hours }),
+    });
+  },
+
+  listWebhookDeliveries(webhookId: string): Promise<WebhookDeliveryRecord[]> {
+    return request<WebhookDeliveryRecord[]>(`/integrations/webhooks/${webhookId}/deliveries`);
+  },
+
+  retryWebhookDelivery(deliveryId: string): Promise<{ id: string; status: string }> {
+    return request(`/integrations/webhook-deliveries/${deliveryId}/retry`, { method: 'POST' });
+  },
+
+  replayWebhookDelivery(deliveryId: string): Promise<{ id: string; status: string; replayed: true }> {
+    return request(`/integrations/webhook-deliveries/${deliveryId}/replay`, { method: 'POST' });
+  },
   listCalendarConnections(): Promise<CalendarConnectionRecord[]> {
     return request<CalendarConnectionRecord[]>('/calendar/connections');
   },
