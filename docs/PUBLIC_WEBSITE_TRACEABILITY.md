@@ -17,8 +17,10 @@ This register maps the supplied Website Master Blueprint and Sessions-like resea
 | Calendar integrations | Repository-backed | Google/Microsoft calendar modules/adapters |
 | Analytics | Repository-backed + surfaced | attendance/engagement analytics foundation from main |
 | REST/API architecture | Repository-backed + documented | NestJS `/v1` API and public route documentation |
-| Durable enquiry/contact form | Implemented | marketing controller/service + PostgreSQL |
+| Durable enquiry/contact form | Implemented | marketing controller/service + PostgreSQL transaction |
 | Lead retry idempotency | Implemented | UUID `submissionKey`, request hash, unique DB constraint |
+| Lead + outbox atomicity | Implemented | one transaction creates the accepted lead and `marketing.lead.received` event |
+| Durable lead event dispatch | Implemented | Redis stream dispatcher with claim locking, retries, backoff and dead-letter state |
 | Public-form abuse control | Implemented | honeypot + hashed Redis rate limiting |
 | Do not falsely acknowledge failed lead | Implemented | UI success only after successful API result |
 | Data minimization for campaign context | Implemented | path + approved UTM/intent keys only |
@@ -34,7 +36,7 @@ This register maps the supplied Website Master Blueprint and Sessions-like resea
 | Exact commercial prices | Not supplied / not invented | plans use enquiry path and explicit note |
 | Testimonials/customer counts/certifications | Not supplied / not invented | deliberately absent |
 | Third-party analytics / ads tags | Not activated | requires approved production accounts, consent/legal settings |
-| CRM destination for marketing leads | Not activated | lead is durably accepted in PostgreSQL; no CRM destination was supplied |
+| CRM destination for marketing leads | Not activated | durable internal outbox event is published; no verified CRM/email destination was supplied |
 | Formal accessibility conformance claim | Not claimed | target described; manual/independent evidence still required |
 | Production legal policy text | Not invented | implementation privacy page marks deployment-specific legal review requirement |
 | Authenticated dashboard/owner console redesign | **Out of scope by explicit user instruction** | `frontend/` is not modified by this public website work |
