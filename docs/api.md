@@ -170,7 +170,7 @@ Upload object keys are namespaced by organization/workspace and start in a quara
 
 | Method | Path                           | Purpose                                                              |
 | ------ | ------------------------------ | -------------------------------------------------------------------- |
-| `GET`  | `/v1/memory`                   | paginated memory library with optional title/transcript query        |
+| `GET`  | `/v1/memory`                   | paginated memory library; optional query uses ranked PostgreSQL full-text search across title, description and transcript with tenant-scoped excerpts |
 | `GET`  | `/v1/memory/{sessionId}`       | agenda, artifacts, transcript segments, chat, polls, Q&A and summary |
 | `PATCH` | `/v1/memory/{sessionId}/summary` | human review/edit of a ready summary with `If-Match`                 |
 | `POST` | `/v1/memory/{sessionId}/retry` | requeue failed recording, transcript and summary artifacts           |
@@ -300,3 +300,8 @@ Hosts can review completed transcripts without mutating provider output invisibl
 - `POST /v1/memory/{sessionId}/transcript/revisions/{revisionId}/restore` restores a prior revision while first preserving the current transcript as a new revision.
 
 Language tags are validated using a BCP-47-style policy. Transcript edits are host-restricted, tenant-scoped, audited, emitted through the outbox, and invalidate AI summary source-version state. Summary workers pin the transcript version they read and refuse stale writes if the transcript changes while generation is in progress.
+
+
+### Memory full-text search
+
+`GET /v1/memory?query=...` uses PostgreSQL `websearch_to_tsquery` with the language-neutral `simple` text-search configuration. GIN expression indexes cover session title/description and transcript full text. Search execution runs inside the normal tenant transaction, repeats organization/workspace predicates as defense in depth, preserves the existing artifact-eligibility boundary, ranks session metadata above transcript-only matches, and returns a short plain-text excerpt for matching cards. Vector retrieval remains a separate optional phase and is not required for this lexical path.
