@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post } from '@nest
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentPrincipal } from '../common/auth/current-principal.decorator';
 import type { Principal } from '../common/auth/principal';
-import { CreateApiKeyDto, CreateWebhookSubscriptionDto } from './integrations.dto';
+import { CreateApiKeyDto, CreateWebhookSubscriptionDto, ReconcileWebhookDto } from './integrations.dto';
 import { IntegrationsService } from './integrations.service';
 
 @ApiTags('integrations')
@@ -53,6 +53,22 @@ export class IntegrationsController {
     return this.integrations.deleteWebhook(principal, id);
   }
 
+  @Post('webhooks/:id/reconcile')
+  reconcileWebhook(
+    @CurrentPrincipal() principal: Principal,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() body: ReconcileWebhookDto,
+  ) {
+    return this.integrations.reconcileWebhook(principal, id, body);
+  }
+
+  @Post('webhook-deliveries/:id/replay')
+  replayDelivery(
+    @CurrentPrincipal() principal: Principal,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ) {
+    return this.integrations.replayDelivery(principal, id);
+  }
   @Get('webhooks/:id/deliveries')
   listDeliveries(
     @CurrentPrincipal() principal: Principal,
