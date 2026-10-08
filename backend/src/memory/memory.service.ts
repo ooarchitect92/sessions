@@ -20,6 +20,13 @@ import { ListMemoryQuery } from './dto/list-memory.query';
 import { UpdateMemorySummaryDto } from './dto/update-memory-summary.dto';
 import { UpdateTranscriptDto } from './dto/update-transcript.dto';
 
+interface MemorySearchHit {
+  id: string;
+  rank: number;
+  excerpt: string | null;
+  totalCount: number;
+}
+
 @Injectable()
 export class MemoryService {
   constructor(
@@ -31,6 +38,17 @@ export class MemoryService {
 
   async list(principal: Principal, query: ListMemoryQuery) {
     return this.database.run(principal, async (transaction) => {
+      const searchTerm = query.query?.trim();
+      if (searchTerm) {
+        return this.searchMemory(
+          transaction,
+          principal,
+          searchTerm,
+          query.page,
+          query.pageSize,
+        );
+      }
+
       const where: Prisma.SessionWhereInput = {
         OR: [
           {
@@ -47,33 +65,6 @@ export class MemoryService {
           { transcript: { isNot: null } },
           { memorySummary: { isNot: null } },
         ],
-        ...(query.query
-          ? {
-              AND: [
-                {
-                  OR: [
-                    { title: { contains: query.query, mode: 'insensitive' } },
-                    {
-                      description: {
-                        contains: query.query,
-                        mode: 'insensitive',
-                      },
-                    },
-                    {
-                      transcript: {
-                        is: {
-                          fullText: {
-                            contains: query.query,
-                            mode: 'insensitive',
-                          },
-                        },
-                      },
-                    },
-                  ],
-                },
-              ],
-            }
-          : {}),
       };
       const [items, total] = await Promise.all([
         transaction.session.findMany({
@@ -86,6 +77,7 @@ export class MemoryService {
                 status: true,
                 language: true,
                 completedAt: true,
+                version: true,
               },
             },
             memorySummary: true,
@@ -824,6 +816,138 @@ export class MemoryService {
         payload: { memorySummaryId: summary.id, sessionId: session.id },
       });
     }
+  }
+
+  private async searchMemory(
+    transaction: Prisma.TransactionClient,
+    principal: Principal,
+    searchTerm: string,
+    page: number,
+    pageSize: number,
+  ) {
+    const offset = (page - 1) * pageSize;
+    const hits = await transaction.$queryRaw<MemorySearchHit[]>`
+      WITH search_query AS (
+        SELECT websearch_to_tsquery('simple', ${searchTerm}) AS query
+      )
+      SELECT
+        s.id::text AS "id",
+        (
+          (
+            ts_rank_cd(
+              setweight(to_tsvector('simple', COALESCE(s.title, '')), 'A') ||
+              setweight(to_tsvector('simple', COALESCE(s.description, '')), 'B'),
+              search_query.query,
+              32
+            ) * 2
+          ) +
+          ts_rank_cd(
+            setweight(to_tsvector('simple', COALESCE(t.full_text, '')), 'C'),
+            search_query.query,
+            32
+          )
+        )::double precision AS "rank",
+        CASE
+          WHEN t.full_text IS NOT NULL
+            AND to_tsvector('simple', t.full_text) @@ search_query.query
+          THEN regexp_replace(
+            ts_headline(
+              'simple',
+              t.full_text,
+              search_query.query,
+              'MaxWords=32, MinWords=8, ShortWord=3, HighlightAll=false'
+            ),
+            '</?b>',
+            '',
+            'gi'
+          )
+          WHEN s.description IS NOT NULL
+            AND to_tsvector('simple', s.description) @@ search_query.query
+          THEN regexp_replace(
+            ts_headline(
+              'simple',
+              s.description,
+              search_query.query,
+              'MaxWords=32, MinWords=8, ShortWord=3, HighlightAll=false'
+            ),
+            '</?b>',
+            '',
+            'gi'
+          )
+          ELSE s.title
+        END AS "excerpt",
+        COUNT(*) OVER()::integer AS "totalCount"
+      FROM sessions s
+      LEFT JOIN transcripts t ON t.session_id = s.id
+      LEFT JOIN recordings r ON r.session_id = s.id
+      LEFT JOIN memory_summaries ms ON ms.session_id = s.id
+      CROSS JOIN search_query
+      WHERE
+        s.organization_id = ${principal.organizationId}::uuid
+        AND s.workspace_id = ${principal.workspaceId}::uuid
+        AND (
+          s.status IN ('ENDED', 'PROCESSING', 'READY', 'FAILED')
+          OR r.id IS NOT NULL
+          OR t.id IS NOT NULL
+          OR ms.id IS NOT NULL
+        )
+        AND (
+          to_tsvector(
+            'simple',
+            COALESCE(s.title, '') || ' ' || COALESCE(s.description, '')
+          ) @@ search_query.query
+          OR to_tsvector('simple', COALESCE(t.full_text, '')) @@ search_query.query
+        )
+      ORDER BY "rank" DESC, s.starts_at DESC, s.id
+      LIMIT ${pageSize}
+      OFFSET ${offset}
+    `;
+
+    const ids = hits.map((hit) => hit.id);
+    const records =
+      ids.length === 0
+        ? []
+        : await transaction.session.findMany({
+            where: { id: { in: ids } },
+            include: {
+              recording: true,
+              transcript: {
+                select: {
+                  id: true,
+                  status: true,
+                  language: true,
+                  completedAt: true,
+                  version: true,
+                },
+              },
+              memorySummary: true,
+              _count: {
+                select: { chatMessages: true, polls: true, questions: true },
+              },
+            },
+          });
+    const recordsById = new Map(records.map((item) => [item.id, item]));
+    const items = hits.flatMap((hit) => {
+      const item = recordsById.get(hit.id);
+      return item
+        ? [
+            {
+              ...item,
+              search: {
+                rank: hit.rank,
+                excerpt: hit.excerpt,
+              },
+            },
+          ]
+        : [];
+    });
+
+    return {
+      items,
+      page,
+      pageSize,
+      total: hits[0]?.totalCount ?? 0,
+    };
   }
 
   private toJson(value: unknown): Prisma.InputJsonValue {

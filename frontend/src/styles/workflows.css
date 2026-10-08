@@ -1611,3 +1611,15 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+.memory-search-excerpt {
+  margin: -2px 0 14px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

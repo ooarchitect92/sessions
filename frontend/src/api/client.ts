@@ -535,6 +535,10 @@ export interface MemoryListItem extends Session {
   recording: RecordingRecord | null;
   transcript: TranscriptRecord | null;
   memorySummary: MemorySummaryRecord | null;
+  search?: {
+    rank: number;
+    excerpt: string | null;
+  };
   _count: { chatMessages: number; polls: number; questions: number };
 }
 
