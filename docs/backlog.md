@@ -60,7 +60,7 @@
 - [x] object-storage access, signed playback and secure download paths
 - [x] provider-abstracted post-session STT worker with bounded media ingestion and durable transcript segments
 - [x] PostgreSQL full-text indexed Memory search with workspace filters and ranked transcript excerpts
-- [ ] optional vector retrieval with workspace filters
+- [x] optional pgvector transcript retrieval with workspace filters, async indexing, stale-version protection and lexical fallback
 - [x] provider-abstracted agenda generator with explicit human review/apply
 - [x] provider-abstracted post-session AI summary execution gateway
 - [x] audited optimistic summary/action review editor
