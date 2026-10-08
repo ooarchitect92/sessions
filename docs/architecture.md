@@ -239,3 +239,12 @@ The Memory retrieval stack now has two independently useful tiers. PostgreSQL fu
 ## Human approval boundary for external AI actions
 
 AI-generated follow-up emails and CRM notes are represented as durable `ai_external_actions`, not direct provider calls. Draft generation is user-triggered and pinned to a reviewed Memory-summary version. Hosts can edit drafts, then an explicit approval transition records the approver and timestamp. Only APPROVED actions are visible to the trusted background worker. Before any email delivery or CRM write, the worker checks that the source summary is still READY and at the exact version used to create the draft. A changed summary cancels the action as stale. Successful and failed executions are durable, provider calls use deterministic idempotency keys, and audit/outbox evidence is emitted. This boundary allows future Salesforce/HubSpot adapters without giving the LLM autonomous write authority.
+
+
+## AI evaluation and release qualification
+
+AI output quality is treated as a release gate rather than an informal prompt check. The platform keeps a versioned evaluation dataset in source control and scores each case for grounded factual coverage, forbidden claims, action-item recall, speaker/owner attribution, prompt-injection canaries, sensitive-value leakage, latency budget and estimated cost budget.
+
+The deterministic baseline runs in CI with `npm run ai:eval`. It validates evaluator behavior and prevents accidental removal or weakening of the required safety/quality checks. Production provider qualification is deliberately separate: `npm run ai:eval:provider` requires a non-mock provider, executes the same dataset through the configured AI gateway, measures latency, estimates model spend from configured per-million-token rates and fails closed when thresholds are missed. Reports are JSON so they can be retained by a deployment pipeline or compliance evidence store.
+
+This does not mark any external LLM provider as production-qualified by itself. Provider credentials, model/version pinning, privacy terms, regional processing, observed evaluation reports, incident handling and recurring regression runs remain operational release requirements.

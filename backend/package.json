@@ -12,6 +12,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
+    "ai:eval": "tsx src/ai/evaluation/run-ai-evaluation.ts",
+    "ai:eval:provider": "tsx src/ai/evaluation/run-provider-evaluation.ts",
     "prisma:generate": "prisma generate --schema prisma/schema.prisma",
     "prisma:migrate": "tsx scripts/migrate.ts",
     "prisma:seed": "tsx prisma/seed.ts"

@@ -18,6 +18,8 @@
     "lint": "npm run build:contracts && npm run lint --workspace @sessions/contracts && npm run lint --workspace @sessions/backend && npm run lint --workspace @sessions/frontend && npm run lint --workspace @sessions/website",
     "test": "npm run build:contracts && npm run test --workspace @sessions/contracts && npm run test --workspace @sessions/backend && npm run test --workspace @sessions/frontend && npm run test --workspace @sessions/website",
     "typecheck": "npm run build:contracts && npm run typecheck --workspace @sessions/contracts && npm run typecheck --workspace @sessions/backend && npm run typecheck --workspace @sessions/frontend && npm run typecheck --workspace @sessions/website",
+    "ai:eval": "npm run ai:eval --workspace @sessions/backend",
+    "ai:eval:provider": "dotenv -e .env -- npm run ai:eval:provider --workspace @sessions/backend",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "db:generate": "dotenv -e .env -- npm run prisma:generate --workspace @sessions/backend",
