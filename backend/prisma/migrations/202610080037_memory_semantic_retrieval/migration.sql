@@ -103,7 +103,8 @@ CREATE POLICY "tenant_isolation_memory_embedding_chunks"
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'sessions_api') THEN
-    GRANT SELECT ON TABLE memory_embedding_indexes, memory_embedding_chunks TO sessions_api;
+    GRANT SELECT, UPDATE ON TABLE memory_embedding_indexes TO sessions_api;
+    GRANT SELECT ON TABLE memory_embedding_chunks TO sessions_api;
   END IF;
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'sessions_worker') THEN
     GRANT SELECT, INSERT, UPDATE, DELETE
