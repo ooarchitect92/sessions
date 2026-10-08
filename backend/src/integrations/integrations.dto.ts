@@ -62,3 +62,10 @@ export class CreateWebhookSubscriptionDto {
   @MaxLength(160, { each: true })
   eventTypes!: string[];
 }
+export class ReconcileWebhookDto {
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(168)
+  hours?: number;
+}
