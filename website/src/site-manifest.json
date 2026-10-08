@@ -64,6 +64,13 @@
       "index": true
     },
     {
+      "path": "/demo",
+      "route": "demo",
+      "title": "Request a Demo — Sessions",
+      "description": "See how Sessions connects meetings, webinars, scheduling, collaboration, and meeting memory in one end-to-end workflow.",
+      "index": true
+    },
+    {
       "path": "/contact",
       "route": "contact",
       "title": "Contact & Demo — Sessions",
@@ -111,6 +118,13 @@
       "title": "Search — Sessions",
       "description": "Search product pages and Sessions resources.",
       "index": false
+    },
+    {
+      "path": "/terms",
+      "route": "terms",
+      "title": "Terms Information — Sessions",
+      "description": "Review the current public website terms boundary and production legal information requirements.",
+      "index": true
     },
     {
       "path": "/privacy",
