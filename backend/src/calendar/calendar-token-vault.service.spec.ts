@@ -26,8 +26,8 @@ describe('CalendarTokenVaultService', () => {
     const service = vault();
     const encrypted = service.encrypt('secret-refresh-token');
     const [version, iv, tag, ciphertext] = encrypted.split('.');
-    const bytes = Buffer.from(ciphertext, 'base64url');
-    bytes[0] ^= 0x01;
+    const bytes = Buffer.from(ciphertext!, 'base64url');
+    bytes[0] = (bytes[0] ?? 0) ^ 0x01;
     const tampered = [version, iv, tag, bytes.toString('base64url')].join('.');
 
     expect(() => service.decrypt(tampered)).toThrow();
