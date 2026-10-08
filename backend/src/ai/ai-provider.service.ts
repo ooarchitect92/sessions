@@ -7,6 +7,8 @@ import type {
   AgendaDraftResult,
   MeetingSummaryRequest,
   MeetingSummaryResult,
+  FollowUpDraftRequest,
+  FollowUpDraftResult,
 } from './ai.types';
 
 interface OpenAiChoice {
@@ -30,6 +32,12 @@ interface ParsedAgenda {
   items?: unknown;
 }
 
+interface ParsedFollowUp {
+  emailSubject?: unknown;
+  emailBody?: unknown;
+  crmNote?: unknown;
+}
+
 @Injectable()
 export class AiProviderService {
   constructor(private readonly config: ConfigService) {}
@@ -46,6 +54,15 @@ export class AiProviderService {
     const provider = this.providerName();
     if (provider === 'mock') return this.mockSummary(request);
     if (provider === 'openai') return this.openAiSummary(request);
+    throw new Error('ai_provider_disabled');
+  }
+
+  async generateFollowUpDraft(
+    request: FollowUpDraftRequest,
+  ): Promise<FollowUpDraftResult> {
+    const provider = this.providerName();
+    if (provider === 'mock') return this.mockFollowUp(request);
+    if (provider === 'openai') return this.openAiFollowUp(request);
     throw new Error('ai_provider_disabled');
   }
 
@@ -70,6 +87,36 @@ export class AiProviderService {
       decisions: [],
       actionItems: [],
       citations: [],
+    };
+  }
+
+  private mockFollowUp(request: FollowUpDraftRequest): FollowUpDraftResult {
+    const actions = request.actionItems
+      .map((item) => item.text.trim())
+      .filter(Boolean)
+      .slice(0, 5);
+    const decisions = request.decisions
+      .map((item) => item.text.trim())
+      .filter(Boolean)
+      .slice(0, 5);
+    const lines = [
+      `Thanks for joining ${request.title}.`,
+      '',
+      request.summaryText.trim().slice(0, 1200),
+      ...(decisions.length
+        ? ['', 'Decisions:', ...decisions.map((item) => `- ${item}`)]
+        : []),
+      ...(actions.length
+        ? ['', 'Next steps:', ...actions.map((item) => `- ${item}`)]
+        : []),
+    ];
+    const body = lines.join('\n').trim();
+    return {
+      provider: 'mock',
+      model: 'deterministic-local',
+      emailSubject: `Follow-up: ${request.title}`.slice(0, 240),
+      emailBody: body,
+      crmNote: body,
     };
   }
 
@@ -152,6 +199,50 @@ export class AiProviderService {
         startMs?: number | null;
         endMs?: number | null;
       }>,
+    };
+  }
+
+  private async openAiFollowUp(
+    request: FollowUpDraftRequest,
+  ): Promise<FollowUpDraftResult> {
+    const { content, model } = await this.chatJson([
+      {
+        role: 'system',
+        content:
+          'Draft a meeting follow-up for explicit human review. Return only JSON with keys emailSubject, emailBody, crmNote. Use only the supplied reviewed meeting output. Do not invent commitments, recipients, CRM fields, or facts. Keep the email concise and professional. The CRM note should be factual and suitable for a timeline/activity record.',
+      },
+      {
+        role: 'user',
+        content: [
+          `Meeting title: ${request.title}`,
+          `Reviewed summary: ${request.summaryText}`,
+          `Reviewed decisions: ${JSON.stringify(request.decisions)}`,
+          `Reviewed action items: ${JSON.stringify(request.actionItems)}`,
+          `Host guidance: ${request.guidance ?? ''}`,
+        ].join('\n'),
+      },
+    ]);
+
+    let parsed: ParsedFollowUp;
+    try {
+      parsed = JSON.parse(content) as ParsedFollowUp;
+    } catch {
+      throw new Error('ai_provider_invalid_json');
+    }
+    const emailSubject =
+      typeof parsed.emailSubject === 'string' ? parsed.emailSubject.trim() : '';
+    const emailBody =
+      typeof parsed.emailBody === 'string' ? parsed.emailBody.trim() : '';
+    const crmNote = typeof parsed.crmNote === 'string' ? parsed.crmNote.trim() : '';
+    if (!emailSubject || !emailBody || !crmNote) {
+      throw new Error('ai_provider_missing_followup');
+    }
+    return {
+      provider: 'openai',
+      model,
+      emailSubject: emailSubject.slice(0, 240),
+      emailBody: emailBody.slice(0, 20000),
+      crmNote: crmNote.slice(0, 20000),
     };
   }
 
