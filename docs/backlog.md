@@ -70,7 +70,8 @@
 ## Phase 5 — platform and enterprise
 
 - [x] workspace API key management, bearer authentication, scopes, rate limiting, webhook subscriptions, HMAC signatures, durable delivery history, retries and dead-letter handling
-- [ ] webhook replay/reconciliation controls and production delivery qualification
+- [x] webhook replay/reconciliation controls
+- [ ] production webhook delivery qualification and pinned-egress hardening
 - [ ] provider integration framework, credential governance and pinned/egress-proxy SSRF-safe delivery
 - [ ] branding, email templates, custom domains and automated TLS
 - [ ] analytics aggregation and governed exports
