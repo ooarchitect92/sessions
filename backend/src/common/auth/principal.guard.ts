@@ -75,8 +75,8 @@ export class PrincipalGuard implements CanActivate {
   }
 
   private assertApiKeyScope(request: FastifyRequest, principal: Principal): void {
-    const path = request.url.split('?')[0].replace(/^\/v1\//, '');
-    const resource = path.split('/')[0];
+    const path = (request.url.split('?')[0] ?? '').replace(/^\/v1\//, '');
+    const resource = path.split('/')[0] ?? '';
     const method = request.method.toUpperCase();
     const access = method === 'GET' || method === 'HEAD' ? 'read' : 'write';
     const resourceMap: Record<string, string> = {
