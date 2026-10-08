@@ -224,3 +224,8 @@ sequenceDiagram
 ```
 
 Consent is a durable per-user decision rather than a UI-only checkbox. Recording access never exposes long-lived storage credentials or raw object keys. Retention is enforced asynchronously and deletion remains idempotent.
+
+
+## Meeting Memory retrieval
+
+The first production retrieval tier is PostgreSQL full-text search rather than an external search service. Session title/description and transcript text have GIN expression indexes using the `simple` configuration so multilingual text is not forced through English stemming. Search is executed inside `TenantDatabaseService.run`, so forced RLS applies, while the query also includes explicit organization/workspace predicates as defense in depth. Results are relevance-ranked and paginated, then hydrated through Prisma for the existing artifact graph. An optional vector retrieval tier can later be added behind the same workspace boundary without replacing the lexical path.
