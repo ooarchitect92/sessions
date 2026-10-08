@@ -19,7 +19,10 @@ This register maps the supplied Website Master Blueprint and Sessions-like resea
 | REST/API architecture | Repository-backed + documented | NestJS `/v1` API and public route documentation |
 | Durable enquiry/contact form | Implemented | marketing controller/service + PostgreSQL transaction |
 | Lead retry idempotency | Implemented | UUID `submissionKey`, request hash, unique DB constraint |
-| Lead + outbox atomicity | Implemented | one transaction creates the accepted lead, consent evidence, audit record and `marketing.lead.received` event |\n| Consent evidence | Implemented | versioned purpose + server-derived statement hash stored per accepted lead |\n| Safe receipt contract | Implemented | post-commit receipt reference + conversion event ID; no unnecessary PII in response |\n| Attribution allowlist | Implemented | server keeps only approved action/intent/UTM string fields and discards arbitrary metadata |
+| Lead + outbox atomicity | Implemented | one transaction creates the accepted lead, consent evidence, audit record and `marketing.lead.received` event |
+| Consent evidence | Implemented | versioned purpose + server-derived statement hash stored per accepted lead |
+| Safe receipt contract | Implemented | post-commit receipt reference + conversion event ID; no unnecessary PII in response |
+| Attribution allowlist | Implemented | server keeps only approved action/intent/UTM string fields and discards arbitrary metadata |
 | Durable lead event dispatch | Implemented | Redis stream dispatcher with claim locking, retries, backoff and dead-letter state |
 | Public-form abuse control | Implemented | honeypot + hashed Redis rate limiting |
 | Do not falsely acknowledge failed lead | Implemented | UI success only after successful API result |
@@ -47,3 +50,20 @@ This register maps the supplied Website Master Blueprint and Sessions-like resea
 ## End-to-end release evidence expected
 
 A website release is considered ready for merge only when repository CI passes and the branch remains isolated from `main` until review. A production launch still requires environment-specific proof for TLS, secrets, real provider credentials, backup/restore, monitoring, actual form delivery handling, and representative accessibility/browser testing.
+
+
+## Explicit scope exceptions from the Website Master Blueprint
+
+The Website Master Blueprint includes an owner console/CMS and owner-operational workflows as part of its reusable full-platform standard. For this project, the user explicitly instructed that the authenticated dashboard/owner console must **not** be built or changed. To avoid silent omission, the following blueprint areas are therefore recorded as deliberate scope exceptions rather than claimed as implemented by this PR:
+
+- Owner console and CMS editing interfaces, including page-builder/editor workflows.
+- Editorial assignments, draft conflict resolution, publish/rollback UI, and media-management screens.
+- Owner lead-management screens, saved views, bulk actions, and operator inbox workflows.
+- Owner-side experiment, workflow, UTM, and reporting controls.
+- Any authenticated dashboard redesign or new dashboard route.
+
+Public-facing requirements from those chapters remain applicable where they affect the visitor experience. This PR therefore implements the public routes, accessible states, forms, booking/event journeys, consent/privacy behavior, SEO, and backend business transactions while leaving authenticated owner interfaces untouched.
+
+## Production-environment evidence still required
+
+Repository CI proves source-level migration, formatting, lint, typecheck, unit-test, and production-build correctness. It does not by itself prove environment-specific operations. Before production launch, the operator must still attach evidence for deployed TLS/domain configuration, production secrets, backup/restore rehearsal, monitoring/alert routing, approved CRM/email/provider credentials, representative accessibility testing, browser/device checks, and any activated analytics/advertising consent configuration.
