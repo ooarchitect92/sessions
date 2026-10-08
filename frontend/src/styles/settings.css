@@ -666,3 +666,129 @@
     text-align: left;
   }
 }
+
+
+.integration-create-form {
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.integration-chip-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.integration-chip {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 7px !important;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid #d8ddd8;
+  border-radius: 999px;
+  background: #f8f8f4;
+  color: #596762;
+  font-size: 9px !important;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.integration-chip.selected {
+  border-color: #8fb5a9;
+  background: #eaf4ef;
+  color: #2d6556;
+}
+
+.integration-chip input {
+  width: 13px !important;
+  height: 13px;
+  min-height: 0 !important;
+  margin: 0;
+  accent-color: #2d6857;
+}
+
+.integration-secret-box {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0 20px;
+  padding: 15px;
+  border: 1px solid #b9d4c8;
+  border-radius: 12px;
+  background: #eef7f2;
+}
+
+.integration-secret-box strong,
+.integration-secret-box small,
+.integration-secret-box code {
+  display: block;
+}
+
+.integration-secret-box strong {
+  font-size: 11px;
+}
+
+.integration-secret-box small {
+  color: #63746e;
+  font-size: 9px;
+}
+
+.integration-secret-box code {
+  overflow-wrap: anywhere;
+  padding: 10px;
+  border-radius: 9px;
+  background: #fff;
+  color: #244f43;
+  font-size: 10px;
+}
+
+.integration-secret-box .button {
+  justify-self: start;
+}
+
+.integration-table {
+  margin-top: 6px;
+}
+
+.integration-row {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+.webhook-row {
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+}
+
+.delivery-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.webhook-delivery-panel {
+  margin-top: 18px;
+  padding: 18px;
+  border: 1px solid #dcddd7;
+  border-radius: 14px;
+  background: #fafaf7;
+}
+
+.webhook-delivery-panel .settings-panel-heading {
+  margin-bottom: 10px;
+}
+
+.webhook-delivery-panel h3 {
+  margin: 0;
+  font-size: 17px;
+}
+
+@media (max-width: 720px) {
+  .integration-row,
+  .webhook-row,
+  .delivery-row {
+    grid-template-columns: 1fr;
+  }
+
+  .integration-chip-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+}
