@@ -27,7 +27,7 @@ export function MemoryPage() {
         </div>
         <div className="memory-search">
           <span>⌕</span>
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search titles and transcript text" aria-label="Search memory" />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search titles, descriptions, and transcript text" aria-label="Search memory" />
         </div>
       </section>
 
@@ -49,6 +49,9 @@ export function MemoryPage() {
                 <span>{new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(item.startsAt))}</span>
               </div>
               <h3>{item.title}</h3>
+              {item.search?.excerpt ? (
+                <p className="memory-search-excerpt">{item.search.excerpt}</p>
+              ) : null}
               <div className="artifact-row">
                 <span><strong>Recording</strong>{statusLabel(item.recording?.status)}</span>
                 <span><strong>Transcript</strong>{statusLabel(item.transcript?.status)}</span>
