@@ -18,6 +18,7 @@ const baseInput = {
 
 function createService(overrides?: {
   create?: ReturnType<typeof vi.fn>;
+  outboxCreate?: ReturnType<typeof vi.fn>;
   findUnique?: ReturnType<typeof vi.fn>;
   incr?: ReturnType<typeof vi.fn>;
 }) {
@@ -28,22 +29,33 @@ function createService(overrides?: {
       kind: 'DEMO',
       createdAt: new Date('2026-10-08T00:00:00.000Z'),
     });
+  const outboxCreate = overrides?.outboxCreate ?? vi.fn().mockResolvedValue({ id: 'event-id' });
   const findUnique = overrides?.findUnique ?? vi.fn();
   const incr = overrides?.incr ?? vi.fn().mockResolvedValue(1);
-  const prisma = { marketingLead: { create, findUnique } };
+  const transactionClient = {
+    marketingLead: { create },
+    marketingLeadOutboxEvent: { create: outboxCreate },
+  };
+  const prisma = {
+    marketingLead: { findUnique },
+    $transaction: vi.fn(async (callback: (transaction: typeof transactionClient) => unknown) =>
+      callback(transactionClient),
+    ),
+  };
   const redis = { incr, expire: vi.fn().mockResolvedValue(1) };
   const config = { getOrThrow: vi.fn().mockReturnValue('x'.repeat(32)) };
   return {
     service: new MarketingService(prisma as never, redis as never, config as never),
     create,
+    outboxCreate,
     findUnique,
     incr,
   };
 }
 
 describe('MarketingService', () => {
-  it('persists a consented public lead before acknowledging it', async () => {
-    const { service, create } = createService();
+  it('persists a consented public lead and one durable outbox event before acknowledging it', async () => {
+    const { service, create, outboxCreate } = createService();
 
     await expect(service.createLead(baseInput, '127.0.0.1')).resolves.toMatchObject({
       kind: 'DEMO',
@@ -58,6 +70,14 @@ describe('MarketingService', () => {
           email: 'alex@example.com',
           consent: true,
           requestHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+        }),
+      }),
+    );
+    expect(outboxCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          leadId: '11111111-1111-4111-8111-111111111111',
+          eventType: 'marketing.lead.received',
         }),
       }),
     );
@@ -89,8 +109,9 @@ describe('MarketingService', () => {
     }
   });
 
-  it('returns the same accepted lead for an idempotent retry', async () => {
+  it('returns the same accepted lead for an idempotent retry without creating another outbox event', async () => {
     const create = vi.fn().mockRejectedValue({ code: 'P2002' });
+    const outboxCreate = vi.fn();
     const nodeCrypto = await import('node:crypto');
     const normalized = {
       kind: 'DEMO',
@@ -113,7 +134,7 @@ describe('MarketingService', () => {
       createdAt: new Date('2026-10-08T00:00:00.000Z'),
       requestHash,
     });
-    const { service } = createService({ create, findUnique });
+    const { service } = createService({ create, outboxCreate, findUnique });
 
     await expect(
       service.createLead({ ...baseInput, email: 'alex@example.com' }),
@@ -121,6 +142,7 @@ describe('MarketingService', () => {
       id: '11111111-1111-4111-8111-111111111111',
       status: 'RECEIVED',
     });
+    expect(outboxCreate).not.toHaveBeenCalled();
   });
 
   it('rejects a reused submission key when the payload is different', async () => {
