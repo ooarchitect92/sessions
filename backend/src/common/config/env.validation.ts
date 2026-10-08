@@ -93,6 +93,9 @@ const environmentSchema = z
     EMAIL_FROM: z.string().email().default('no-reply@sessions.local'),
     NOTIFICATION_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(5),
     NOTIFICATION_RETRY_BASE_SECONDS: z.coerce.number().int().min(10).max(3600).default(60),
+    CRM_WRITE_PROVIDER: z.enum(['disabled', 'mock', 'http']).default('disabled'),
+    CRM_WRITE_HTTP_ENDPOINT: z.string().url().optional(),
+    CRM_WRITE_HTTP_API_KEY: z.string().min(1).optional(),
     WEB_APP_URL: z.string().url().default('http://localhost:3000'),
     GOOGLE_CALENDAR_CLIENT_ID: z.string().min(1).optional(),
     GOOGLE_CALENDAR_CLIENT_SECRET: z.string().min(1).optional(),
@@ -150,6 +153,20 @@ const environmentSchema = z
         'MICROSOFT_CALENDAR_CLIENT_SECRET',
         'Microsoft Calendar client ID and secret must be configured together',
       );
+    }
+    if (value.CRM_WRITE_PROVIDER === 'http') {
+      if (!value.CRM_WRITE_HTTP_ENDPOINT) {
+        issue(
+          'CRM_WRITE_HTTP_ENDPOINT',
+          'CRM_WRITE_HTTP_ENDPOINT is required when CRM_WRITE_PROVIDER=http',
+        );
+      }
+      if (!value.CRM_WRITE_HTTP_API_KEY) {
+        issue(
+          'CRM_WRITE_HTTP_API_KEY',
+          'CRM_WRITE_HTTP_API_KEY is required when CRM_WRITE_PROVIDER=http',
+        );
+      }
     }
     if (value.EMAIL_PROVIDER === 'http') {
       if (!value.EMAIL_HTTP_ENDPOINT) {
@@ -229,6 +246,12 @@ const environmentSchema = z
       issue(
         'EMBEDDING_PROVIDER',
         'EMBEDDING_PROVIDER=mock is forbidden in production',
+      );
+    }
+    if (value.CRM_WRITE_PROVIDER === 'mock') {
+      issue(
+        'CRM_WRITE_PROVIDER',
+        'CRM_WRITE_PROVIDER=mock is forbidden in production',
       );
     }
     if (value.EMAIL_PROVIDER !== 'http') {
