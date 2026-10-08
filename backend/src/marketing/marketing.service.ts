@@ -51,15 +51,39 @@ export class MarketingService {
     const requestHash = createHash('sha256').update(JSON.stringify(normalized)).digest('hex');
 
     try {
-      const lead = await this.prisma.marketingLead.create({
-        data: {
-          submissionKey: input.submissionKey,
-          requestHash,
-          ...normalized,
-          metadata: normalized.metadata as Prisma.InputJsonValue,
-        },
-        select: { id: true, kind: true, createdAt: true },
+      const lead = await this.prisma.$transaction(async (transaction) => {
+        const created = await transaction.marketingLead.create({
+          data: {
+            submissionKey: input.submissionKey,
+            requestHash,
+            ...normalized,
+            metadata: normalized.metadata as Prisma.InputJsonValue,
+          },
+          select: { id: true, kind: true, createdAt: true },
+        });
+
+        await transaction.marketingLeadOutboxEvent.create({
+          data: {
+            leadId: created.id,
+            eventType: 'marketing.lead.received',
+            payload: {
+              leadId: created.id,
+              kind: normalized.kind,
+              email: normalized.email,
+              name: normalized.name,
+              company: normalized.company,
+              teamSize: normalized.teamSize,
+              sourcePath: normalized.sourcePath,
+              metadata: normalized.metadata,
+              consent: normalized.consent,
+              createdAt: created.createdAt.toISOString(),
+            } as Prisma.InputJsonValue,
+          },
+        });
+
+        return created;
       });
+
       return { ...lead, status: 'RECEIVED' as const };
     } catch (error: unknown) {
       if (this.isUniqueConflict(error)) {
