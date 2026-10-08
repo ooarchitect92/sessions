@@ -101,6 +101,11 @@ function WorkspaceProfile() {
   const [slug, setSlug] = useState('');
   const [timezone, setTimezone] = useState('UTC');
   const [recordingConsentRequired, setRecordingConsentRequired] = useState(true);
+  const [logoUrl, setLogoUrl] = useState('');
+  const [primaryColor, setPrimaryColor] = useState('#183f38');
+  const [accentColor, setAccentColor] = useState('#dcefe8');
+  const [fontFamily, setFontFamily] = useState('Inter');
+  const [waitingRoomImageUrl, setWaitingRoomImageUrl] = useState('');
   const canManage = ['OWNER', 'ADMIN'].includes(workspace.data?.currentRole ?? 'GUEST');
 
   useEffect(() => {
@@ -111,6 +116,23 @@ function WorkspaceProfile() {
     setRecordingConsentRequired(
       workspace.data.settings.recordingConsentRequired !== false,
     );
+    const branding =
+      workspace.data.settings.branding &&
+      typeof workspace.data.settings.branding === 'object' &&
+      !Array.isArray(workspace.data.settings.branding)
+        ? (workspace.data.settings.branding as Record<string, unknown>)
+        : {};
+    setLogoUrl(typeof branding.logoUrl === 'string' ? branding.logoUrl : '');
+    setPrimaryColor(
+      typeof branding.primaryColor === 'string' ? branding.primaryColor : '#183f38',
+    );
+    setAccentColor(
+      typeof branding.accentColor === 'string' ? branding.accentColor : '#dcefe8',
+    );
+    setFontFamily(typeof branding.fontFamily === 'string' ? branding.fontFamily : 'Inter');
+    setWaitingRoomImageUrl(
+      typeof branding.waitingRoomImageUrl === 'string' ? branding.waitingRoomImageUrl : '',
+    );
   }, [workspace.data]);
 
   const update = useMutation({
@@ -120,7 +142,16 @@ function WorkspaceProfile() {
         name,
         slug,
         timezone,
-        settings: { recordingConsentRequired },
+        settings: {
+          recordingConsentRequired,
+          branding: {
+            logoUrl: logoUrl.trim(),
+            primaryColor,
+            accentColor,
+            fontFamily: fontFamily.trim(),
+            waitingRoomImageUrl: waitingRoomImageUrl.trim(),
+          },
+        },
       });
     },
     onSuccess: async () => {
@@ -185,6 +216,65 @@ function WorkspaceProfile() {
                 placeholder="Asia/Kolkata"
               />
             </label>
+          </div>
+          <div className="settings-branding-block">
+            <div className="settings-panel-heading compact-settings-heading">
+              <div>
+                <span className="eyebrow">Workspace identity</span>
+                <h3>Branding</h3>
+                <p>Set the visual identity reused by meeting, booking, event, and waiting-room experiences.</p>
+              </div>
+            </div>
+            <div className="settings-form-grid">
+              <label>
+                Logo URL
+                <input
+                  disabled={!canManage}
+                  type="url"
+                  value={logoUrl}
+                  onChange={(event) => setLogoUrl(event.target.value)}
+                  placeholder="https://cdn.example.com/logo.svg"
+                />
+              </label>
+              <label>
+                Waiting-room image URL
+                <input
+                  disabled={!canManage}
+                  type="url"
+                  value={waitingRoomImageUrl}
+                  onChange={(event) => setWaitingRoomImageUrl(event.target.value)}
+                  placeholder="https://cdn.example.com/waiting-room.jpg"
+                />
+              </label>
+              <label>
+                Primary color
+                <div className="settings-color-field">
+                  <input disabled={!canManage} type="color" value={primaryColor} onChange={(event) => setPrimaryColor(event.target.value)} />
+                  <input disabled={!canManage} value={primaryColor} onChange={(event) => setPrimaryColor(event.target.value)} pattern="^#[0-9A-Fa-f]{6}$" />
+                </div>
+              </label>
+              <label>
+                Accent color
+                <div className="settings-color-field">
+                  <input disabled={!canManage} type="color" value={accentColor} onChange={(event) => setAccentColor(event.target.value)} />
+                  <input disabled={!canManage} value={accentColor} onChange={(event) => setAccentColor(event.target.value)} pattern="^#[0-9A-Fa-f]{6}$" />
+                </div>
+              </label>
+              <label className="settings-grid-span">
+                Font family
+                <input disabled={!canManage} value={fontFamily} onChange={(event) => setFontFamily(event.target.value)} placeholder="Inter" />
+              </label>
+            </div>
+            <div className="settings-brand-preview" style={{ '--brand-primary': primaryColor, '--brand-accent': accentColor, fontFamily } as React.CSSProperties}>
+              <div className="settings-brand-preview-logo">
+                {logoUrl ? <img src={logoUrl} alt="Workspace logo preview" /> : <span>{name.slice(0, 1).toUpperCase() || 'S'}</span>}
+              </div>
+              <div>
+                <strong>{name || 'Workspace name'}</strong>
+                <small>Preview of your workspace identity</small>
+              </div>
+              <button type="button">Join session</button>
+            </div>
           </div>
           <label className="settings-toggle-row">
             <input
