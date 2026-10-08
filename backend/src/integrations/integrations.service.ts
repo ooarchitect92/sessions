@@ -1,16 +1,22 @@
 import {
   BadRequestException,
   ForbiddenException,
+  HttpException,
+  HttpStatus,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { WorkspaceRole } from '@prisma/client';
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 import { AuditService } from '../audit/audit.service';
 import { ADMIN_ROLES, hasAnyRole, type Principal } from '../common/auth/principal';
 import { TenantDatabaseService } from '../database/tenant-database.service';
+import { WorkerPrismaService } from '../database/worker-prisma.service';
+import { RedisService } from '../infrastructure/redis.service';
 import { CreateApiKeyDto, CreateWebhookSubscriptionDto } from './integrations.dto';
 
 type ApiKeyRow = {
@@ -36,6 +42,17 @@ type WebhookRow = {
   updated_at: Date;
 };
 
+type ApiKeyAuthRow = {
+  id: string;
+  organization_id: string;
+  workspace_id: string;
+  created_by_id: string;
+  scopes: string[];
+  email: string;
+  display_name: string;
+  role: WorkspaceRole;
+};
+
 type DeliveryRow = {
   id: string;
   subscription_id: string;
@@ -53,10 +70,66 @@ type DeliveryRow = {
 export class IntegrationsService {
   constructor(
     private readonly database: TenantDatabaseService,
+    private readonly workerPrisma: WorkerPrismaService,
+    private readonly redis: RedisService,
     private readonly audit: AuditService,
     private readonly config: ConfigService,
   ) {}
 
+  async authenticateApiKey(secret: string): Promise<Principal> {
+    if (!secret.startsWith('sk_sessions_') || secret.length < 32 || secret.length > 200) {
+      throw new UnauthorizedException('The API key is invalid');
+    }
+
+    const hash = createHash('sha256').update(secret).digest('hex');
+    const rows = await this.workerPrisma.$queryRaw<ApiKeyAuthRow[]>`
+      SELECT ak.id,
+             ak.organization_id,
+             ak.workspace_id,
+             ak.created_by_id,
+             ak.scopes,
+             u.email,
+             u.display_name,
+             wm.role
+      FROM api_keys ak
+      JOIN users u ON u.id = ak.created_by_id
+      JOIN workspace_memberships wm
+        ON wm.workspace_id = ak.workspace_id
+       AND wm.user_id = ak.created_by_id
+      WHERE ak.key_hash = ${hash}
+        AND ak.revoked_at IS NULL
+        AND (ak.expires_at IS NULL OR ak.expires_at > NOW())
+        AND u.status = 'ACTIVE'
+      LIMIT 1
+    `;
+
+    const row = rows[0];
+    if (!row) throw new UnauthorizedException('The API key is invalid or expired');
+
+    const rateLimit = this.config.get<number>('API_KEY_RATE_LIMIT_PER_MINUTE', 120);
+    const minute = Math.floor(Date.now() / 60_000);
+    const rateKey = 'sessions:api-key-rate:' + row.id + ':' + minute;
+    const count = await this.redis.incr(rateKey);
+    if (count === 1) await this.redis.expire(rateKey, 70);
+    if (count > rateLimit) {
+      throw new HttpException('API key rate limit exceeded', HttpStatus.TOO_MANY_REQUESTS);
+    }
+
+    await this.workerPrisma.$executeRaw`
+      UPDATE api_keys SET last_used_at = NOW() WHERE id = ${row.id}::uuid
+    `;
+
+    return {
+      userId: row.created_by_id,
+      organizationId: row.organization_id,
+      workspaceId: row.workspace_id,
+      email: row.email,
+      displayName: row.display_name,
+      roles: [row.role],
+      apiKeyId: row.id,
+      apiScopes: row.scopes,
+    };
+  }
   async listApiKeys(principal: Principal) {
     this.assertAdmin(principal);
     return this.database.run(principal, (tx) =>
