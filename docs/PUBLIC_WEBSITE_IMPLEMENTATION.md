@@ -41,6 +41,7 @@ The existing product modules remain authoritative for sessions, rooms, agendas, 
 | `/integrations` | Provider adapters, calendars, API, webhooks | index |
 | `/security` | Tenant, consent, data, reliability, AI boundaries | index |
 | `/pricing` | Capability packaging without invented prices | index |
+| `/demo` | Focused campaign/demo conversion journey backed by the durable lead API | index |
 | `/contact` | Backend-persisted demo/contact enquiry | index |
 | `/about` | Trust, clean-room approach, architecture principles | index |
 | `/resources` | Public resource library | index |
@@ -48,6 +49,7 @@ The existing product modules remain authoritative for sessions, rooms, agendas, 
 | `/resources/webinar-lifecycle` | Webinar lifecycle guide | index |
 | `/resources/scheduling-workflow` | Scheduling guide | index |
 | `/search` | Accessible local public-site search | noindex |
+| `/terms` | Terms-route implementation boundary pending verified production legal terms | index |
 | `/privacy` | Current implementation privacy/data boundaries | index |
 | `/accessibility` | Accessibility implementation and reporting route | index |
 | `/consent` | Optional measurement preference controls | noindex |
