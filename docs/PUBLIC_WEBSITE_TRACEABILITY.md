@@ -27,6 +27,7 @@ This register maps the supplied Website Master Blueprint and Sessions-like resea
 | Optional consent preferences | Implemented | `ConsentPreferences.tsx`; no SDK auto-activation |
 | Resources/content route family | Implemented | resource index + three detailed workflow guides |
 | About/trust route | Implemented | `/about` |
+| Focused campaign/demo landing route | Implemented | `/demo` with one dominant demo-request action and durable lead backend |
 | Search route | Implemented | accessible public route/content search |
 | Utility states | Implemented | 404, error, offline, thank-you, form error/success/loading |
 | Correct production unknown-route 404 | Implemented | generated `404.html` + nginx `try_files ... =404` |
@@ -38,7 +39,8 @@ This register maps the supplied Website Master Blueprint and Sessions-like resea
 | Third-party analytics / ads tags | Not activated | requires approved production accounts, consent/legal settings |
 | CRM destination for marketing leads | Not activated | durable internal outbox event is published; no verified CRM/email destination was supplied |
 | Formal accessibility conformance claim | Not claimed | target described; manual/independent evidence still required |
-| Production legal policy text | Not invented | implementation privacy page marks deployment-specific legal review requirement |
+| Terms route | Implemented without fabricated legal commitments | `/terms` clearly separates implementation boundaries from operator-approved legal terms |
+| Production legal policy text | Not invented | privacy/terms pages mark deployment-specific legal review requirements |
 | Authenticated dashboard/owner console redesign | **Out of scope by explicit user instruction** | `frontend/` is not modified by this public website work |
 | Proprietary Sessions code/assets | Not used | clean-room implementation |
 
