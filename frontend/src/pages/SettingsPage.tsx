@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { WorkspaceRole } from '@sessions/contracts';
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api, type ApiKeyRecord, type WebhookSubscriptionRecord, type WorkspaceMember } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
@@ -265,7 +265,7 @@ function WorkspaceProfile() {
                 <input disabled={!canManage} value={fontFamily} onChange={(event) => setFontFamily(event.target.value)} placeholder="Inter" />
               </label>
             </div>
-            <div className="settings-brand-preview" style={{ '--brand-primary': primaryColor, '--brand-accent': accentColor, fontFamily } as React.CSSProperties}>
+            <div className="settings-brand-preview" style={{ '--brand-primary': primaryColor, '--brand-accent': accentColor, fontFamily } as CSSProperties}>
               <div className="settings-brand-preview-logo">
                 {logoUrl ? <img src={logoUrl} alt="Workspace logo preview" /> : <span>{name.slice(0, 1).toUpperCase() || 'S'}</span>}
               </div>
