@@ -531,6 +531,43 @@ export interface MemorySummaryRecord {
   version: number;
 }
 
+export type AiExternalActionKind = 'EMAIL_FOLLOW_UP' | 'CRM_NOTE';
+export type AiExternalActionStatus =
+  | 'DRAFT'
+  | 'APPROVED'
+  | 'PROCESSING'
+  | 'SUCCEEDED'
+  | 'FAILED'
+  | 'CANCELLED';
+
+export interface AiExternalActionRecord {
+  id: string;
+  sessionId: string;
+  kind: AiExternalActionKind;
+  status: AiExternalActionStatus;
+  sourceSummaryVersion: number;
+  draftProvider: string | null;
+  draftModel: string | null;
+  recipientEmail: string | null;
+  subject: string | null;
+  bodyText: string;
+  targetProvider: string | null;
+  targetRecordId: string | null;
+  approvedAt: string | null;
+  executionProvider: string | null;
+  providerReferenceId: string | null;
+  failureCode: string | null;
+  executedAt: string | null;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  approvedBy?: {
+    id: string;
+    displayName: string;
+    email: string;
+  } | null;
+}
+
 export interface MemoryListItem extends Session {
   recording: RecordingRecord | null;
   transcript: TranscriptRecord | null;
@@ -1381,6 +1418,96 @@ export const api = {
 
   getMemory(sessionId: string): Promise<MemoryDetail> {
     return request<MemoryDetail>(`/memory/${sessionId}`);
+  },
+
+  listAiExternalActions(sessionId: string): Promise<AiExternalActionRecord[]> {
+    return request<AiExternalActionRecord[]>(`/memory/${sessionId}/follow-ups`);
+  },
+
+  createFollowUpEmailDraft(
+    sessionId: string,
+    input: { recipientEmail: string; guidance?: string },
+  ): Promise<AiExternalActionRecord> {
+    return request<AiExternalActionRecord>(
+      `/memory/${sessionId}/follow-ups/email/draft`,
+      {
+        method: 'POST',
+        body: JSON.stringify(input),
+      },
+    );
+  },
+
+  createCrmNoteDraft(
+    sessionId: string,
+    input: {
+      targetProvider: string;
+      targetRecordId: string;
+      guidance?: string;
+    },
+  ): Promise<AiExternalActionRecord> {
+    return request<AiExternalActionRecord>(
+      `/memory/${sessionId}/follow-ups/crm-note/draft`,
+      {
+        method: 'POST',
+        body: JSON.stringify(input),
+      },
+    );
+  },
+
+  updateAiExternalAction(
+    sessionId: string,
+    actionId: string,
+    version: number,
+    input: Partial<{
+      recipientEmail: string;
+      subject: string;
+      bodyText: string;
+      targetProvider: string;
+      targetRecordId: string;
+    }>,
+  ): Promise<AiExternalActionRecord> {
+    return request<AiExternalActionRecord>(
+      `/memory/${sessionId}/follow-ups/${actionId}`,
+      {
+        method: 'PATCH',
+        headers: { 'if-match': String(version) },
+        body: JSON.stringify(input),
+      },
+    );
+  },
+
+  approveAiExternalAction(
+    sessionId: string,
+    actionId: string,
+    version: number,
+  ): Promise<AiExternalActionRecord> {
+    return request<AiExternalActionRecord>(
+      `/memory/${sessionId}/follow-ups/${actionId}/approve`,
+      {
+        method: 'POST',
+        headers: { 'if-match': String(version) },
+      },
+    );
+  },
+
+  retryAiExternalAction(
+    sessionId: string,
+    actionId: string,
+  ): Promise<AiExternalActionRecord> {
+    return request<AiExternalActionRecord>(
+      `/memory/${sessionId}/follow-ups/${actionId}/retry`,
+      { method: 'POST' },
+    );
+  },
+
+  cancelAiExternalAction(
+    sessionId: string,
+    actionId: string,
+  ): Promise<AiExternalActionRecord> {
+    return request<AiExternalActionRecord>(
+      `/memory/${sessionId}/follow-ups/${actionId}/cancel`,
+      { method: 'POST' },
+    );
   },
 
   listTranscriptRevisions(sessionId: string): Promise<TranscriptRevisionRecord[]> {

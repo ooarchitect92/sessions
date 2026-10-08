@@ -41,3 +41,23 @@ export interface AgendaDraftResult {
   model?: string | null;
   items: AgendaDraftItem[];
 }
+
+export interface FollowUpDraftRequest {
+  title: string;
+  summaryText: string;
+  decisions: Array<{ text: string }>;
+  actionItems: Array<{
+    text: string;
+    owner?: string | null;
+    dueDate?: string | null;
+  }>;
+  guidance?: string | null;
+}
+
+export interface FollowUpDraftResult {
+  provider: string;
+  model?: string | null;
+  emailSubject: string;
+  emailBody: string;
+  crmNote: string;
+}

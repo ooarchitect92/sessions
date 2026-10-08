@@ -13,7 +13,10 @@ import {
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentPrincipal } from '../common/auth/current-principal.decorator';
 import type { Principal } from '../common/auth/principal';
+import { CreateCrmNoteDto } from './dto/create-crm-note.dto';
+import { CreateFollowUpEmailDto } from './dto/create-follow-up-email.dto';
 import { ListMemoryQuery } from './dto/list-memory.query';
+import { UpdateAiExternalActionDto } from './dto/update-ai-external-action.dto';
 import { UpdateMemorySummaryDto } from './dto/update-memory-summary.dto';
 import { UpdateTranscriptDto } from './dto/update-transcript.dto';
 import { MemoryService } from './memory.service';
@@ -46,6 +49,82 @@ export class MemoryController {
     return this.memory.getBySession(principal, sessionId);
   }
 
+
+  @Get(':sessionId/follow-ups')
+  listExternalActions(
+    @CurrentPrincipal() principal: Principal,
+    @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
+  ) {
+    return this.memory.listExternalActions(principal, sessionId);
+  }
+
+  @Post(':sessionId/follow-ups/email/draft')
+  createFollowUpEmailDraft(
+    @CurrentPrincipal() principal: Principal,
+    @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
+    @Body() body: CreateFollowUpEmailDto,
+  ) {
+    return this.memory.createFollowUpEmailDraft(principal, sessionId, body);
+  }
+
+  @Post(':sessionId/follow-ups/crm-note/draft')
+  createCrmNoteDraft(
+    @CurrentPrincipal() principal: Principal,
+    @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
+    @Body() body: CreateCrmNoteDto,
+  ) {
+    return this.memory.createCrmNoteDraft(principal, sessionId, body);
+  }
+
+  @Patch(':sessionId/follow-ups/:actionId')
+  updateExternalAction(
+    @CurrentPrincipal() principal: Principal,
+    @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
+    @Param('actionId', new ParseUUIDPipe({ version: '4' })) actionId: string,
+    @Headers('if-match') ifMatch: string | undefined,
+    @Body() body: UpdateAiExternalActionDto,
+  ) {
+    return this.memory.updateExternalAction(
+      principal,
+      sessionId,
+      actionId,
+      parseVersion(ifMatch),
+      body,
+    );
+  }
+
+  @Post(':sessionId/follow-ups/:actionId/approve')
+  approveExternalAction(
+    @CurrentPrincipal() principal: Principal,
+    @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
+    @Param('actionId', new ParseUUIDPipe({ version: '4' })) actionId: string,
+    @Headers('if-match') ifMatch: string | undefined,
+  ) {
+    return this.memory.approveExternalAction(
+      principal,
+      sessionId,
+      actionId,
+      parseVersion(ifMatch),
+    );
+  }
+
+  @Post(':sessionId/follow-ups/:actionId/retry')
+  retryExternalAction(
+    @CurrentPrincipal() principal: Principal,
+    @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
+    @Param('actionId', new ParseUUIDPipe({ version: '4' })) actionId: string,
+  ) {
+    return this.memory.retryExternalAction(principal, sessionId, actionId);
+  }
+
+  @Post(':sessionId/follow-ups/:actionId/cancel')
+  cancelExternalAction(
+    @CurrentPrincipal() principal: Principal,
+    @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
+    @Param('actionId', new ParseUUIDPipe({ version: '4' })) actionId: string,
+  ) {
+    return this.memory.cancelExternalAction(principal, sessionId, actionId);
+  }
 
   @Get(':sessionId/transcript/revisions')
   listTranscriptRevisions(

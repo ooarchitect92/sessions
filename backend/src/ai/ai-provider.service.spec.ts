@@ -20,6 +20,25 @@ describe('AiProviderService', () => {
     expect(result.actionItems).toEqual([]);
   });
 
+  it('creates a deterministic human-reviewable follow-up draft', async () => {
+    const service = new AiProviderService(
+      new ConfigService({ AI_PROVIDER: 'mock' }),
+    );
+
+    const result = await service.generateFollowUpDraft({
+      title: 'Customer review',
+      summaryText: 'The team agreed to send revised pricing next week.',
+      decisions: [{ text: 'Use annual pricing.' }],
+      actionItems: [{ text: 'Send revised pricing', owner: 'Sam' }],
+      guidance: 'Keep it concise.',
+    });
+
+    expect(result.provider).toBe('mock');
+    expect(result.emailSubject).toContain('Customer review');
+    expect(result.emailBody).toContain('revised pricing');
+    expect(result.crmNote).toContain('annual pricing');
+  });
+
   it('creates a deterministic reviewable agenda draft', async () => {
     const service = new AiProviderService(
       new ConfigService({ AI_PROVIDER: 'mock' }),
