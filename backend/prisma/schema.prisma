@@ -1369,8 +1369,29 @@ model MarketingLead {
   consent       Boolean  @default(false)
   metadata      Json     @default("{}")
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  outboxEvents  MarketingLeadOutboxEvent[]
 
   @@index([kind, createdAt])
   @@index([email, createdAt])
   @@map("marketing_leads")
+}
+
+model MarketingLeadOutboxEvent {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  leadId         String    @map("lead_id") @db.Uuid
+  eventType      String    @map("event_type") @db.VarChar(160)
+  payload        Json
+  attempts       Int       @default(0)
+  availableAt    DateTime  @default(now()) @map("available_at") @db.Timestamptz(6)
+  lockedAt       DateTime? @map("locked_at") @db.Timestamptz(6)
+  lockedBy       String?   @map("locked_by") @db.VarChar(160)
+  publishedAt    DateTime? @map("published_at") @db.Timestamptz(6)
+  lastError      String?   @map("last_error") @db.Text
+  deadLetteredAt DateTime? @map("dead_lettered_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  lead           MarketingLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@unique([leadId, eventType])
+  @@index([publishedAt, deadLetteredAt, availableAt])
+  @@map("marketing_lead_outbox_events")
 }
