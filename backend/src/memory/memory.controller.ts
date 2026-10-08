@@ -100,6 +100,14 @@ export class MemoryController {
     );
   }
 
+  @Post(':sessionId/semantic-index/retry')
+  retrySemanticIndex(
+    @CurrentPrincipal() principal: Principal,
+    @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
+  ) {
+    return this.memory.retrySemanticIndex(principal, sessionId);
+  }
+
   @Post(':sessionId/retry')
   retryFailed(
     @CurrentPrincipal() principal: Principal,

@@ -78,6 +78,15 @@ const environmentSchema = z
       .url()
       .default('https://api.openai.com/v1/chat/completions'),
     AI_OPENAI_MODEL: z.string().min(1).max(160).default('gpt-4o-mini'),
+    EMBEDDING_PROVIDER: z.enum(['disabled', 'mock', 'openai']).default('disabled'),
+    EMBEDDING_OPENAI_API_KEY: z.string().min(1).optional(),
+    EMBEDDING_OPENAI_ENDPOINT: z
+      .string()
+      .url()
+      .default('https://api.openai.com/v1/embeddings'),
+    EMBEDDING_OPENAI_MODEL: z.string().min(1).max(160).default('text-embedding-3-small'),
+    EMBEDDING_DIMENSIONS: z.coerce.number().int().min(128).max(4096).default(1536),
+    EMBEDDING_CHUNK_MAX_CHARS: z.coerce.number().int().min(256).max(8000).default(1800),
     EMAIL_PROVIDER: z.enum(['disabled', 'mock', 'http']).default('mock'),
     EMAIL_HTTP_ENDPOINT: z.string().url().optional(),
     EMAIL_HTTP_API_KEY: z.string().min(1).optional(),
@@ -107,6 +116,21 @@ const environmentSchema = z
       issue(
         'AI_OPENAI_API_KEY',
         'AI_OPENAI_API_KEY is required when AI_PROVIDER=openai',
+      );
+    }
+    if (
+      value.EMBEDDING_PROVIDER === 'openai' &&
+      !value.EMBEDDING_OPENAI_API_KEY
+    ) {
+      issue(
+        'EMBEDDING_OPENAI_API_KEY',
+        'EMBEDDING_OPENAI_API_KEY is required when EMBEDDING_PROVIDER=openai',
+      );
+    }
+    if (value.EMBEDDING_DIMENSIONS !== 1536) {
+      issue(
+        'EMBEDDING_DIMENSIONS',
+        'The current pgvector schema requires EMBEDDING_DIMENSIONS=1536',
       );
     }
     if (
@@ -200,6 +224,12 @@ const environmentSchema = z
     }
     if (value.AI_PROVIDER === 'mock') {
       issue('AI_PROVIDER', 'AI_PROVIDER=mock is forbidden in production');
+    }
+    if (value.EMBEDDING_PROVIDER === 'mock') {
+      issue(
+        'EMBEDDING_PROVIDER',
+        'EMBEDDING_PROVIDER=mock is forbidden in production',
+      );
     }
     if (value.EMAIL_PROVIDER !== 'http') {
       issue(

@@ -2,7 +2,7 @@ name: sessions
 
 services:
   postgres:
-    image: postgres:17-alpine
+    image: pgvector/pgvector:pg17
     environment:
       POSTGRES_DB: sessions
       POSTGRES_USER: sessions
