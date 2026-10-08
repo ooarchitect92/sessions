@@ -914,11 +914,9 @@ export class MemoryService {
       });
       if (!action) throw new NotFoundException('AI external action not found');
       if (
-        ![
-          AiExternalActionStatus.DRAFT,
-          AiExternalActionStatus.APPROVED,
-          AiExternalActionStatus.FAILED,
-        ].includes(action.status)
+        action.status !== AiExternalActionStatus.DRAFT &&
+        action.status !== AiExternalActionStatus.APPROVED &&
+        action.status !== AiExternalActionStatus.FAILED
       ) {
         throw new ConflictException('This external action can no longer be cancelled');
       }
@@ -1199,7 +1197,9 @@ export class MemoryService {
       summaryText: context.summary.summaryText!,
       decisions: this.summaryDecisions(context.summary.decisions),
       actionItems: this.summaryActionItems(context.summary.actionItems),
-      guidance: target.guidance,
+      ...(target.guidance !== undefined
+        ? { guidance: target.guidance }
+        : {}),
     });
 
     return this.database.run(principal, async (transaction) => {
@@ -1228,7 +1228,7 @@ export class MemoryService {
           draftModel: draft.model ?? null,
           recipientEmail:
             kind === AiExternalActionKind.EMAIL_FOLLOW_UP
-              ? target.recipientEmail
+              ? target.recipientEmail ?? null
               : null,
           subject:
             kind === AiExternalActionKind.EMAIL_FOLLOW_UP
@@ -1240,11 +1240,11 @@ export class MemoryService {
               : draft.crmNote,
           targetProvider:
             kind === AiExternalActionKind.CRM_NOTE
-              ? target.targetProvider
+              ? target.targetProvider ?? null
               : null,
           targetRecordId:
             kind === AiExternalActionKind.CRM_NOTE
-              ? target.targetRecordId
+              ? target.targetRecordId ?? null
               : null,
         },
       });
