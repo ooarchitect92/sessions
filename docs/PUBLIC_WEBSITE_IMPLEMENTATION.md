@@ -74,11 +74,11 @@ The marketing website does not pretend that a public marketing page itself perfo
 2. Client sends only approved form fields, source pathname, intent, and approved UTM keys.
 3. Server validates type, length, email, consent, and honeypot state.
 4. Server applies hashed email/IP rate limiting without persisting raw IP addresses.
-5. One PostgreSQL transaction stores the lead and one `marketing.lead.received` outbox event.
+5. One PostgreSQL transaction stores the lead, immutable consent evidence, an acceptance audit record, and one `marketing.lead.received` outbox event.
 6. The outbox dispatcher claims pending events with `SKIP LOCKED`, publishes them to the internal Redis event stream, and retries failures with exponential backoff/dead-letter handling.
 7. A same-key/same-payload retry returns the same accepted business outcome without creating a second lead or outbox event.
 8. A same-key/different-payload retry is rejected as a conflict.
-9. The UI never displays success after a failed API request.
+9. The API returns a safe receipt reference and conversion event identifier only after commit; the UI displays the receipt reference in the success state.\n10. Only allowlisted attribution fields are persisted from public metadata; arbitrary client metadata is discarded.\n11. The UI never displays success after a failed API request.
 
 This specifically protects double-click, timeout, user retry, and dispatcher restart scenarios from creating duplicate accepted leads or duplicate accepted outbox events. An external CRM/email destination is intentionally not fabricated; the durable internal event is ready for a configured downstream consumer.
 

@@ -33,6 +33,7 @@ export function MarketingLeadForm({
   const [submissionKey, setSubmissionKey] = useState(() => crypto.randomUUID());
   const [status, setStatus] = useState<'idle' | 'sending' | 'success' | 'error'>('idle');
   const [error, setError] = useState('');
+  const [receiptReference, setReceiptReference] = useState('');
   const newsletter = kind === 'NEWSLETTER';
   const set = (key: string, value: string | boolean) =>
     setForm((current) => ({ ...current, [key]: value }));
@@ -42,7 +43,11 @@ export function MarketingLeadForm({
     setStatus('sending');
     setError('');
     try {
-      await publicApi('/public/marketing/leads', {
+      const result = await publicApi<{
+        receiptReference: string;
+        conversionEventId: string | null;
+        status: 'RECEIVED';
+      }>('/public/marketing/leads', {
         method: 'POST',
         body: JSON.stringify({
           submissionKey,
@@ -66,6 +71,7 @@ export function MarketingLeadForm({
           },
         }),
       });
+      setReceiptReference(result.receiptReference);
       setStatus('success');
       setForm({
         name: '',
@@ -98,6 +104,11 @@ export function MarketingLeadForm({
               ? 'The backend accepted your request to receive product updates.'
               : 'The backend durably accepted your enquiry. You do not need to submit it again.'}
           </p>
+          {receiptReference ? (
+            <p className="receipt-reference">
+              Reference: <code>{receiptReference}</code>
+            </p>
+          ) : null}
         </div>
       </div>
     );

@@ -18,8 +18,11 @@ const baseInput = {
 
 function createService(overrides?: {
   create?: ReturnType<typeof vi.fn>;
+  consentCreate?: ReturnType<typeof vi.fn>;
+  auditCreate?: ReturnType<typeof vi.fn>;
   outboxCreate?: ReturnType<typeof vi.fn>;
   findUnique?: ReturnType<typeof vi.fn>;
+  outboxFindFirst?: ReturnType<typeof vi.fn>;
   incr?: ReturnType<typeof vi.fn>;
 }) {
   const create =
@@ -29,15 +32,27 @@ function createService(overrides?: {
       kind: 'DEMO',
       createdAt: new Date('2026-10-08T00:00:00.000Z'),
     });
-  const outboxCreate = overrides?.outboxCreate ?? vi.fn().mockResolvedValue({ id: 'event-id' });
+  const consentCreate =
+    overrides?.consentCreate ??
+    vi.fn().mockResolvedValue({ id: '22222222-2222-4222-8222-222222222222' });
+  const auditCreate = overrides?.auditCreate ?? vi.fn().mockResolvedValue({ id: 'audit-id' });
+  const outboxCreate =
+    overrides?.outboxCreate ??
+    vi.fn().mockResolvedValue({ id: '33333333-3333-4333-8333-333333333333' });
   const findUnique = overrides?.findUnique ?? vi.fn();
+  const outboxFindFirst =
+    overrides?.outboxFindFirst ??
+    vi.fn().mockResolvedValue({ id: '33333333-3333-4333-8333-333333333333' });
   const incr = overrides?.incr ?? vi.fn().mockResolvedValue(1);
   const transactionClient = {
     marketingLead: { create },
+    marketingConsentEvidence: { create: consentCreate },
+    marketingLeadAuditEvent: { create: auditCreate },
     marketingLeadOutboxEvent: { create: outboxCreate },
   };
   const prisma = {
     marketingLead: { findUnique },
+    marketingLeadOutboxEvent: { findFirst: outboxFindFirst },
     $transaction: vi.fn(async (callback: (transaction: typeof transactionClient) => unknown) =>
       callback(transactionClient),
     ),
@@ -47,19 +62,35 @@ function createService(overrides?: {
   return {
     service: new MarketingService(prisma as never, redis as never, config as never),
     create,
+    consentCreate,
+    auditCreate,
     outboxCreate,
     findUnique,
+    outboxFindFirst,
     incr,
   };
 }
 
 describe('MarketingService', () => {
-  it('persists a consented public lead and one durable outbox event before acknowledging it', async () => {
-    const { service, create, outboxCreate } = createService();
+  it('commits lead, consent evidence, audit and outbox before acknowledging it', async () => {
+    const { service, create, consentCreate, auditCreate, outboxCreate } = createService();
 
-    await expect(service.createLead(baseInput, '127.0.0.1')).resolves.toMatchObject({
+    await expect(
+      service.createLead(
+        {
+          ...baseInput,
+          metadata: {
+            utmSource: 'launch',
+            arbitraryPrivateField: 'must-not-be-stored',
+          },
+        },
+        '127.0.0.1',
+      ),
+    ).resolves.toMatchObject({
       kind: 'DEMO',
       status: 'RECEIVED',
+      receiptReference: '11111111-1111-4111-8111-111111111111',
+      conversionEventId: '33333333-3333-4333-8333-333333333333',
     });
 
     expect(create).toHaveBeenCalledWith(
@@ -69,10 +100,22 @@ describe('MarketingService', () => {
           name: 'Alex',
           email: 'alex@example.com',
           consent: true,
+          metadata: { utmSource: 'launch' },
           requestHash: expect.stringMatching(/^[a-f0-9]{64}$/),
         }),
       }),
     );
+    expect(consentCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          leadId: '11111111-1111-4111-8111-111111111111',
+          purpose: 'respond_to_request',
+          version: 'enquiry-consent-v1',
+          statementHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+        }),
+      }),
+    );
+    expect(auditCreate).toHaveBeenCalled();
     expect(outboxCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -109,8 +152,10 @@ describe('MarketingService', () => {
     }
   });
 
-  it('returns the same accepted lead for an idempotent retry without creating another outbox event', async () => {
+  it('returns the original receipt for an idempotent retry without creating another durable record', async () => {
     const create = vi.fn().mockRejectedValue({ code: 'P2002' });
+    const consentCreate = vi.fn();
+    const auditCreate = vi.fn();
     const outboxCreate = vi.fn();
     const nodeCrypto = await import('node:crypto');
     const normalized = {
@@ -134,14 +179,23 @@ describe('MarketingService', () => {
       createdAt: new Date('2026-10-08T00:00:00.000Z'),
       requestHash,
     });
-    const { service } = createService({ create, outboxCreate, findUnique });
+    const { service } = createService({
+      create,
+      consentCreate,
+      auditCreate,
+      outboxCreate,
+      findUnique,
+    });
 
     await expect(
       service.createLead({ ...baseInput, email: 'alex@example.com' }),
     ).resolves.toMatchObject({
-      id: '11111111-1111-4111-8111-111111111111',
+      receiptReference: '11111111-1111-4111-8111-111111111111',
+      conversionEventId: '33333333-3333-4333-8333-333333333333',
       status: 'RECEIVED',
     });
+    expect(consentCreate).not.toHaveBeenCalled();
+    expect(auditCreate).not.toHaveBeenCalled();
     expect(outboxCreate).not.toHaveBeenCalled();
   });
 

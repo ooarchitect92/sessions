@@ -1369,11 +1369,37 @@ model MarketingLead {
   consent       Boolean  @default(false)
   metadata      Json     @default("{}")
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  outboxEvents  MarketingLeadOutboxEvent[]
+  outboxEvents      MarketingLeadOutboxEvent[]
+  consentEvidence  MarketingConsentEvidence?
+  auditEvents      MarketingLeadAuditEvent[]
 
   @@index([kind, createdAt])
   @@index([email, createdAt])
   @@map("marketing_leads")
+}
+
+model MarketingConsentEvidence {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  leadId        String   @unique @map("lead_id") @db.Uuid
+  purpose       String   @db.VarChar(80)
+  version       String   @db.VarChar(80)
+  statementHash String   @map("statement_hash") @db.VarChar(64)
+  capturedAt    DateTime @default(now()) @map("captured_at") @db.Timestamptz(6)
+  lead          MarketingLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@map("marketing_consent_evidence")
+}
+
+model MarketingLeadAuditEvent {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  leadId    String   @map("lead_id") @db.Uuid
+  action    String   @db.VarChar(160)
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  lead      MarketingLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId, createdAt])
+  @@map("marketing_lead_audit_events")
 }
 
 model MarketingLeadOutboxEvent {

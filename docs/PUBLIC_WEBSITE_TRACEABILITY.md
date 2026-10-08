@@ -19,7 +19,7 @@ This register maps the supplied Website Master Blueprint and Sessions-like resea
 | REST/API architecture | Repository-backed + documented | NestJS `/v1` API and public route documentation |
 | Durable enquiry/contact form | Implemented | marketing controller/service + PostgreSQL transaction |
 | Lead retry idempotency | Implemented | UUID `submissionKey`, request hash, unique DB constraint |
-| Lead + outbox atomicity | Implemented | one transaction creates the accepted lead and `marketing.lead.received` event |
+| Lead + outbox atomicity | Implemented | one transaction creates the accepted lead, consent evidence, audit record and `marketing.lead.received` event |\n| Consent evidence | Implemented | versioned purpose + server-derived statement hash stored per accepted lead |\n| Safe receipt contract | Implemented | post-commit receipt reference + conversion event ID; no unnecessary PII in response |\n| Attribution allowlist | Implemented | server keeps only approved action/intent/UTM string fields and discards arbitrary metadata |
 | Durable lead event dispatch | Implemented | Redis stream dispatcher with claim locking, retries, backoff and dead-letter state |
 | Public-form abuse control | Implemented | honeypot + hashed Redis rate limiting |
 | Do not falsely acknowledge failed lead | Implemented | UI success only after successful API result |
