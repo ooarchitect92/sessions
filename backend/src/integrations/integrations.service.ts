@@ -17,7 +17,7 @@ import { ADMIN_ROLES, hasAnyRole, type Principal } from '../common/auth/principa
 import { TenantDatabaseService } from '../database/tenant-database.service';
 import { WorkerPrismaService } from '../database/worker-prisma.service';
 import { RedisService } from '../infrastructure/redis.service';
-import { CreateApiKeyDto, CreateWebhookSubscriptionDto } from './integrations.dto';
+import { CreateApiKeyDto, CreateWebhookSubscriptionDto, ReconcileWebhookDto } from './integrations.dto';
 
 type ApiKeyRow = {
   id: string;
@@ -262,6 +262,75 @@ export class IntegrationsService {
     });
   }
 
+  async reconcileWebhook(
+    principal: Principal,
+    subscriptionId: string,
+    input: ReconcileWebhookDto,
+  ) {
+    this.assertAdmin(principal);
+    const hours = input.hours ?? 24;
+    return this.database.run(principal, async (tx) => {
+      const exists = await tx.$queryRaw<{ id: string }[]>`
+        SELECT id FROM webhook_subscriptions
+        WHERE id = ${subscriptionId}::uuid
+        LIMIT 1
+      `;
+      if (!exists[0]) throw new NotFoundException('Webhook subscription not found');
+
+      const inserted = await tx.$executeRaw`
+        INSERT INTO webhook_deliveries (
+          organization_id, workspace_id, subscription_id, outbox_event_id, event_type, payload
+        )
+        SELECT oe.organization_id, oe.workspace_id, ws.id, oe.id, oe.event_type, oe.payload
+        FROM outbox_events oe
+        JOIN webhook_subscriptions ws ON ws.id = ${subscriptionId}::uuid
+          AND ws.organization_id = oe.organization_id
+          AND ws.workspace_id = oe.workspace_id
+          AND oe.event_type = ANY(ws.event_types)
+        WHERE oe.published_at IS NOT NULL
+          AND oe.created_at >= NOW() - (${hours}::text || ' hours')::interval
+        ON CONFLICT (subscription_id, outbox_event_id) DO NOTHING
+      `;
+
+      await this.audit.record(tx, principal, {
+        action: 'webhook.reconciled',
+        resourceType: 'webhook_subscription',
+        resourceId: subscriptionId,
+        metadata: { hours, inserted },
+      });
+      return { subscriptionId, hours, inserted };
+    });
+  }
+
+  async replayDelivery(principal: Principal, deliveryId: string) {
+    this.assertAdmin(principal);
+    return this.database.run(principal, async (tx) => {
+      const rows = await tx.$queryRaw<{ id: string; subscription_id: string }[]>`
+        UPDATE webhook_deliveries
+        SET status = 'PENDING',
+            attempts = 0,
+            available_at = NOW(),
+            locked_at = NULL,
+            locked_by = NULL,
+            response_status = NULL,
+            last_error = NULL,
+            delivered_at = NULL,
+            dead_lettered_at = NULL,
+            updated_at = NOW()
+        WHERE id = ${deliveryId}::uuid
+        RETURNING id, subscription_id
+      `;
+      const delivery = rows[0];
+      if (!delivery) throw new NotFoundException('Webhook delivery not found');
+      await this.audit.record(tx, principal, {
+        action: 'webhook.delivery.replayed',
+        resourceType: 'webhook_delivery',
+        resourceId: deliveryId,
+        metadata: { subscriptionId: delivery.subscription_id },
+      });
+      return { id: deliveryId, status: 'PENDING', replayed: true };
+    });
+  }
   async listDeliveries(principal: Principal, subscriptionId: string) {
     this.assertAdmin(principal);
     return this.database.run(principal, (tx) =>
