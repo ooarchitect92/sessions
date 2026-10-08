@@ -128,8 +128,10 @@ function Footer() {
         </div>
         <div>
           <b>Help & policies</b>
+          <a href="/demo">Request a demo</a>
           <a href="/contact">Contact</a>
           <a href="/search">Search</a>
+          <a href="/terms">Terms information</a>
           <a href="/privacy">Privacy information</a>
           <a href="/accessibility">Accessibility</a>
           <a href="/consent">Consent preferences</a>
@@ -395,7 +397,7 @@ function FinalCta() {
           <a className="btn lime" href={`${appUrl}/signup`} data-action-id="final_get_started">
             Get started →
           </a>
-          <a className="btn ghost" href="/contact?intent=demo" data-action-id="final_request_demo">
+          <a className="btn ghost" href="/demo" data-action-id="final_request_demo">
             Request a demo
           </a>
         </div>
@@ -501,7 +503,7 @@ function Product() {
         title="Everything the meeting needs — before, during, and after."
         copy="The public site surfaces the complete Sessions-like capability map while the authenticated product stays in the existing application. Public events and bookings remain connected to real backend workflows."
         secondary="Request a demo"
-        secondaryHref="/contact?intent=demo"
+        secondaryHref="/demo"
       />
       <section className="section shell">
         <SectionTitle eyebrow="Capability map" title="Full product coverage in one public overview." />
@@ -839,6 +841,62 @@ function Pricing() {
   );
 }
 
+function Demo() {
+  return (
+    <>
+      <Hero
+        visual={false}
+        eyebrow="Focused product demo"
+        title="See the complete meeting lifecycle in one guided walkthrough."
+        copy="Use this focused demo path to tell us which workflow matters most: meetings, webinars, scheduling, recording and memory, security, branding, or integrations. The request is only confirmed after the backend durably accepts it."
+        primary="Request your demo"
+        primaryHref="#demo-request"
+        secondary="Explore product first"
+        secondaryHref="/product"
+      />
+      <section className="section shell demo-journey">
+        <SectionTitle
+          eyebrow="What the walkthrough can cover"
+          title="Start with your use case, then follow the end-to-end flow."
+          copy="The demo route is deliberately focused on one conversion action rather than sending visitors through an unrelated dashboard."
+        />
+        <div className="detail-grid">
+          {[
+            ['01', 'Before the session', 'Booking pages, event registration, room setup, agendas, reminders, calendars, and intake.'],
+            ['02', 'During the session', 'Video, screen sharing, agenda state, embedded content, polls, Q&A, chat, whiteboards, and breakouts.'],
+            ['03', 'After the session', 'Recording, transcription, searchable memory, summaries, decisions, actions, and analytics.'],
+            ['04', 'Platform controls', 'Workspace isolation, permissions, integrations, APIs, webhooks, branding, and security boundaries.'],
+          ].map(([number, title, copy]) => (
+            <article key={number}>
+              <span>{number}</span>
+              <h3>{title}</h3>
+              <p>{copy}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+      <section className="section shell contact" id="demo-request">
+        <div>
+          <span className="eyebrow">Demo request</span>
+          <h2>Tell us what you want to evaluate.</h2>
+          <p>
+            The request uses the same durable public lead pipeline as the contact page, including
+            server validation, consent, idempotency, rate limiting, PostgreSQL persistence, and the
+            lead outbox event.
+          </p>
+        </div>
+        <div className="contact-card">
+          <MarketingLeadForm
+            kind="DEMO"
+            title="Request a Sessions walkthrough"
+            submitLabel="Request demo"
+          />
+        </div>
+      </section>
+    </>
+  );
+}
+
 function Contact() {
   return (
     <section className="section shell contact">
@@ -1091,6 +1149,61 @@ function SearchPage() {
   );
 }
 
+function Terms() {
+  return (
+    <article className="policy-page shell">
+      <span className="eyebrow">Terms information</span>
+      <h1>Public website terms boundary</h1>
+      <p className="article-lead">
+        This implementation provides the route, structure, and product-use boundaries needed for a
+        production terms page without inventing a legal entity, jurisdiction, fees, governing law,
+        support promises, or contractual commitments that were not supplied.
+      </p>
+      <section>
+        <h2>Public website use</h2>
+        <p>
+          Visitors may browse the public product and resource pages and may use published event,
+          booking, contact, and demo journeys according to the validation and access rules enforced
+          by the backend.
+        </p>
+      </section>
+      <section>
+        <h2>Product and account terms</h2>
+        <p>
+          Account access, paid plans, service limits, support obligations, cancellation rules,
+          warranties, and organization-specific agreements require verified commercial and legal
+          terms from the production operator before they can be presented as binding conditions.
+        </p>
+      </section>
+      <section>
+        <h2>External services</h2>
+        <p>
+          Calendar, media, storage, transcription, AI, email, and other providers may have their
+          own applicable terms when those integrations are configured. This page does not invent
+          provider obligations that have not been verified for the deployment.
+        </p>
+      </section>
+      <section>
+        <h2>Production legal review</h2>
+        <p>
+          Before launch, the operator must supply its verified legal identity, contact details,
+          governing-law decisions, commercial terms, support commitments, intellectual-property
+          wording, and jurisdiction-specific notices. Until then this page is implementation
+          information, not a substitute for approved production legal terms.
+        </p>
+      </section>
+      <div className="actions">
+        <a className="btn secondary" href="/privacy">
+          Privacy information
+        </a>
+        <a className="btn secondary" href="/contact">
+          Contact
+        </a>
+      </div>
+    </article>
+  );
+}
+
 function Privacy() {
   return (
     <article className="policy-page shell">
@@ -1303,6 +1416,8 @@ function pageFor(route: MarketingRoute) {
       return <Security />;
     case 'pricing':
       return <Pricing />;
+    case 'demo':
+      return <Demo />;
     case 'contact':
       return <Contact />;
     case 'about':
@@ -1315,6 +1430,8 @@ function pageFor(route: MarketingRoute) {
       return <ResourceArticle route={route} />;
     case 'search':
       return <SearchPage />;
+    case 'terms':
+      return <Terms />;
     case 'privacy':
       return <Privacy />;
     case 'accessibility':
