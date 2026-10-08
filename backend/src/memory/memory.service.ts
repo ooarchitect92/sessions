@@ -644,6 +644,37 @@ export class MemoryService {
     return result;
   }
 
+  async retrySemanticIndex(principal: Principal, sessionId: string) {
+    this.assertHost(principal);
+    return this.database.run(principal, async (transaction) => {
+      const transcript = await transaction.transcript.findUnique({
+        where: { sessionId },
+        select: { id: true, status: true, fullText: true },
+      });
+      if (!transcript) throw new NotFoundException('Transcript not found');
+      if (
+        transcript.status !== ArtifactStatus.READY ||
+        !transcript.fullText?.trim()
+      ) {
+        throw new BadRequestException(
+          'A ready transcript with text is required for semantic indexing',
+        );
+      }
+
+      await transaction.$executeRawUnsafe(
+        "UPDATE memory_embedding_indexes SET status = 'PENDING', failure_code = NULL, completed_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE transcript_id = $1::uuid",
+        transcript.id,
+      );
+      await this.audit.record(transaction, principal, {
+        action: 'memory.semantic_index.retry_requested',
+        resourceType: 'transcript',
+        resourceId: transcript.id,
+        metadata: { sessionId },
+      });
+      return { sessionId, transcriptId: transcript.id, accepted: true as const };
+    });
+  }
+
   async retryFailed(principal: Principal, sessionId: string) {
     this.assertHost(principal);
     const result = await this.database.run(principal, async (transaction) => {
