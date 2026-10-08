@@ -65,7 +65,7 @@
 - [x] provider-abstracted post-session AI summary execution gateway
 - [x] audited optimistic summary/action review editor
 - [x] AI follow-up email and CRM-note drafts with explicit review, approval, stale-summary protection, idempotent execution and retry/cancel controls
-- [ ] groundedness, privacy, prompt-injection, cost and latency evaluation suite
+- [x] versioned groundedness, action extraction, speaker attribution, privacy, prompt-injection, cost and latency evaluation suite with CI baseline and provider qualification runner
 
 ## Phase 5 — platform and enterprise
 
