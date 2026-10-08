@@ -218,6 +218,7 @@ export class WorkspacesService {
       throw new BadRequestException('At least one workspace field must be supplied');
     }
     if (input.timezone !== undefined) this.assertTimeZone(input.timezone);
+    if (input.settings !== undefined) this.assertWorkspaceSettings(input.settings);
 
     return this.prisma.$transaction(async (transaction) => {
       await this.requireCurrentMembership(principal, transaction);
@@ -646,6 +647,41 @@ export class WorkspacesService {
     }
   }
 
+  private assertWorkspaceSettings(settings: Record<string, unknown>): void {
+    const branding = settings.branding;
+    if (branding === undefined) return;
+    if (!branding || typeof branding !== 'object' || Array.isArray(branding)) {
+      throw new BadRequestException('Workspace branding must be an object');
+    }
+    const value = branding as Record<string, unknown>;
+    for (const key of ['primaryColor', 'accentColor'] as const) {
+      const color = value[key];
+      if (color !== undefined && (typeof color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(color))) {
+        throw new BadRequestException(`${key} must be a six-digit hex color`);
+      }
+    }
+    for (const key of ['logoUrl', 'waitingRoomImageUrl'] as const) {
+      const raw = value[key];
+      if (raw === undefined || raw === '') continue;
+      if (typeof raw !== 'string' || raw.length > 2048) {
+        throw new BadRequestException(`${key} must be a valid HTTPS URL`);
+      }
+      let parsed: URL;
+      try {
+        parsed = new URL(raw);
+      } catch {
+        throw new BadRequestException(`${key} must be a valid HTTPS URL`);
+      }
+      if (parsed.protocol !== 'https:') {
+        throw new BadRequestException(`${key} must use HTTPS`);
+      }
+    }
+    if (value.fontFamily !== undefined) {
+      if (typeof value.fontFamily !== 'string' || value.fontFamily.trim().length > 120) {
+        throw new BadRequestException('fontFamily must be 120 characters or fewer');
+      }
+    }
+  }
   private assertTimeZone(timezone: string): void {
     try {
       new Intl.DateTimeFormat('en-US', { timeZone: timezone }).format();
