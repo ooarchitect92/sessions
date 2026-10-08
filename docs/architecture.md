@@ -229,3 +229,8 @@ Consent is a durable per-user decision rather than a UI-only checkbox. Recording
 ## Meeting Memory retrieval
 
 The first production retrieval tier is PostgreSQL full-text search rather than an external search service. Session title/description and transcript text have GIN expression indexes using the `simple` configuration so multilingual text is not forced through English stemming. Search is executed inside `TenantDatabaseService.run`, so forced RLS applies, while the query also includes explicit organization/workspace predicates as defense in depth. Results are relevance-ranked and paginated, then hydrated through Prisma for the existing artifact graph. An optional vector retrieval tier can later be added behind the same workspace boundary without replacing the lexical path.
+
+
+## Optional semantic Memory tier
+
+The Memory retrieval stack now has two independently useful tiers. PostgreSQL full-text search remains the deterministic baseline. An optional pgvector tier asynchronously embeds transcript chunks and supports cosine-ranked retrieval. The embedding index is version-pinned to the transcript so corrections cannot silently serve stale vectors. A worker role performs cross-tenant indexing, while user queries run through the tenant database transaction with forced RLS and explicit organization/workspace predicates. Local development uses deterministic mock embeddings only to exercise the end-to-end pipeline; production must configure a qualified provider or leave semantic retrieval disabled. The current semantic scope is transcript content; agenda/document ingestion remains a later RAG expansion.
