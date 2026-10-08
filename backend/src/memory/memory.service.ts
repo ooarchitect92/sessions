@@ -17,6 +17,7 @@ import { TenantDatabaseService } from '../database/tenant-database.service';
 import { RealtimeEventsService } from '../infrastructure/realtime-events.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { ListMemoryQuery } from './dto/list-memory.query';
+import { EmbeddingProviderService } from './embedding-provider.service';
 import { UpdateMemorySummaryDto } from './dto/update-memory-summary.dto';
 import { UpdateTranscriptDto } from './dto/update-transcript.dto';
 
@@ -34,12 +35,23 @@ export class MemoryService {
     private readonly audit: AuditService,
     private readonly outbox: OutboxService,
     private readonly realtime: RealtimeEventsService,
+    private readonly embeddings: EmbeddingProviderService,
   ) {}
 
   async list(principal: Principal, query: ListMemoryQuery) {
     return this.database.run(principal, async (transaction) => {
       const searchTerm = query.query?.trim();
       if (searchTerm) {
+        if (query.searchMode === 'semantic') {
+          const semantic = await this.searchSemanticMemory(
+            transaction,
+            principal,
+            searchTerm,
+            query.page,
+            query.pageSize,
+          );
+          if (semantic.items.length > 0) return semantic;
+        }
         return this.searchMemory(
           transaction,
           principal,
@@ -818,6 +830,35 @@ export class MemoryService {
     }
   }
 
+  private async searchSemanticMemory(
+    transaction: Prisma.TransactionClient,
+    principal: Principal,
+    searchTerm: string,
+    page: number,
+    pageSize: number,
+  ) {
+    if (!this.embeddings.isEnabled()) {
+      return { items: [], page, pageSize, total: 0 };
+    }
+
+    const embedded = await this.embeddings.embed([searchTerm]);
+    const vector = embedded.vectors[0];
+    if (!vector) return { items: [], page, pageSize, total: 0 };
+    const vectorLiteral = '[' + vector.join(',') + ']';
+    const offset = (page - 1) * pageSize;
+
+    const hits = await transaction.$queryRawUnsafe<MemorySearchHit[]>(
+      "WITH ranked AS (SELECT c.session_id::text AS id, MAX(1 - (c.embedding <=> $1::vector))::double precision AS rank, (array_agg(c.content ORDER BY c.embedding <=> $1::vector))[1] AS excerpt FROM memory_embedding_chunks c JOIN memory_embedding_indexes i ON i.id = c.index_id JOIN transcripts t ON t.id = c.transcript_id WHERE c.organization_id = $2::uuid AND c.workspace_id = $3::uuid AND i.status = 'READY' AND i.source_transcript_version = t.version GROUP BY c.session_id) SELECT id AS \"id\", rank AS \"rank\", excerpt AS \"excerpt\", COUNT(*) OVER()::integer AS \"totalCount\" FROM ranked ORDER BY rank DESC, id LIMIT $4 OFFSET $5",
+      vectorLiteral,
+      principal.organizationId,
+      principal.workspaceId,
+      pageSize,
+      offset,
+    );
+
+    return this.hydrateSearchHits(transaction, hits, page, pageSize, 'semantic');
+  }
+
   private async searchMemory(
     transaction: Prisma.TransactionClient,
     principal: Principal,
@@ -903,6 +944,16 @@ export class MemoryService {
       OFFSET ${offset}
     `;
 
+    return this.hydrateSearchHits(transaction, hits, page, pageSize, 'lexical');
+  }
+
+  private async hydrateSearchHits(
+    transaction: Prisma.TransactionClient,
+    hits: MemorySearchHit[],
+    page: number,
+    pageSize: number,
+    mode: 'lexical' | 'semantic',
+  ) {
     const ids = hits.map((hit) => hit.id);
     const records =
       ids.length === 0
@@ -936,12 +987,12 @@ export class MemoryService {
               search: {
                 rank: hit.rank,
                 excerpt: hit.excerpt,
+                mode,
               },
             },
           ]
         : [];
     });
-
     return {
       items,
       page,
