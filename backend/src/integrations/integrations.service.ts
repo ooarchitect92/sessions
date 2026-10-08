@@ -167,6 +167,7 @@ export class IntegrationsService {
         RETURNING id, name, key_prefix, scopes, last_used_at, expires_at, revoked_at, created_at
       `;
       const created = rows[0];
+      if (!created) throw new Error('API key creation did not return a row');
       await this.audit.record(tx, principal, {
         action: 'api_key.created',
         resourceType: 'api_key',
@@ -232,6 +233,7 @@ export class IntegrationsService {
         RETURNING id, name, endpoint_url, event_types, active, last_success_at, last_failure_at, created_at, updated_at
       `;
       const created = rows[0];
+      if (!created) throw new Error('Webhook creation did not return a row');
       await this.audit.record(tx, principal, {
         action: 'webhook.created',
         resourceType: 'webhook_subscription',
@@ -341,15 +343,17 @@ export class IntegrationsService {
     const version = isIP(address);
     if (version === 4) {
       const parts = address.split('.').map(Number);
+      const first = parts[0] ?? -1;
+      const second = parts[1] ?? -1;
       const blocked =
-        parts[0] === 10 ||
-        parts[0] === 127 ||
-        parts[0] === 0 ||
-        (parts[0] === 100 && parts[1] >= 64 && parts[1] <= 127) ||
-        (parts[0] === 169 && parts[1] === 254) ||
-        (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) ||
-        (parts[0] === 192 && parts[1] === 168) ||
-        (parts[0] >= 224);
+        first === 10 ||
+        first === 127 ||
+        first === 0 ||
+        (first === 100 && second >= 64 && second <= 127) ||
+        (first === 169 && second === 254) ||
+        (first === 172 && second >= 16 && second <= 31) ||
+        (first === 192 && second === 168) ||
+        first >= 224;
       if (blocked) throw new BadRequestException('Webhook endpoint must be publicly routable');
     }
     if (version === 6) {
