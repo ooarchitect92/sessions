@@ -40,6 +40,16 @@ export function MemoryDetailPage() {
   const [actionItems, setActionItems] = useState<
     Array<{ text: string; owner?: string | null; dueDate?: string | null }>
   >([]);
+  const [followUpEmail, setFollowUpEmail] = useState('');
+  const [followUpGuidance, setFollowUpGuidance] = useState('');
+  const [crmProvider, setCrmProvider] = useState('');
+  const [crmRecordId, setCrmRecordId] = useState('');
+  const [editingActionId, setEditingActionId] = useState<string | null>(null);
+  const [editRecipientEmail, setEditRecipientEmail] = useState('');
+  const [editSubject, setEditSubject] = useState('');
+  const [editBodyText, setEditBodyText] = useState('');
+  const [editTargetProvider, setEditTargetProvider] = useState('');
+  const [editTargetRecordId, setEditTargetRecordId] = useState('');
   const memory = useQuery({
     queryKey: ['memory-detail', sessionId],
     queryFn: () => api.getMemory(sessionId),
@@ -49,6 +59,17 @@ export function MemoryDetailPage() {
     queryKey: ['transcript-revisions', sessionId],
     queryFn: () => api.listTranscriptRevisions(sessionId),
     enabled: Boolean(sessionId && showTranscriptHistory),
+  });
+  const externalActions = useQuery({
+    queryKey: ['ai-external-actions', sessionId],
+    queryFn: () => api.listAiExternalActions(sessionId),
+    enabled: Boolean(sessionId),
+    refetchInterval: (query) =>
+      query.state.data?.some((action) =>
+        ['APPROVED', 'PROCESSING'].includes(action.status),
+      )
+        ? 2500
+        : false,
   });
 
   const retry = useMutation({
@@ -145,6 +166,91 @@ export function MemoryDetailPage() {
     },
   });
 
+  const refreshExternalActions = async () => {
+    await queryClient.invalidateQueries({
+      queryKey: ['ai-external-actions', sessionId],
+    });
+  };
+
+  const createFollowUpEmail = useMutation({
+    mutationFn: () =>
+      api.createFollowUpEmailDraft(sessionId, {
+        recipientEmail: followUpEmail.trim(),
+        ...(followUpGuidance.trim()
+          ? { guidance: followUpGuidance.trim() }
+          : {}),
+      }),
+    onSuccess: async () => {
+      setFollowUpGuidance('');
+      await refreshExternalActions();
+    },
+  });
+
+  const createCrmNote = useMutation({
+    mutationFn: () =>
+      api.createCrmNoteDraft(sessionId, {
+        targetProvider: crmProvider.trim(),
+        targetRecordId: crmRecordId.trim(),
+        ...(followUpGuidance.trim()
+          ? { guidance: followUpGuidance.trim() }
+          : {}),
+      }),
+    onSuccess: async () => {
+      setFollowUpGuidance('');
+      await refreshExternalActions();
+    },
+  });
+
+  const updateExternalAction = useMutation({
+    mutationFn: () => {
+      const action = externalActions.data?.find(
+        (item) => item.id === editingActionId,
+      );
+      if (!action) throw new Error('External action is unavailable');
+      return api.updateAiExternalAction(sessionId, action.id, action.version, {
+        ...(action.kind === 'EMAIL_FOLLOW_UP'
+          ? {
+              recipientEmail: editRecipientEmail.trim(),
+              subject: editSubject.trim(),
+            }
+          : {
+              targetProvider: editTargetProvider.trim(),
+              targetRecordId: editTargetRecordId.trim(),
+            }),
+        bodyText: editBodyText.trim(),
+      });
+    },
+    onSuccess: async () => {
+      setEditingActionId(null);
+      await refreshExternalActions();
+    },
+  });
+
+  const approveExternalAction = useMutation({
+    mutationFn: (actionId: string) => {
+      const action = externalActions.data?.find((item) => item.id === actionId);
+      if (!action) throw new Error('External action is unavailable');
+      return api.approveAiExternalAction(
+        sessionId,
+        action.id,
+        action.version,
+      );
+    },
+    onSuccess: refreshExternalActions,
+  });
+
+  const retryExternalAction = useMutation({
+    mutationFn: (actionId: string) =>
+      api.retryAiExternalAction(sessionId, actionId),
+    onSuccess: refreshExternalActions,
+  });
+
+  const cancelExternalAction = useMutation({
+    mutationFn: (actionId: string) =>
+      api.cancelAiExternalAction(sessionId, actionId),
+    onSuccess: refreshExternalActions,
+  });
+
   const removeRecording = useMutation({
     mutationFn: () => api.deleteRecording(sessionId),
     onSuccess: async () => {
@@ -200,6 +306,17 @@ export function MemoryDetailPage() {
       })),
     );
     setEditingTranscript(true);
+  };
+
+  const beginExternalActionEdit = (
+    action: NonNullable<typeof externalActions.data>[number],
+  ) => {
+    setEditingActionId(action.id);
+    setEditRecipientEmail(action.recipientEmail ?? '');
+    setEditSubject(action.subject ?? '');
+    setEditBodyText(action.bodyText);
+    setEditTargetProvider(action.targetProvider ?? '');
+    setEditTargetRecordId(action.targetRecordId ?? '');
   };
 
   const hasFailure = [
@@ -518,6 +635,286 @@ export function MemoryDetailPage() {
               <div className="artifact-placeholder">
                 Summary generation is pending or was not requested. External actions remain
                 blocked until a user reviews generated output.
+              </div>
+            )}
+          </section>
+
+          <section className="panel ai-followup-panel">
+            <div className="summary-review-heading">
+              <div>
+                <span className="eyebrow">Human-approved AI</span>
+                <h2>Follow-up actions</h2>
+              </div>
+              <small>Nothing is sent or written externally before host approval.</small>
+            </div>
+
+            {item.memorySummary?.status === 'READY' ? (
+              <>
+                <div className="followup-draft-grid">
+                  <label>
+                    Follow-up email recipient
+                    <input
+                      type="email"
+                      value={followUpEmail}
+                      placeholder="customer@example.com"
+                      onChange={(event) => setFollowUpEmail(event.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="button secondary"
+                      disabled={
+                        createFollowUpEmail.isPending || !followUpEmail.trim()
+                      }
+                      onClick={() => createFollowUpEmail.mutate()}
+                    >
+                      {createFollowUpEmail.isPending
+                        ? 'Drafting…'
+                        : 'Draft follow-up email'}
+                    </button>
+                  </label>
+
+                  <div className="crm-draft-fields">
+                    <label>
+                      CRM provider
+                      <input
+                        value={crmProvider}
+                        placeholder="hubspot"
+                        onChange={(event) => setCrmProvider(event.target.value)}
+                      />
+                    </label>
+                    <label>
+                      Target record ID
+                      <input
+                        value={crmRecordId}
+                        placeholder="contact-or-deal-id"
+                        onChange={(event) => setCrmRecordId(event.target.value)}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="button secondary"
+                      disabled={
+                        createCrmNote.isPending ||
+                        !crmProvider.trim() ||
+                        !crmRecordId.trim()
+                      }
+                      onClick={() => createCrmNote.mutate()}
+                    >
+                      {createCrmNote.isPending ? 'Drafting…' : 'Draft CRM note'}
+                    </button>
+                  </div>
+                </div>
+                <label className="followup-guidance">
+                  Optional drafting guidance
+                  <input
+                    value={followUpGuidance}
+                    maxLength={1000}
+                    placeholder="Keep it concise and emphasize the agreed next step"
+                    onChange={(event) => setFollowUpGuidance(event.target.value)}
+                  />
+                </label>
+
+                {createFollowUpEmail.error || createCrmNote.error ? (
+                  <div className="error-banner">
+                    {(createFollowUpEmail.error ?? createCrmNote.error)?.message}
+                  </div>
+                ) : null}
+
+                <div className="external-action-list">
+                  {externalActions.isLoading ? (
+                    <div className="artifact-placeholder">Loading follow-up actions…</div>
+                  ) : externalActions.error ? (
+                    <div className="error-banner">{externalActions.error.message}</div>
+                  ) : externalActions.data?.length ? (
+                    externalActions.data.map((action) => (
+                      <article className="external-action-card" key={action.id}>
+                        <div className="external-action-card-heading">
+                          <div>
+                            <strong>
+                              {action.kind === 'EMAIL_FOLLOW_UP'
+                                ? 'Follow-up email'
+                                : 'CRM note'}
+                            </strong>
+                            <span className={`external-action-status ${action.status.toLowerCase()}`}>
+                              {action.status.toLowerCase().replace('_', ' ')}
+                            </span>
+                          </div>
+                          <small>
+                            Summary v{action.sourceSummaryVersion} ·{' '}
+                            {action.draftProvider ?? 'manual'}
+                          </small>
+                        </div>
+
+                        {editingActionId === action.id ? (
+                          <div className="external-action-editor">
+                            {action.kind === 'EMAIL_FOLLOW_UP' ? (
+                              <>
+                                <label>
+                                  Recipient
+                                  <input
+                                    type="email"
+                                    value={editRecipientEmail}
+                                    onChange={(event) =>
+                                      setEditRecipientEmail(event.target.value)
+                                    }
+                                  />
+                                </label>
+                                <label>
+                                  Subject
+                                  <input
+                                    value={editSubject}
+                                    maxLength={240}
+                                    onChange={(event) =>
+                                      setEditSubject(event.target.value)
+                                    }
+                                  />
+                                </label>
+                              </>
+                            ) : (
+                              <div className="crm-draft-fields">
+                                <label>
+                                  CRM provider
+                                  <input
+                                    value={editTargetProvider}
+                                    onChange={(event) =>
+                                      setEditTargetProvider(event.target.value)
+                                    }
+                                  />
+                                </label>
+                                <label>
+                                  Target record ID
+                                  <input
+                                    value={editTargetRecordId}
+                                    onChange={(event) =>
+                                      setEditTargetRecordId(event.target.value)
+                                    }
+                                  />
+                                </label>
+                              </div>
+                            )}
+                            <label>
+                              Content
+                              <textarea
+                                value={editBodyText}
+                                maxLength={20000}
+                                onChange={(event) =>
+                                  setEditBodyText(event.target.value)
+                                }
+                              />
+                            </label>
+                            <div className="summary-review-actions">
+                              <button
+                                type="button"
+                                className="button secondary"
+                                onClick={() => setEditingActionId(null)}
+                              >
+                                Cancel edit
+                              </button>
+                              <button
+                                type="button"
+                                className="button primary"
+                                disabled={
+                                  updateExternalAction.isPending ||
+                                  !editBodyText.trim()
+                                }
+                                onClick={() => updateExternalAction.mutate()}
+                              >
+                                {updateExternalAction.isPending
+                                  ? 'Saving…'
+                                  : 'Save reviewed draft'}
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            {action.kind === 'EMAIL_FOLLOW_UP' ? (
+                              <div className="external-action-meta">
+                                <span>To: {action.recipientEmail}</span>
+                                <strong>{action.subject}</strong>
+                              </div>
+                            ) : (
+                              <div className="external-action-meta">
+                                <span>
+                                  {action.targetProvider} · {action.targetRecordId}
+                                </span>
+                              </div>
+                            )}
+                            <pre className="external-action-copy">{action.bodyText}</pre>
+                          </>
+                        )}
+
+                        {action.failureCode ? (
+                          <div className="error-banner compact-error">
+                            {action.failureCode}
+                          </div>
+                        ) : null}
+
+                        {editingActionId !== action.id ? (
+                          <div className="external-action-controls">
+                            {action.status === 'DRAFT' ? (
+                              <>
+                                <button
+                                  type="button"
+                                  className="button secondary"
+                                  onClick={() => beginExternalActionEdit(action)}
+                                >
+                                  Review & edit
+                                </button>
+                                <button
+                                  type="button"
+                                  className="button primary"
+                                  disabled={approveExternalAction.isPending}
+                                  onClick={() => {
+                                    if (
+                                      window.confirm(
+                                        action.kind === 'EMAIL_FOLLOW_UP'
+                                          ? 'Approve this email for external delivery?'
+                                          : 'Approve this note for external CRM write?',
+                                      )
+                                    ) {
+                                      approveExternalAction.mutate(action.id);
+                                    }
+                                  }}
+                                >
+                                  Approve external action
+                                </button>
+                              </>
+                            ) : null}
+                            {action.status === 'FAILED' ? (
+                              <button
+                                type="button"
+                                className="button secondary"
+                                disabled={retryExternalAction.isPending}
+                                onClick={() => retryExternalAction.mutate(action.id)}
+                              >
+                                Retry approved action
+                              </button>
+                            ) : null}
+                            {['DRAFT', 'APPROVED', 'FAILED'].includes(action.status) ? (
+                              <button
+                                type="button"
+                                className="button danger"
+                                disabled={cancelExternalAction.isPending}
+                                onClick={() => cancelExternalAction.mutate(action.id)}
+                              >
+                                Cancel
+                              </button>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </article>
+                    ))
+                  ) : (
+                    <div className="artifact-placeholder">
+                      Generate a draft from the reviewed summary, inspect it, edit it if
+                      needed, then explicitly approve it before any external action occurs.
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="artifact-placeholder">
+                Review the AI summary before drafting follow-up emails or CRM notes.
               </div>
             )}
           </section>

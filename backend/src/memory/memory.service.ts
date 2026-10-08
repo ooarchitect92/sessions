@@ -6,18 +6,24 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  AiExternalActionKind,
+  AiExternalActionStatus,
   ArtifactStatus,
   Prisma,
   SessionStatus,
   type Session,
 } from '@prisma/client';
+import { AiProviderService } from '../ai/ai-provider.service';
 import { AuditService } from '../audit/audit.service';
 import { HOST_ROLES, hasAnyRole, type Principal } from '../common/auth/principal';
 import { TenantDatabaseService } from '../database/tenant-database.service';
 import { RealtimeEventsService } from '../infrastructure/realtime-events.service';
 import { OutboxService } from '../outbox/outbox.service';
+import { CreateCrmNoteDto } from './dto/create-crm-note.dto';
+import { CreateFollowUpEmailDto } from './dto/create-follow-up-email.dto';
 import { ListMemoryQuery } from './dto/list-memory.query';
 import { EmbeddingProviderService } from './embedding-provider.service';
+import { UpdateAiExternalActionDto } from './dto/update-ai-external-action.dto';
 import { UpdateMemorySummaryDto } from './dto/update-memory-summary.dto';
 import { UpdateTranscriptDto } from './dto/update-transcript.dto';
 
@@ -36,6 +42,7 @@ export class MemoryService {
     private readonly outbox: OutboxService,
     private readonly realtime: RealtimeEventsService,
     private readonly embeddings: EmbeddingProviderService,
+    private readonly ai: AiProviderService,
   ) {}
 
   async list(principal: Principal, query: ListMemoryQuery) {
@@ -603,6 +610,23 @@ export class MemoryService {
       const value = await transaction.memorySummary.findUniqueOrThrow({
         where: { id: summary.id },
       });
+      await transaction.aiExternalAction.updateMany({
+        where: {
+          sessionId,
+          status: {
+            in: [
+              AiExternalActionStatus.DRAFT,
+              AiExternalActionStatus.APPROVED,
+            ],
+          },
+          sourceSummaryVersion: { not: value.version },
+        },
+        data: {
+          status: AiExternalActionStatus.CANCELLED,
+          failureCode: 'source_summary_changed',
+          version: { increment: 1 },
+        },
+      });
       await this.audit.record(transaction, principal, {
         action: 'memory.summary.reviewed',
         resourceType: 'memory_summary',
@@ -642,6 +666,276 @@ export class MemoryService {
       },
     });
     return result;
+  }
+
+  async listExternalActions(principal: Principal, sessionId: string) {
+    this.assertHost(principal);
+    return this.database.run(principal, async (transaction) => {
+      const session = await transaction.session.findUnique({
+        where: { id: sessionId },
+        select: { id: true },
+      });
+      if (!session) throw new NotFoundException('Session not found');
+      return transaction.aiExternalAction.findMany({
+        where: { sessionId },
+        include: {
+          approvedBy: {
+            select: { id: true, displayName: true, email: true },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+      });
+    });
+  }
+
+  async createFollowUpEmailDraft(
+    principal: Principal,
+    sessionId: string,
+    input: CreateFollowUpEmailDto,
+  ) {
+    return this.createExternalDraft(
+      principal,
+      sessionId,
+      AiExternalActionKind.EMAIL_FOLLOW_UP,
+      {
+        recipientEmail: input.recipientEmail.trim(),
+        guidance: input.guidance?.trim() || null,
+      },
+    );
+  }
+
+  async createCrmNoteDraft(
+    principal: Principal,
+    sessionId: string,
+    input: CreateCrmNoteDto,
+  ) {
+    return this.createExternalDraft(
+      principal,
+      sessionId,
+      AiExternalActionKind.CRM_NOTE,
+      {
+        targetProvider: input.targetProvider.trim(),
+        targetRecordId: input.targetRecordId.trim(),
+        guidance: input.guidance?.trim() || null,
+      },
+    );
+  }
+
+  async updateExternalAction(
+    principal: Principal,
+    sessionId: string,
+    actionId: string,
+    expectedVersion: number,
+    input: UpdateAiExternalActionDto,
+  ) {
+    this.assertHost(principal);
+    return this.database.run(principal, async (transaction) => {
+      const action = await transaction.aiExternalAction.findFirst({
+        where: { id: actionId, sessionId },
+      });
+      if (!action) throw new NotFoundException('AI external action not found');
+      if (action.status !== AiExternalActionStatus.DRAFT) {
+        throw new ConflictException('Only draft external actions can be edited');
+      }
+
+      const updated = await transaction.aiExternalAction.updateMany({
+        where: {
+          id: action.id,
+          version: expectedVersion,
+          status: AiExternalActionStatus.DRAFT,
+        },
+        data: {
+          ...(input.recipientEmail !== undefined
+            ? { recipientEmail: input.recipientEmail.trim() }
+            : {}),
+          ...(input.subject !== undefined
+            ? { subject: input.subject.trim() }
+            : {}),
+          ...(input.bodyText !== undefined
+            ? { bodyText: input.bodyText.trim() }
+            : {}),
+          ...(input.targetProvider !== undefined
+            ? { targetProvider: input.targetProvider.trim() }
+            : {}),
+          ...(input.targetRecordId !== undefined
+            ? { targetRecordId: input.targetRecordId.trim() }
+            : {}),
+          version: { increment: 1 },
+        },
+      });
+      if (updated.count === 0) {
+        throw new ConflictException(
+          'External action changed since it was loaded. Refresh and retry.',
+        );
+      }
+      const value = await transaction.aiExternalAction.findUniqueOrThrow({
+        where: { id: action.id },
+      });
+      this.assertExternalActionComplete(value);
+      await this.audit.record(transaction, principal, {
+        action: 'ai.external_action.edited',
+        resourceType: 'ai_external_action',
+        resourceId: action.id,
+        metadata: { sessionId, kind: value.kind, version: value.version },
+      });
+      return value;
+    });
+  }
+
+  async approveExternalAction(
+    principal: Principal,
+    sessionId: string,
+    actionId: string,
+    expectedVersion: number,
+  ) {
+    this.assertHost(principal);
+    return this.database.run(principal, async (transaction) => {
+      const action = await transaction.aiExternalAction.findFirst({
+        where: { id: actionId, sessionId },
+      });
+      if (!action) throw new NotFoundException('AI external action not found');
+      if (action.status !== AiExternalActionStatus.DRAFT) {
+        throw new ConflictException('Only draft external actions can be approved');
+      }
+      this.assertExternalActionComplete(action);
+
+      const summary = await transaction.memorySummary.findUnique({
+        where: { sessionId },
+        select: { version: true, status: true },
+      });
+      if (
+        !summary ||
+        summary.status !== ArtifactStatus.READY ||
+        summary.version !== action.sourceSummaryVersion
+      ) {
+        throw new ConflictException(
+          'Reviewed summary changed after this draft was created. Generate a new draft.',
+        );
+      }
+
+      const updated = await transaction.aiExternalAction.updateMany({
+        where: {
+          id: action.id,
+          version: expectedVersion,
+          status: AiExternalActionStatus.DRAFT,
+        },
+        data: {
+          status: AiExternalActionStatus.APPROVED,
+          approvedById: principal.userId,
+          approvedAt: new Date(),
+          failureCode: null,
+          version: { increment: 1 },
+        },
+      });
+      if (updated.count === 0) {
+        throw new ConflictException(
+          'External action changed since it was loaded. Refresh and retry.',
+        );
+      }
+      const value = await transaction.aiExternalAction.findUniqueOrThrow({
+        where: { id: action.id },
+      });
+      await this.audit.record(transaction, principal, {
+        action: 'ai.external_action.approved',
+        resourceType: 'ai_external_action',
+        resourceId: action.id,
+        metadata: { sessionId, kind: value.kind, version: value.version },
+      });
+      await this.outbox.enqueue(transaction, principal, {
+        aggregateType: 'ai_external_action',
+        aggregateId: action.id,
+        eventType: 'ai.external_action.approved',
+        payload: {
+          actionId: action.id,
+          sessionId,
+          kind: value.kind,
+          approvedById: principal.userId,
+        },
+      });
+      return value;
+    });
+  }
+
+  async retryExternalAction(
+    principal: Principal,
+    sessionId: string,
+    actionId: string,
+  ) {
+    this.assertHost(principal);
+    return this.database.run(principal, async (transaction) => {
+      const action = await transaction.aiExternalAction.findFirst({
+        where: { id: actionId, sessionId },
+      });
+      if (!action) throw new NotFoundException('AI external action not found');
+      if (action.status !== AiExternalActionStatus.FAILED) {
+        throw new ConflictException('Only failed external actions can be retried');
+      }
+      const summary = await transaction.memorySummary.findUnique({
+        where: { sessionId },
+        select: { version: true, status: true },
+      });
+      if (
+        !summary ||
+        summary.status !== ArtifactStatus.READY ||
+        summary.version !== action.sourceSummaryVersion
+      ) {
+        throw new ConflictException(
+          'Reviewed summary changed after approval. Generate a new draft.',
+        );
+      }
+      const value = await transaction.aiExternalAction.update({
+        where: { id: action.id },
+        data: {
+          status: AiExternalActionStatus.APPROVED,
+          failureCode: null,
+          version: { increment: 1 },
+        },
+      });
+      await this.audit.record(transaction, principal, {
+        action: 'ai.external_action.retry_requested',
+        resourceType: 'ai_external_action',
+        resourceId: action.id,
+        metadata: { sessionId, kind: value.kind },
+      });
+      return value;
+    });
+  }
+
+  async cancelExternalAction(
+    principal: Principal,
+    sessionId: string,
+    actionId: string,
+  ) {
+    this.assertHost(principal);
+    return this.database.run(principal, async (transaction) => {
+      const action = await transaction.aiExternalAction.findFirst({
+        where: { id: actionId, sessionId },
+      });
+      if (!action) throw new NotFoundException('AI external action not found');
+      if (
+        action.status !== AiExternalActionStatus.DRAFT &&
+        action.status !== AiExternalActionStatus.APPROVED &&
+        action.status !== AiExternalActionStatus.FAILED
+      ) {
+        throw new ConflictException('This external action can no longer be cancelled');
+      }
+      const value = await transaction.aiExternalAction.update({
+        where: { id: action.id },
+        data: {
+          status: AiExternalActionStatus.CANCELLED,
+          failureCode: 'cancelled_by_user',
+          version: { increment: 1 },
+        },
+      });
+      await this.audit.record(transaction, principal, {
+        action: 'ai.external_action.cancelled',
+        resourceType: 'ai_external_action',
+        resourceId: action.id,
+        metadata: { sessionId, kind: value.kind },
+      });
+      return value;
+    });
   }
 
   async retrySemanticIndex(principal: Principal, sessionId: string) {
@@ -859,6 +1153,178 @@ export class MemoryService {
         payload: { memorySummaryId: summary.id, sessionId: session.id },
       });
     }
+  }
+
+  private async createExternalDraft(
+    principal: Principal,
+    sessionId: string,
+    kind: AiExternalActionKind,
+    target: {
+      recipientEmail?: string;
+      targetProvider?: string;
+      targetRecordId?: string;
+      guidance?: string | null;
+    },
+  ) {
+    this.assertHost(principal);
+    if (!this.ai.isEnabled()) {
+      throw new BadRequestException('AI provider is disabled');
+    }
+
+    const context = await this.database.run(principal, async (transaction) => {
+      const session = await transaction.session.findUnique({
+        where: { id: sessionId },
+        select: { id: true, title: true },
+      });
+      if (!session) throw new NotFoundException('Session not found');
+      const summary = await transaction.memorySummary.findUnique({
+        where: { sessionId },
+      });
+      if (
+        !summary ||
+        summary.status !== ArtifactStatus.READY ||
+        !summary.summaryText?.trim()
+      ) {
+        throw new BadRequestException(
+          'A reviewed, ready summary is required before drafting an external action',
+        );
+      }
+      return { session, summary };
+    });
+
+    const draft = await this.ai.generateFollowUpDraft({
+      title: context.session.title,
+      summaryText: context.summary.summaryText!,
+      decisions: this.summaryDecisions(context.summary.decisions),
+      actionItems: this.summaryActionItems(context.summary.actionItems),
+      ...(target.guidance !== undefined
+        ? { guidance: target.guidance }
+        : {}),
+    });
+
+    return this.database.run(principal, async (transaction) => {
+      const currentSummary = await transaction.memorySummary.findUnique({
+        where: { sessionId },
+        select: { version: true, status: true },
+      });
+      if (
+        !currentSummary ||
+        currentSummary.status !== ArtifactStatus.READY ||
+        currentSummary.version !== context.summary.version
+      ) {
+        throw new ConflictException(
+          'Reviewed summary changed while the draft was being generated. Retry.',
+        );
+      }
+
+      const value = await transaction.aiExternalAction.create({
+        data: {
+          organizationId: principal.organizationId,
+          workspaceId: principal.workspaceId,
+          sessionId,
+          kind,
+          sourceSummaryVersion: context.summary.version,
+          draftProvider: draft.provider,
+          draftModel: draft.model ?? null,
+          recipientEmail:
+            kind === AiExternalActionKind.EMAIL_FOLLOW_UP
+              ? target.recipientEmail ?? null
+              : null,
+          subject:
+            kind === AiExternalActionKind.EMAIL_FOLLOW_UP
+              ? draft.emailSubject
+              : null,
+          bodyText:
+            kind === AiExternalActionKind.EMAIL_FOLLOW_UP
+              ? draft.emailBody
+              : draft.crmNote,
+          targetProvider:
+            kind === AiExternalActionKind.CRM_NOTE
+              ? target.targetProvider ?? null
+              : null,
+          targetRecordId:
+            kind === AiExternalActionKind.CRM_NOTE
+              ? target.targetRecordId ?? null
+              : null,
+        },
+      });
+      await this.audit.record(transaction, principal, {
+        action: 'ai.external_action.drafted',
+        resourceType: 'ai_external_action',
+        resourceId: value.id,
+        metadata: {
+          sessionId,
+          kind,
+          sourceSummaryVersion: context.summary.version,
+          provider: draft.provider,
+          model: draft.model ?? null,
+        },
+      });
+      return value;
+    });
+  }
+
+  private assertExternalActionComplete(action: {
+    kind: AiExternalActionKind;
+    recipientEmail: string | null;
+    subject: string | null;
+    bodyText: string;
+    targetProvider: string | null;
+    targetRecordId: string | null;
+  }): void {
+    if (!action.bodyText.trim()) {
+      throw new BadRequestException('External action body cannot be empty');
+    }
+    if (
+      action.kind === AiExternalActionKind.EMAIL_FOLLOW_UP &&
+      (!action.recipientEmail || !action.subject?.trim())
+    ) {
+      throw new BadRequestException(
+        'Follow-up email requires recipient, subject, and body',
+      );
+    }
+    if (
+      action.kind === AiExternalActionKind.CRM_NOTE &&
+      (!action.targetProvider?.trim() || !action.targetRecordId?.trim())
+    ) {
+      throw new BadRequestException(
+        'CRM note requires provider, target record, and body',
+      );
+    }
+  }
+
+  private summaryDecisions(value: Prisma.JsonValue): Array<{ text: string }> {
+    if (!Array.isArray(value)) return [];
+    return value.flatMap((item) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) return [];
+      const text = (item as Record<string, unknown>).text;
+      return typeof text === 'string' && text.trim()
+        ? [{ text: text.trim() }]
+        : [];
+    });
+  }
+
+  private summaryActionItems(value: Prisma.JsonValue): Array<{
+    text: string;
+    owner?: string | null;
+    dueDate?: string | null;
+  }> {
+    if (!Array.isArray(value)) return [];
+    return value.flatMap((item) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) return [];
+      const entry = item as Record<string, unknown>;
+      const text = typeof entry.text === 'string' ? entry.text.trim() : '';
+      if (!text) return [];
+      return [{
+        text,
+        ...(typeof entry.owner === 'string'
+          ? { owner: entry.owner.trim() || null }
+          : {}),
+        ...(typeof entry.dueDate === 'string'
+          ? { dueDate: entry.dueDate.trim() || null }
+          : {}),
+      }];
+    });
   }
 
   private async searchSemanticMemory(

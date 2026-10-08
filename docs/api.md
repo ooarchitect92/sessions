@@ -315,3 +315,18 @@ When `EMBEDDING_PROVIDER` is enabled, a background worker chunks ready transcrip
 - `POST /v1/memory/{sessionId}/semantic-index/retry` is host-restricted and requeues a failed semantic index for a ready transcript.
 
 Local development uses a deterministic mock embedding provider. Production forbids that provider; an external embedding provider must be configured or the optional semantic tier can remain disabled. API queries still execute inside tenant RLS transactions and repeat organization/workspace predicates in vector search.
+
+
+### Human-approved AI follow-up and CRM actions
+
+External AI actions are never sent or written automatically. A host first creates a draft from the current reviewed Memory summary, can edit the draft under optimistic concurrency, and must explicitly approve it. The background worker revalidates the source summary version immediately before execution; if the reviewed summary changed, the action is cancelled instead of sending stale content.
+
+- `GET /v1/memory/{sessionId}/follow-ups` lists draft and execution history.
+- `POST /v1/memory/{sessionId}/follow-ups/email/draft` generates a reviewable follow-up email draft for a supplied recipient.
+- `POST /v1/memory/{sessionId}/follow-ups/crm-note/draft` generates a reviewable CRM activity/note draft for a supplied provider and record ID.
+- `PATCH /v1/memory/{sessionId}/follow-ups/{actionId}` edits only a DRAFT action and requires `If-Match`.
+- `POST /v1/memory/{sessionId}/follow-ups/{actionId}/approve` explicitly authorizes external execution and requires `If-Match`.
+- `POST /v1/memory/{sessionId}/follow-ups/{actionId}/retry` retries a previously approved action that failed.
+- `POST /v1/memory/{sessionId}/follow-ups/{actionId}/cancel` cancels a draft, approved, or failed action before successful execution.
+
+Email execution reuses the qualified email delivery adapter with an action-specific idempotency key. CRM writes use a separately configured controlled HTTP adapter (`CRM_WRITE_PROVIDER=http`) and also carry an idempotency key. Local mock providers exercise the pipeline but are forbidden in production.

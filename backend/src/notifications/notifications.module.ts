@@ -15,5 +15,6 @@ import { NotificationsService } from './notifications.service';
     BookingReminderWorker,
     EventReminderWorker,
   ],
+  exports: [EmailDeliveryProvider],
 })
 export class NotificationsModule {}

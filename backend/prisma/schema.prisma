@@ -187,6 +187,20 @@ enum CalendarConnectionStatus {
   REVOKED
 }
 
+enum AiExternalActionKind {
+  EMAIL_FOLLOW_UP
+  CRM_NOTE
+}
+
+enum AiExternalActionStatus {
+  DRAFT
+  APPROVED
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
 model Organization {
   id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name                String                @db.VarChar(160)
@@ -231,6 +245,7 @@ model Organization {
   engagementEvents EngagementEvent[]
   calendarConnections CalendarConnection[]
   calendarOAuthStates CalendarOAuthState[]
+  aiExternalActions    AiExternalAction[]
 
   @@map("organizations")
 }
@@ -283,6 +298,7 @@ model Workspace {
   engagementEvents EngagementEvent[]
   calendarConnections CalendarConnection[]
   calendarOAuthStates CalendarOAuthState[]
+  aiExternalActions    AiExternalAction[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -329,6 +345,7 @@ model User {
   engagementEvents         EngagementEvent[]
   calendarConnections      CalendarConnection[]
   calendarOAuthStates      CalendarOAuthState[]
+  approvedAiExternalActions AiExternalAction[] @relation("AiExternalActionApprover")
 
   @@index([status])
   @@map("users")
@@ -414,6 +431,7 @@ model Session {
   questions            Question[]
   attendanceIntervals  AttendanceInterval[]
   engagementEvents     EngagementEvent[]
+  aiExternalActions     AiExternalAction[]
 
   @@index([organizationId, workspaceId, startsAt])
   @@index([workspaceId, status, startsAt])
@@ -914,6 +932,40 @@ model MemorySummary {
   @@map("memory_summaries")
 }
 
+model AiExternalAction {
+  id                       String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId           String                 @map("organization_id") @db.Uuid
+  workspaceId              String                 @map("workspace_id") @db.Uuid
+  sessionId                String                 @map("session_id") @db.Uuid
+  kind                     AiExternalActionKind
+  status                   AiExternalActionStatus @default(DRAFT)
+  sourceSummaryVersion     Int                    @map("source_summary_version")
+  draftProvider            String?                @map("draft_provider") @db.VarChar(100)
+  draftModel               String?                @map("draft_model") @db.VarChar(160)
+  recipientEmail           String?                @map("recipient_email") @db.Citext
+  subject                  String?                @db.VarChar(240)
+  bodyText                 String                 @map("body_text") @db.Text
+  targetProvider           String?                @map("target_provider") @db.VarChar(80)
+  targetRecordId           String?                @map("target_record_id") @db.VarChar(255)
+  approvedById             String?                @map("approved_by_id") @db.Uuid
+  approvedAt               DateTime?              @map("approved_at") @db.Timestamptz(6)
+  executionProvider        String?                @map("execution_provider") @db.VarChar(100)
+  providerReferenceId      String?                @map("provider_reference_id") @db.VarChar(255)
+  failureCode              String?                @map("failure_code") @db.VarChar(500)
+  executedAt               DateTime?              @map("executed_at") @db.Timestamptz(6)
+  version                  Int                    @default(1)
+  createdAt                DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization             Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace                Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  session                  Session                @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  approvedBy               User?                  @relation("AiExternalActionApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, workspaceId, sessionId, createdAt])
+  @@index([status, updatedAt])
+  @@map("ai_external_actions")
+}
+
 model ChatMessage {
   id             String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   organizationId String      @map("organization_id") @db.Uuid
@@ -1353,7 +1405,6 @@ model WorkspaceInvitation {
   @@index([workspaceId, email, acceptedAt, revokedAt])
   @@map("workspace_invitations")
 }
-
 
 model MarketingLead {
   id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
