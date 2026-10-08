@@ -1611,3 +1611,67 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+.memory-search-excerpt {
+  margin: -2px 0 14px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+
+.memory-search-stack {
+  display: grid;
+  gap: 8px;
+  min-width: min(100%, 360px);
+}
+
+.memory-search-mode {
+  display: inline-flex;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #f7f5ef;
+  width: fit-content;
+}
+
+.memory-search-mode button {
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.memory-search-mode button.active {
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.memory-search-match {
+  display: grid;
+  gap: 4px;
+  margin: -2px 0 14px;
+}
+
+.memory-search-match > span {
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.memory-search-match .memory-search-excerpt {
+  margin: 0;
+}

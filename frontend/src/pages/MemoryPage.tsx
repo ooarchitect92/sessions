@@ -9,9 +9,10 @@ function statusLabel(status: string | undefined): string {
 
 export function MemoryPage() {
   const [query, setQuery] = useState('');
+  const [searchMode, setSearchMode] = useState<'lexical' | 'semantic'>('lexical');
   const memory = useQuery({
-    queryKey: ['memory', query],
-    queryFn: () => api.listMemory(query.trim() || undefined),
+    queryKey: ['memory', query, searchMode],
+    queryFn: () => api.listMemory(query.trim() || undefined, searchMode),
   });
 
   return (
@@ -25,9 +26,27 @@ export function MemoryPage() {
             transcript segments, agenda context, chat, polls, questions, and reviewed AI output.
           </p>
         </div>
-        <div className="memory-search">
-          <span>⌕</span>
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search titles and transcript text" aria-label="Search memory" />
+        <div className="memory-search-stack">
+          <div className="memory-search">
+            <span>⌕</span>
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search titles, descriptions, and transcript text" aria-label="Search memory" />
+          </div>
+          <div className="memory-search-mode" role="group" aria-label="Memory search mode">
+            <button
+              type="button"
+              className={searchMode === 'lexical' ? 'active' : ''}
+              onClick={() => setSearchMode('lexical')}
+            >
+              Keyword
+            </button>
+            <button
+              type="button"
+              className={searchMode === 'semantic' ? 'active' : ''}
+              onClick={() => setSearchMode('semantic')}
+            >
+              Semantic
+            </button>
+          </div>
         </div>
       </section>
 
@@ -49,6 +68,12 @@ export function MemoryPage() {
                 <span>{new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(item.startsAt))}</span>
               </div>
               <h3>{item.title}</h3>
+              {item.search?.excerpt ? (
+                <div className="memory-search-match">
+                  <span>{item.search.mode === 'semantic' ? 'Semantic match' : 'Keyword match'}</span>
+                  <p className="memory-search-excerpt">{item.search.excerpt}</p>
+                </div>
+              ) : null}
               <div className="artifact-row">
                 <span><strong>Recording</strong>{statusLabel(item.recording?.status)}</span>
                 <span><strong>Transcript</strong>{statusLabel(item.transcript?.status)}</span>

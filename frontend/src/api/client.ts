@@ -535,6 +535,11 @@ export interface MemoryListItem extends Session {
   recording: RecordingRecord | null;
   transcript: TranscriptRecord | null;
   memorySummary: MemorySummaryRecord | null;
+  search?: {
+    rank: number;
+    excerpt: string | null;
+    mode: 'lexical' | 'semantic';
+  };
   _count: { chatMessages: number; polls: number; questions: number };
 }
 
@@ -1363,8 +1368,14 @@ export const api = {
     });
   },
 
-  listMemory(query?: string): Promise<Paginated<MemoryListItem>> {
-    const search = query ? `?query=${encodeURIComponent(query)}` : "";
+  listMemory(
+    query?: string,
+    searchMode: 'lexical' | 'semantic' = 'lexical',
+  ): Promise<Paginated<MemoryListItem>> {
+    const params = new URLSearchParams();
+    if (query) params.set('query', query);
+    params.set('searchMode', searchMode);
+    const search = params.size ? `?${params.toString()}` : '';
     return request<Paginated<MemoryListItem>>(`/memory${search}`);
   },
 

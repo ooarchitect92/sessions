@@ -170,7 +170,7 @@ Upload object keys are namespaced by organization/workspace and start in a quara
 
 | Method | Path                           | Purpose                                                              |
 | ------ | ------------------------------ | -------------------------------------------------------------------- |
-| `GET`  | `/v1/memory`                   | paginated memory library with optional title/transcript query        |
+| `GET`  | `/v1/memory`                   | paginated Memory library; `searchMode=lexical|semantic` selects GIN keyword ranking or optional pgvector transcript retrieval with workspace filtering and lexical fallback |
 | `GET`  | `/v1/memory/{sessionId}`       | agenda, artifacts, transcript segments, chat, polls, Q&A and summary |
 | `PATCH` | `/v1/memory/{sessionId}/summary` | human review/edit of a ready summary with `If-Match`                 |
 | `POST` | `/v1/memory/{sessionId}/retry` | requeue failed recording, transcript and summary artifacts           |
@@ -300,3 +300,18 @@ Hosts can review completed transcripts without mutating provider output invisibl
 - `POST /v1/memory/{sessionId}/transcript/revisions/{revisionId}/restore` restores a prior revision while first preserving the current transcript as a new revision.
 
 Language tags are validated using a BCP-47-style policy. Transcript edits are host-restricted, tenant-scoped, audited, emitted through the outbox, and invalidate AI summary source-version state. Summary workers pin the transcript version they read and refuse stale writes if the transcript changes while generation is in progress.
+
+
+### Memory full-text search
+
+`GET /v1/memory?query=...` uses PostgreSQL `websearch_to_tsquery` with the language-neutral `simple` text-search configuration. GIN expression indexes cover session title/description and transcript full text. Search execution runs inside the normal tenant transaction, repeats organization/workspace predicates as defense in depth, preserves the existing artifact-eligibility boundary, ranks session metadata above transcript-only matches, and returns a short plain-text excerpt for matching cards. Vector retrieval remains a separate optional phase and is not required for this lexical path.
+
+
+### Optional semantic Memory retrieval
+
+When `EMBEDDING_PROVIDER` is enabled, a background worker chunks ready transcript segments, embeds them, and writes tenant-scoped vectors to PostgreSQL pgvector. Index rows pin `source_transcript_version`; transcript corrections automatically become stale and are re-indexed before semantic results are considered current.
+
+- `GET /v1/memory?query=...&searchMode=semantic` embeds the query and ranks ready transcript chunks by cosine distance. If semantic indexing is unavailable or has no matching indexed sessions yet, the API falls back to the existing lexical search path.
+- `POST /v1/memory/{sessionId}/semantic-index/retry` is host-restricted and requeues a failed semantic index for a ready transcript.
+
+Local development uses a deterministic mock embedding provider. Production forbids that provider; an external embedding provider must be configured or the optional semantic tier can remain disabled. API queries still execute inside tenant RLS transactions and repeat organization/workspace predicates in vector search.

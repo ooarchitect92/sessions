@@ -1,11 +1,15 @@
 import { Transform } from 'class-transformer';
-import { IsInt, IsOptional, IsString, Length, Max, Min } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, Length, Max, Min } from 'class-validator';
 
 export class ListMemoryQuery {
   @IsOptional()
   @IsString()
   @Length(1, 200)
   query?: string;
+
+  @IsOptional()
+  @IsIn(['lexical', 'semantic'])
+  searchMode: 'lexical' | 'semantic' = 'lexical';
 
   @IsOptional()
   @Transform(({ value }) => Number(value))

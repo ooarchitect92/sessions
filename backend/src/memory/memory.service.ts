@@ -17,8 +17,16 @@ import { TenantDatabaseService } from '../database/tenant-database.service';
 import { RealtimeEventsService } from '../infrastructure/realtime-events.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { ListMemoryQuery } from './dto/list-memory.query';
+import { EmbeddingProviderService } from './embedding-provider.service';
 import { UpdateMemorySummaryDto } from './dto/update-memory-summary.dto';
 import { UpdateTranscriptDto } from './dto/update-transcript.dto';
+
+interface MemorySearchHit {
+  id: string;
+  rank: number;
+  excerpt: string | null;
+  totalCount: number;
+}
 
 @Injectable()
 export class MemoryService {
@@ -27,10 +35,32 @@ export class MemoryService {
     private readonly audit: AuditService,
     private readonly outbox: OutboxService,
     private readonly realtime: RealtimeEventsService,
+    private readonly embeddings: EmbeddingProviderService,
   ) {}
 
   async list(principal: Principal, query: ListMemoryQuery) {
     return this.database.run(principal, async (transaction) => {
+      const searchTerm = query.query?.trim();
+      if (searchTerm) {
+        if (query.searchMode === 'semantic') {
+          const semantic = await this.searchSemanticMemory(
+            transaction,
+            principal,
+            searchTerm,
+            query.page,
+            query.pageSize,
+          );
+          if (semantic.items.length > 0) return semantic;
+        }
+        return this.searchMemory(
+          transaction,
+          principal,
+          searchTerm,
+          query.page,
+          query.pageSize,
+        );
+      }
+
       const where: Prisma.SessionWhereInput = {
         OR: [
           {
@@ -47,33 +77,6 @@ export class MemoryService {
           { transcript: { isNot: null } },
           { memorySummary: { isNot: null } },
         ],
-        ...(query.query
-          ? {
-              AND: [
-                {
-                  OR: [
-                    { title: { contains: query.query, mode: 'insensitive' } },
-                    {
-                      description: {
-                        contains: query.query,
-                        mode: 'insensitive',
-                      },
-                    },
-                    {
-                      transcript: {
-                        is: {
-                          fullText: {
-                            contains: query.query,
-                            mode: 'insensitive',
-                          },
-                        },
-                      },
-                    },
-                  ],
-                },
-              ],
-            }
-          : {}),
       };
       const [items, total] = await Promise.all([
         transaction.session.findMany({
@@ -86,6 +89,7 @@ export class MemoryService {
                 status: true,
                 language: true,
                 completedAt: true,
+                version: true,
               },
             },
             memorySummary: true,
@@ -640,6 +644,37 @@ export class MemoryService {
     return result;
   }
 
+  async retrySemanticIndex(principal: Principal, sessionId: string) {
+    this.assertHost(principal);
+    return this.database.run(principal, async (transaction) => {
+      const transcript = await transaction.transcript.findUnique({
+        where: { sessionId },
+        select: { id: true, status: true, fullText: true },
+      });
+      if (!transcript) throw new NotFoundException('Transcript not found');
+      if (
+        transcript.status !== ArtifactStatus.READY ||
+        !transcript.fullText?.trim()
+      ) {
+        throw new BadRequestException(
+          'A ready transcript with text is required for semantic indexing',
+        );
+      }
+
+      await transaction.$executeRawUnsafe(
+        "UPDATE memory_embedding_indexes SET status = 'PENDING', failure_code = NULL, completed_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE transcript_id = $1::uuid",
+        transcript.id,
+      );
+      await this.audit.record(transaction, principal, {
+        action: 'memory.semantic_index.retry_requested',
+        resourceType: 'transcript',
+        resourceId: transcript.id,
+        metadata: { sessionId },
+      });
+      return { sessionId, transcriptId: transcript.id, accepted: true as const };
+    });
+  }
+
   async retryFailed(principal: Principal, sessionId: string) {
     this.assertHost(principal);
     const result = await this.database.run(principal, async (transaction) => {
@@ -824,6 +859,177 @@ export class MemoryService {
         payload: { memorySummaryId: summary.id, sessionId: session.id },
       });
     }
+  }
+
+  private async searchSemanticMemory(
+    transaction: Prisma.TransactionClient,
+    principal: Principal,
+    searchTerm: string,
+    page: number,
+    pageSize: number,
+  ) {
+    if (!this.embeddings.isEnabled()) {
+      return { items: [], page, pageSize, total: 0 };
+    }
+
+    const embedded = await this.embeddings.embed([searchTerm]);
+    const vector = embedded.vectors[0];
+    if (!vector) return { items: [], page, pageSize, total: 0 };
+    const vectorLiteral = '[' + vector.join(',') + ']';
+    const offset = (page - 1) * pageSize;
+
+    const hits = await transaction.$queryRawUnsafe<MemorySearchHit[]>(
+      "WITH ranked AS (SELECT c.session_id::text AS id, MAX(1 - (c.embedding <=> $1::vector))::double precision AS rank, (array_agg(c.content ORDER BY c.embedding <=> $1::vector))[1] AS excerpt FROM memory_embedding_chunks c JOIN memory_embedding_indexes i ON i.id = c.index_id JOIN transcripts t ON t.id = c.transcript_id WHERE c.organization_id = $2::uuid AND c.workspace_id = $3::uuid AND i.status = 'READY' AND i.source_transcript_version = t.version GROUP BY c.session_id) SELECT id AS \"id\", rank AS \"rank\", excerpt AS \"excerpt\", COUNT(*) OVER()::integer AS \"totalCount\" FROM ranked ORDER BY rank DESC, id LIMIT $4 OFFSET $5",
+      vectorLiteral,
+      principal.organizationId,
+      principal.workspaceId,
+      pageSize,
+      offset,
+    );
+
+    return this.hydrateSearchHits(transaction, hits, page, pageSize, 'semantic');
+  }
+
+  private async searchMemory(
+    transaction: Prisma.TransactionClient,
+    principal: Principal,
+    searchTerm: string,
+    page: number,
+    pageSize: number,
+  ) {
+    const offset = (page - 1) * pageSize;
+    const hits = await transaction.$queryRaw<MemorySearchHit[]>`
+      WITH search_query AS (
+        SELECT websearch_to_tsquery('simple', ${searchTerm}) AS query
+      )
+      SELECT
+        s.id::text AS "id",
+        (
+          (
+            ts_rank_cd(
+              setweight(to_tsvector('simple', COALESCE(s.title, '')), 'A') ||
+              setweight(to_tsvector('simple', COALESCE(s.description, '')), 'B'),
+              search_query.query,
+              32
+            ) * 2
+          ) +
+          ts_rank_cd(
+            setweight(to_tsvector('simple', COALESCE(t.full_text, '')), 'C'),
+            search_query.query,
+            32
+          )
+        )::double precision AS "rank",
+        CASE
+          WHEN t.full_text IS NOT NULL
+            AND to_tsvector('simple', t.full_text) @@ search_query.query
+          THEN regexp_replace(
+            ts_headline(
+              'simple',
+              t.full_text,
+              search_query.query,
+              'MaxWords=32, MinWords=8, ShortWord=3, HighlightAll=false'
+            ),
+            '</?b>',
+            '',
+            'gi'
+          )
+          WHEN s.description IS NOT NULL
+            AND to_tsvector('simple', s.description) @@ search_query.query
+          THEN regexp_replace(
+            ts_headline(
+              'simple',
+              s.description,
+              search_query.query,
+              'MaxWords=32, MinWords=8, ShortWord=3, HighlightAll=false'
+            ),
+            '</?b>',
+            '',
+            'gi'
+          )
+          ELSE s.title
+        END AS "excerpt",
+        COUNT(*) OVER()::integer AS "totalCount"
+      FROM sessions s
+      LEFT JOIN transcripts t ON t.session_id = s.id
+      LEFT JOIN recordings r ON r.session_id = s.id
+      LEFT JOIN memory_summaries ms ON ms.session_id = s.id
+      CROSS JOIN search_query
+      WHERE
+        s.organization_id = ${principal.organizationId}::uuid
+        AND s.workspace_id = ${principal.workspaceId}::uuid
+        AND (
+          s.status IN ('ENDED', 'PROCESSING', 'READY', 'FAILED')
+          OR r.id IS NOT NULL
+          OR t.id IS NOT NULL
+          OR ms.id IS NOT NULL
+        )
+        AND (
+          to_tsvector(
+            'simple',
+            COALESCE(s.title, '') || ' ' || COALESCE(s.description, '')
+          ) @@ search_query.query
+          OR to_tsvector('simple', COALESCE(t.full_text, '')) @@ search_query.query
+        )
+      ORDER BY "rank" DESC, s.starts_at DESC, s.id
+      LIMIT ${pageSize}
+      OFFSET ${offset}
+    `;
+
+    return this.hydrateSearchHits(transaction, hits, page, pageSize, 'lexical');
+  }
+
+  private async hydrateSearchHits(
+    transaction: Prisma.TransactionClient,
+    hits: MemorySearchHit[],
+    page: number,
+    pageSize: number,
+    mode: 'lexical' | 'semantic',
+  ) {
+    const ids = hits.map((hit) => hit.id);
+    const records =
+      ids.length === 0
+        ? []
+        : await transaction.session.findMany({
+            where: { id: { in: ids } },
+            include: {
+              recording: true,
+              transcript: {
+                select: {
+                  id: true,
+                  status: true,
+                  language: true,
+                  completedAt: true,
+                  version: true,
+                },
+              },
+              memorySummary: true,
+              _count: {
+                select: { chatMessages: true, polls: true, questions: true },
+              },
+            },
+          });
+    const recordsById = new Map(records.map((item) => [item.id, item]));
+    const items = hits.flatMap((hit) => {
+      const item = recordsById.get(hit.id);
+      return item
+        ? [
+            {
+              ...item,
+              search: {
+                rank: hit.rank,
+                excerpt: hit.excerpt,
+                mode,
+              },
+            },
+          ]
+        : [];
+    });
+    return {
+      items,
+      page,
+      pageSize,
+      total: hits[0]?.totalCount ?? 0,
+    };
   }
 
   private toJson(value: unknown): Prisma.InputJsonValue {
