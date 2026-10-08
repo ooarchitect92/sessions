@@ -606,11 +606,12 @@ function IntegrationsSettings() {
     onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['calendar-connections'] }),
   });
   const createApiKey = useMutation({
-    mutationFn: () => api.createApiKey({
-      name: apiKeyName.trim(),
-      scopes: apiKeyScopes,
-      expiresInDays: apiKeyExpiry ? Number(apiKeyExpiry) : undefined,
-    }),
+    mutationFn: () =>
+      api.createApiKey({
+        name: apiKeyName.trim(),
+        scopes: apiKeyScopes,
+        ...(apiKeyExpiry ? { expiresInDays: Number(apiKeyExpiry) } : {}),
+      }),
     onSuccess: async (result) => {
       setIssuedApiKey(result);
       setApiKeyName('');
