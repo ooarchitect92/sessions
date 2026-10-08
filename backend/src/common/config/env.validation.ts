@@ -21,6 +21,7 @@ const environmentSchema = z
     AUTH_REQUIRE_EMAIL_VERIFICATION: optionalBoolean.default(false),
     ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().min(300).max(3600).default(900),
     REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).max(365).default(30),
+    API_KEY_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(1).max(10000).default(120),
     AUTH_IP_HASH_PEPPER: z.string().min(32),
     AUTH_ENCRYPTION_KEY: z.string().regex(/^[a-fA-F0-9]{64}$/),
     MFA_ISSUER: z.string().min(1).max(100).default('Sessions'),
