@@ -28,15 +28,28 @@ export class CalendarTokenVaultService {
     ) {
       throw new Error('calendar_token_ciphertext_invalid');
     }
-    const decipher = createDecipheriv(
-      'aes-256-gcm',
-      this.key,
-      Buffer.from(ivEncoded, 'base64url'),
-    );
-    decipher.setAuthTag(Buffer.from(tagEncoded, 'base64url'));
+    const iv = this.decodeBase64UrlCanonical(ivEncoded);
+    const tag = this.decodeBase64UrlCanonical(tagEncoded);
+    const ciphertext = this.decodeBase64UrlCanonical(ciphertextEncoded);
+    if (iv.length !== 12 || tag.length !== 16 || ciphertext.length === 0) {
+      throw new Error('calendar_token_ciphertext_invalid');
+    }
+    const decipher = createDecipheriv('aes-256-gcm', this.key, iv);
+    decipher.setAuthTag(tag);
     return Buffer.concat([
-      decipher.update(Buffer.from(ciphertextEncoded, 'base64url')),
+      decipher.update(ciphertext),
       decipher.final(),
     ]).toString('utf8');
+  }
+
+  private decodeBase64UrlCanonical(value: string): Buffer {
+    if (!/^[A-Za-z0-9_-]+$/.test(value)) {
+      throw new Error('calendar_token_ciphertext_invalid');
+    }
+    const decoded = Buffer.from(value, 'base64url');
+    if (decoded.toString('base64url') !== value) {
+      throw new Error('calendar_token_ciphertext_invalid');
+    }
+    return decoded;
   }
 }
