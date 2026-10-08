@@ -1,0 +1,172 @@
+{
+  "routes": [
+    {
+      "path": "/",
+      "route": "home",
+      "title": "Sessions — Meetings that move work forward",
+      "description": "Agenda-led meetings, webinars, scheduling, collaboration, recording, transcription, and meeting memory in one platform.",
+      "index": true
+    },
+    {
+      "path": "/product",
+      "route": "product",
+      "title": "Product — Sessions",
+      "description": "Explore the complete Sessions workflow across meetings, collaboration, events, bookings, memory, AI, integrations, and analytics.",
+      "index": true
+    },
+    {
+      "path": "/meetings",
+      "route": "meetings",
+      "title": "Meetings & Rooms — Sessions",
+      "description": "Run structured video meetings with interactive agendas, content, polls, Q&A, whiteboards, chat, and breakouts.",
+      "index": true
+    },
+    {
+      "path": "/webinars",
+      "route": "webinars",
+      "title": "Webinars & Events — Sessions",
+      "description": "Publish branded event pages, register attendees, manage presenters, reminders, and interactive webinars.",
+      "index": true
+    },
+    {
+      "path": "/scheduling",
+      "route": "scheduling",
+      "title": "Scheduling & Booking Pages — Sessions",
+      "description": "Publish booking pages with availability, intake forms, calendar invitations, cancellation, and rescheduling.",
+      "index": true
+    },
+    {
+      "path": "/memory",
+      "route": "memory",
+      "title": "AI & Meeting Memory — Sessions",
+      "description": "Turn recordings and transcripts into searchable meeting memory, summaries, decisions, and actions.",
+      "index": true
+    },
+    {
+      "path": "/integrations",
+      "route": "integrations",
+      "title": "Integrations & API — Sessions",
+      "description": "Connect calendars, content tools, REST APIs, signed webhooks, storage, transcription, and AI providers.",
+      "index": true
+    },
+    {
+      "path": "/security",
+      "route": "security",
+      "title": "Security & Trust — Sessions",
+      "description": "Tenant isolation, consent-aware recording, secure storage, reliable external effects, and human-controlled AI.",
+      "index": true
+    },
+    {
+      "path": "/pricing",
+      "route": "pricing",
+      "title": "Plans — Sessions",
+      "description": "Understand Sessions capability packaging without publishing unapproved commercial prices.",
+      "index": true
+    },
+    {
+      "path": "/demo",
+      "route": "demo",
+      "title": "Request a Demo — Sessions",
+      "description": "See how Sessions connects meetings, webinars, scheduling, collaboration, and meeting memory in one end-to-end workflow.",
+      "index": true
+    },
+    {
+      "path": "/contact",
+      "route": "contact",
+      "title": "Contact & Demo — Sessions",
+      "description": "Tell us about your meeting, webinar, scheduling, or collaboration workflow.",
+      "index": true
+    },
+    {
+      "path": "/about",
+      "route": "about",
+      "title": "About the Platform — Sessions",
+      "description": "Learn how the clean-room Sessions-like platform is structured and which product principles guide the build.",
+      "index": true
+    },
+    {
+      "path": "/resources",
+      "route": "resources",
+      "title": "Resources — Sessions",
+      "description": "Practical guides to agenda-led meetings, webinar operations, scheduling, and meeting memory.",
+      "index": true
+    },
+    {
+      "path": "/resources/agenda-led-meetings",
+      "route": "resource-agenda",
+      "title": "Guide to Agenda-Led Meetings — Sessions",
+      "description": "A practical guide to using time-boxed interactive agendas to keep meetings aligned and actionable.",
+      "index": true
+    },
+    {
+      "path": "/resources/webinar-lifecycle",
+      "route": "resource-webinars",
+      "title": "Webinar Lifecycle Guide — Sessions",
+      "description": "Plan the public page, registration, reminders, live engagement, and follow-through for webinars.",
+      "index": true
+    },
+    {
+      "path": "/resources/scheduling-workflow",
+      "route": "resource-scheduling",
+      "title": "Scheduling Workflow Guide — Sessions",
+      "description": "Design a reliable booking flow from availability and intake through reservation, calendar, and rescheduling.",
+      "index": true
+    },
+    {
+      "path": "/search",
+      "route": "search",
+      "title": "Search — Sessions",
+      "description": "Search product pages and Sessions resources.",
+      "index": false
+    },
+    {
+      "path": "/terms",
+      "route": "terms",
+      "title": "Terms Information — Sessions",
+      "description": "Review the current public website terms boundary and production legal information requirements.",
+      "index": true
+    },
+    {
+      "path": "/privacy",
+      "route": "privacy",
+      "title": "Privacy Information — Sessions",
+      "description": "Understand the data the public Sessions website accepts and the boundaries of the current implementation.",
+      "index": true
+    },
+    {
+      "path": "/accessibility",
+      "route": "accessibility",
+      "title": "Accessibility — Sessions",
+      "description": "Accessibility goals and implementation details for the public Sessions website.",
+      "index": true
+    },
+    {
+      "path": "/consent",
+      "route": "consent",
+      "title": "Consent Preferences — Sessions",
+      "description": "Review optional website measurement preferences.",
+      "index": false
+    },
+    {
+      "path": "/offline",
+      "route": "offline",
+      "title": "Offline — Sessions",
+      "description": "The Sessions public website is currently offline.",
+      "index": false
+    },
+    {
+      "path": "/error",
+      "route": "error",
+      "title": "Temporary Problem — Sessions",
+      "description": "The Sessions public website encountered a temporary problem.",
+      "index": false
+    },
+    {
+      "path": "/thank-you",
+      "route": "thank-you",
+      "title": "Request Received — Sessions",
+      "description": "Your Sessions request has been received.",
+      "index": false
+    }
+  ]
+}

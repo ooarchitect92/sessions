@@ -5,6 +5,7 @@ import {
   type DynamicFieldDefinition,
 } from './DynamicPublicFormFields';
 import { publicApi } from './public-api';
+import { applyHead } from './site-head';
 
 interface PublicEvent {
   id: string;
@@ -88,6 +89,19 @@ export function PublicEventPage({
       cancelled = true;
     };
   }, [eventSlug, organizationSlug, workspaceSlug]);
+
+  useEffect(() => {
+    if (!event) return;
+    applyHead({
+      title: `${event.title} — Sessions Event`,
+      description:
+        event.branding.heroSubheadline ??
+        event.description ??
+        'Register for this Sessions event.',
+      path: window.location.pathname,
+      index: true,
+    });
+  }, [event]);
 
   const submit = async (formEvent: FormEvent) => {
     formEvent.preventDefault();

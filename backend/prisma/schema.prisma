@@ -1405,3 +1405,70 @@ model WorkspaceInvitation {
   @@index([workspaceId, email, acceptedAt, revokedAt])
   @@map("workspace_invitations")
 }
+
+model MarketingLead {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  submissionKey String   @unique @map("submission_key") @db.Uuid
+  requestHash   String   @map("request_hash") @db.VarChar(64)
+  kind          String   @db.VarChar(40)
+  name          String?  @db.VarChar(160)
+  email         String   @db.Citext
+  company       String?  @db.VarChar(160)
+  teamSize      String?  @map("team_size") @db.VarChar(40)
+  message       String?  @db.Text
+  sourcePath    String?  @map("source_path") @db.VarChar(500)
+  consent       Boolean  @default(false)
+  metadata      Json     @default("{}")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  outboxEvents      MarketingLeadOutboxEvent[]
+  consentEvidence  MarketingConsentEvidence?
+  auditEvents      MarketingLeadAuditEvent[]
+
+  @@index([kind, createdAt])
+  @@index([email, createdAt])
+  @@map("marketing_leads")
+}
+
+model MarketingConsentEvidence {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  leadId        String   @unique @map("lead_id") @db.Uuid
+  purpose       String   @db.VarChar(80)
+  version       String   @db.VarChar(80)
+  statementHash String   @map("statement_hash") @db.VarChar(64)
+  capturedAt    DateTime @default(now()) @map("captured_at") @db.Timestamptz(6)
+  lead          MarketingLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@map("marketing_consent_evidence")
+}
+
+model MarketingLeadAuditEvent {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  leadId    String   @map("lead_id") @db.Uuid
+  action    String   @db.VarChar(160)
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  lead      MarketingLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId, createdAt])
+  @@map("marketing_lead_audit_events")
+}
+
+model MarketingLeadOutboxEvent {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  leadId         String    @map("lead_id") @db.Uuid
+  eventType      String    @map("event_type") @db.VarChar(160)
+  payload        Json
+  attempts       Int       @default(0)
+  availableAt    DateTime  @default(now()) @map("available_at") @db.Timestamptz(6)
+  lockedAt       DateTime? @map("locked_at") @db.Timestamptz(6)
+  lockedBy       String?   @map("locked_by") @db.VarChar(160)
+  publishedAt    DateTime? @map("published_at") @db.Timestamptz(6)
+  lastError      String?   @map("last_error") @db.Text
+  deadLetteredAt DateTime? @map("dead_lettered_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  lead           MarketingLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@unique([leadId, eventType])
+  @@index([publishedAt, deadLetteredAt, availableAt])
+  @@map("marketing_lead_outbox_events")
+}

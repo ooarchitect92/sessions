@@ -2,8 +2,10 @@ FROM node:22-alpine AS build
 WORKDIR /app
 ARG VITE_APP_URL=http://localhost:3000
 ARG VITE_API_URL=http://localhost:4000/v1
+ARG VITE_SITE_URL=http://localhost:3001
 ENV VITE_APP_URL=$VITE_APP_URL
 ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_SITE_URL=$VITE_SITE_URL
 
 COPY package.json tsconfig.base.json ./
 COPY backend/package.json backend/package.json
