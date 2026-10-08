@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { WorkspaceRole } from '@sessions/contracts';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { api, type WorkspaceMember } from '../api/client';
+import { api, type ApiKeyRecord, type WebhookSubscriptionRecord, type WorkspaceMember } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 
 const TABS = ['workspace', 'members', 'workspaces', 'integrations', 'security'] as const;
@@ -556,38 +556,101 @@ function WorkspaceDirectory() {
 }
 
 function IntegrationsSettings() {
+  const auth = useAuth();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
+  const canManage = auth.me?.principal.roles.some((role) => ['OWNER', 'ADMIN'].includes(role)) ?? false;
+
   const connections = useQuery({
     queryKey: ['calendar-connections'],
     queryFn: () => api.listCalendarConnections(),
   });
+  const apiKeys = useQuery({
+    queryKey: ['integration-api-keys'],
+    queryFn: () => api.listApiKeys(),
+    enabled: canManage,
+  });
+  const webhooks = useQuery({
+    queryKey: ['integration-webhooks'],
+    queryFn: () => api.listWebhooks(),
+    enabled: canManage,
+  });
+
+  const [apiKeyName, setApiKeyName] = useState('');
+  const [apiKeyScopes, setApiKeyScopes] = useState<string[]>(['sessions:read']);
+  const [apiKeyExpiry, setApiKeyExpiry] = useState('90');
+  const [issuedApiKey, setIssuedApiKey] = useState<ApiKeyRecord | null>(null);
+  const [webhookName, setWebhookName] = useState('');
+  const [webhookEndpoint, setWebhookEndpoint] = useState('');
+  const [webhookEvents, setWebhookEvents] = useState<string[]>(['session.started', 'session.ended']);
+  const [issuedWebhook, setIssuedWebhook] = useState<WebhookSubscriptionRecord | null>(null);
+  const [selectedWebhookId, setSelectedWebhookId] = useState<string | null>(null);
+
+  const deliveries = useQuery({
+    queryKey: ['webhook-deliveries', selectedWebhookId],
+    queryFn: () => api.listWebhookDeliveries(selectedWebhookId!),
+    enabled: Boolean(selectedWebhookId && canManage),
+  });
 
   const connect = useMutation({
-    mutationFn: (provider: 'GOOGLE' | 'MICROSOFT') =>
-      api.startCalendarOAuth(provider),
-    onSuccess: (result) => {
-      window.location.assign(result.authorizationUrl);
-    },
+    mutationFn: (provider: 'GOOGLE' | 'MICROSOFT') => api.startCalendarOAuth(provider),
+    onSuccess: (result) => window.location.assign(result.authorizationUrl),
   });
-
   const update = useMutation({
-    mutationFn: ({
-      id,
-      syncEnabled,
-    }: {
-      id: string;
-      syncEnabled: boolean;
-    }) => api.updateCalendarConnection(id, { syncEnabled }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['calendar-connections'] });
-    },
+    mutationFn: ({ id, syncEnabled }: { id: string; syncEnabled: boolean }) =>
+      api.updateCalendarConnection(id, { syncEnabled }),
+    onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['calendar-connections'] }),
   });
-
   const disconnect = useMutation({
     mutationFn: (id: string) => api.disconnectCalendar(id),
+    onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['calendar-connections'] }),
+  });
+  const createApiKey = useMutation({
+    mutationFn: () => api.createApiKey({
+      name: apiKeyName.trim(),
+      scopes: apiKeyScopes,
+      expiresInDays: apiKeyExpiry ? Number(apiKeyExpiry) : undefined,
+    }),
+    onSuccess: async (result) => {
+      setIssuedApiKey(result);
+      setApiKeyName('');
+      await queryClient.invalidateQueries({ queryKey: ['integration-api-keys'] });
+    },
+  });
+  const revokeApiKey = useMutation({
+    mutationFn: (id: string) => api.revokeApiKey(id),
+    onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['integration-api-keys'] }),
+  });
+  const createWebhook = useMutation({
+    mutationFn: () => api.createWebhook({
+      name: webhookName.trim(),
+      endpointUrl: webhookEndpoint.trim(),
+      eventTypes: webhookEvents,
+    }),
+    onSuccess: async (result) => {
+      setIssuedWebhook(result);
+      setWebhookName('');
+      setWebhookEndpoint('');
+      await queryClient.invalidateQueries({ queryKey: ['integration-webhooks'] });
+    },
+  });
+  const removeWebhook = useMutation({
+    mutationFn: (id: string) => api.deleteWebhook(id),
+    onSuccess: async (_, id) => {
+      if (selectedWebhookId === id) setSelectedWebhookId(null);
+      await queryClient.invalidateQueries({ queryKey: ['integration-webhooks'] });
+    },
+  });
+  const reconcileWebhook = useMutation({
+    mutationFn: (id: string) => api.reconcileWebhook(id, 24),
+    onSuccess: async (_, id) => {
+      await queryClient.invalidateQueries({ queryKey: ['webhook-deliveries', id] });
+    },
+  });
+  const replayDelivery = useMutation({
+    mutationFn: (id: string) => api.replayWebhookDelivery(id),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['calendar-connections'] });
+      await queryClient.invalidateQueries({ queryKey: ['webhook-deliveries', selectedWebhookId] });
     },
   });
 
@@ -600,12 +663,19 @@ function IntegrationsSettings() {
     setSearchParams(next, { replace: true });
   }, [queryClient, searchParams, setSearchParams]);
 
-  const byProvider = new Map(
-    (connections.data ?? []).map((connection) => [
-      connection.provider,
-      connection,
-    ]),
-  );
+  const byProvider = new Map((connections.data ?? []).map((connection) => [connection.provider, connection]));
+  const scopeOptions = [
+    'sessions:read', 'sessions:write', 'rooms:read', 'rooms:write',
+    'events:read', 'events:write', 'bookings:read', 'bookings:write',
+    'memory:read', 'analytics:read',
+  ];
+  const eventOptions = [
+    'session.created', 'session.started', 'session.ended',
+    'participant.joined', 'participant.left',
+    'recording.ready', 'transcript.ready',
+    'booking.created', 'booking.rescheduled', 'booking.cancelled',
+    'event.registration.created', 'event.started', 'event.ended',
+  ];
 
   return (
     <div className="settings-stack">
@@ -614,16 +684,11 @@ function IntegrationsSettings() {
           <div>
             <span className="eyebrow">Availability synchronization</span>
             <h2>Connected calendars</h2>
-            <p>
-              Connect Google or Microsoft Calendar so public booking slots automatically
-              exclude busy time. Access and refresh tokens are encrypted before persistence.
-            </p>
+            <p>Connect Google or Microsoft Calendar so public booking slots automatically exclude busy time. Access and refresh tokens are encrypted before persistence.</p>
           </div>
         </div>
-
         {connections.isLoading ? <SettingsLoading /> : null}
         {connections.error ? <SettingsError message={connections.error.message} /> : null}
-
         <div className="workspace-directory-grid">
           {(['GOOGLE', 'MICROSOFT'] as const).map((provider) => {
             const connection = byProvider.get(provider);
@@ -634,88 +699,139 @@ function IntegrationsSettings() {
                 <h3>{label}</h3>
                 {connection ? (
                   <>
-                    <p>
-                      {connection.externalAccountEmail ?? 'Connected account'} ·{' '}
-                      {connection.status.toLowerCase()}
-                    </p>
-                    <small>
-                      {connection.lastSyncAt
-                        ? `Last checked ${formatDate(connection.lastSyncAt)}`
-                        : 'Busy-time synchronization has not run yet.'}
-                    </small>
-                    {connection.lastError ? (
-                      <div className="error-banner">{connection.lastError}</div>
-                    ) : null}
+                    <p>{connection.externalAccountEmail ?? 'Connected account'} · {connection.status.toLowerCase()}</p>
+                    <small>{connection.lastSyncAt ? `Last checked ${formatDate(connection.lastSyncAt)}` : 'Busy-time synchronization has not run yet.'}</small>
+                    {connection.lastError ? <div className="error-banner">{connection.lastError}</div> : null}
                     <label className="settings-toggle-row">
-                      <input
-                        type="checkbox"
-                        checked={connection.syncEnabled}
-                        disabled={update.isPending || connection.status === 'REVOKED'}
-                        onChange={(event) =>
-                          update.mutate({
-                            id: connection.id,
-                            syncEnabled: event.target.checked,
-                          })
-                        }
-                      />
-                      <span>
-                        <strong>Use for booking availability</strong>
-                        <small>Busy intervals will be excluded from public slots.</small>
-                      </span>
+                      <input type="checkbox" checked={connection.syncEnabled} disabled={update.isPending || connection.status === 'REVOKED'} onChange={(event) => update.mutate({ id: connection.id, syncEnabled: event.target.checked })} />
+                      <span><strong>Use for booking availability</strong><small>Busy intervals will be excluded from public slots.</small></span>
                     </label>
-                    <button
-                      type="button"
-                      className="button secondary"
-                      disabled={disconnect.isPending}
-                      onClick={() => {
-                        if (window.confirm(`Disconnect ${label}?`)) {
-                          disconnect.mutate(connection.id);
-                        }
-                      }}
-                    >
-                      Disconnect
-                    </button>
+                    <button type="button" className="button secondary" disabled={disconnect.isPending} onClick={() => { if (window.confirm(`Disconnect ${label}?`)) disconnect.mutate(connection.id); }}>Disconnect</button>
                   </>
                 ) : (
                   <>
                     <p>No account connected in this workspace.</p>
-                    <button
-                      type="button"
-                      className="button primary"
-                      disabled={connect.isPending}
-                      onClick={() => connect.mutate(provider)}
-                    >
-                      Connect {label}
-                    </button>
+                    <button type="button" className="button primary" disabled={connect.isPending} onClick={() => connect.mutate(provider)}>Connect {label}</button>
                   </>
                 )}
               </article>
             );
           })}
         </div>
-
         {connect.error ? <div className="error-banner">{connect.error.message}</div> : null}
         {update.error ? <div className="error-banner">{update.error.message}</div> : null}
         {disconnect.error ? <div className="error-banner">{disconnect.error.message}</div> : null}
       </section>
 
       <section className="panel settings-panel">
-        <div className="settings-panel-heading compact-settings-heading">
+        <div className="settings-panel-heading">
           <div>
-            <span className="eyebrow">Conflict policy</span>
-            <h2>How availability is calculated</h2>
+            <span className="eyebrow">Developer access</span>
+            <h2>Workspace API keys</h2>
+            <p>Create scoped credentials for automation. The full secret is shown once and only its hash is stored by the platform.</p>
           </div>
+          <span className="count-pill">{apiKeys.data?.length ?? 0}</span>
         </div>
-        <p>
-          Booking availability combines workspace booking rules, minimum notice, buffers,
-          existing reservations, and busy intervals returned by each active connected
-          calendar. A slot must pass every check before it can be reserved.
-        </p>
+        {!canManage ? <SettingsError message="Owner or admin access is required to manage API keys." /> : null}
+        {canManage ? (
+          <>
+            <form className="settings-form integration-create-form" onSubmit={(event) => { event.preventDefault(); createApiKey.mutate(); }}>
+              <div className="settings-form-grid">
+                <label>Key name<input required minLength={2} value={apiKeyName} onChange={(event) => setApiKeyName(event.target.value)} placeholder="Production automation" /></label>
+                <label>Expires in days<input type="number" min={1} max={3650} value={apiKeyExpiry} onChange={(event) => setApiKeyExpiry(event.target.value)} /></label>
+              </div>
+              <div className="integration-chip-grid">
+                {scopeOptions.map((scope) => (
+                  <label className={apiKeyScopes.includes(scope) ? 'integration-chip selected' : 'integration-chip'} key={scope}>
+                    <input type="checkbox" checked={apiKeyScopes.includes(scope)} onChange={(event) => setApiKeyScopes((current) => event.target.checked ? [...new Set([...current, scope])] : current.filter((item) => item !== scope))} />
+                    {scope}
+                  </label>
+                ))}
+              </div>
+              <div className="settings-actions"><button className="button primary" disabled={createApiKey.isPending || !apiKeyName.trim() || apiKeyScopes.length === 0}>{createApiKey.isPending ? 'Creating…' : 'Create API key'}</button></div>
+            </form>
+            {issuedApiKey?.secret ? <div className="integration-secret-box"><strong>Copy this key now</strong><small>It will not be shown again.</small><code>{issuedApiKey.secret}</code><button type="button" className="button secondary" onClick={() => void navigator.clipboard.writeText(issuedApiKey.secret ?? '')}>Copy key</button></div> : null}
+            {createApiKey.error ? <div className="error-banner">{createApiKey.error.message}</div> : null}
+            <div className="settings-table integration-table">
+              {apiKeys.data?.map((key) => (
+                <div className="settings-table-row integration-row" key={key.id}>
+                  <div className="member-copy"><strong>{key.name}</strong><span><code>{key.key_prefix}…</code> · {key.scopes.join(', ')}</span><small>Created {formatDate(key.created_at)} · Last used {formatDate(key.last_used_at)} · Expires {formatDate(key.expires_at)}</small></div>
+                  <span className={`invitation-status ${key.revoked_at ? '' : 'status-accepted'}`}>{key.revoked_at ? 'revoked' : 'active'}</span>
+                  <button type="button" className="settings-row-action danger-text" disabled={Boolean(key.revoked_at) || revokeApiKey.isPending} onClick={() => { if (window.confirm(`Revoke API key ${key.name}?`)) revokeApiKey.mutate(key.id); }}>Revoke</button>
+                </div>
+              ))}
+              {apiKeys.data?.length === 0 ? <div className="settings-empty-row">No API keys have been created.</div> : null}
+            </div>
+          </>
+        ) : null}
+      </section>
+
+      <section className="panel settings-panel">
+        <div className="settings-panel-heading">
+          <div>
+            <span className="eyebrow">Event delivery</span>
+            <h2>Signed webhooks</h2>
+            <p>Deliver selected workspace events to an HTTPS endpoint using HMAC-SHA256 signatures, retries, delivery logs, replay, and reconciliation.</p>
+          </div>
+          <span className="count-pill">{webhooks.data?.length ?? 0}</span>
+        </div>
+        {canManage ? (
+          <>
+            <form className="settings-form integration-create-form" onSubmit={(event) => { event.preventDefault(); createWebhook.mutate(); }}>
+              <div className="settings-form-grid">
+                <label>Name<input required minLength={2} value={webhookName} onChange={(event) => setWebhookName(event.target.value)} placeholder="CRM events" /></label>
+                <label>HTTPS endpoint<input required type="url" value={webhookEndpoint} onChange={(event) => setWebhookEndpoint(event.target.value)} placeholder="https://example.com/webhooks/sessions" /></label>
+              </div>
+              <div className="integration-chip-grid">
+                {eventOptions.map((eventType) => (
+                  <label className={webhookEvents.includes(eventType) ? 'integration-chip selected' : 'integration-chip'} key={eventType}>
+                    <input type="checkbox" checked={webhookEvents.includes(eventType)} onChange={(event) => setWebhookEvents((current) => event.target.checked ? [...new Set([...current, eventType])] : current.filter((item) => item !== eventType))} />
+                    {eventType}
+                  </label>
+                ))}
+              </div>
+              <div className="settings-actions"><button className="button primary" disabled={createWebhook.isPending || !webhookName.trim() || !webhookEndpoint.trim() || webhookEvents.length === 0}>{createWebhook.isPending ? 'Creating…' : 'Create webhook'}</button></div>
+            </form>
+            {issuedWebhook?.signingSecret ? <div className="integration-secret-box"><strong>Webhook signing secret</strong><small>Use this to verify the x-sessions-signature header. Copy it now.</small><code>{issuedWebhook.signingSecret}</code><button type="button" className="button secondary" onClick={() => void navigator.clipboard.writeText(issuedWebhook.signingSecret ?? '')}>Copy secret</button></div> : null}
+            {createWebhook.error ? <div className="error-banner">{createWebhook.error.message}</div> : null}
+            <div className="settings-table integration-table">
+              {webhooks.data?.map((hook) => (
+                <div className="settings-table-row webhook-row" key={hook.id}>
+                  <div className="member-copy"><strong>{hook.name}</strong><span>{hook.endpoint_url}</span><small>{hook.event_types.join(', ')} · Last success {formatDate(hook.last_success_at)} · Last failure {formatDate(hook.last_failure_at)}</small></div>
+                  <button type="button" className="settings-row-action" onClick={() => setSelectedWebhookId((current) => current === hook.id ? null : hook.id)}>{selectedWebhookId === hook.id ? 'Hide logs' : 'View logs'}</button>
+                  <button type="button" className="settings-row-action" disabled={reconcileWebhook.isPending} onClick={() => reconcileWebhook.mutate(hook.id)}>Reconcile 24h</button>
+                  <button type="button" className="settings-row-action danger-text" disabled={removeWebhook.isPending} onClick={() => { if (window.confirm(`Delete webhook ${hook.name}?`)) removeWebhook.mutate(hook.id); }}>Delete</button>
+                </div>
+              ))}
+              {webhooks.data?.length === 0 ? <div className="settings-empty-row">No webhook subscriptions have been created.</div> : null}
+            </div>
+            {selectedWebhookId ? (
+              <div className="webhook-delivery-panel">
+                <div className="settings-panel-heading compact-settings-heading"><div><span className="eyebrow">Delivery history</span><h3>Recent attempts</h3></div></div>
+                {deliveries.isLoading ? <SettingsLoading /> : null}
+                {deliveries.error ? <SettingsError message={deliveries.error.message} /> : null}
+                <div className="settings-table">
+                  {deliveries.data?.map((delivery) => (
+                    <div className="settings-table-row delivery-row" key={delivery.id}>
+                      <div className="member-copy"><strong>{delivery.event_type}</strong><span>{delivery.status.toLowerCase()} · attempts {delivery.attempts}{delivery.response_status ? ` · HTTP ${delivery.response_status}` : ''}</span><small>{delivery.last_error ?? `Created ${formatDate(delivery.created_at)}`}</small></div>
+                      <button type="button" className="settings-row-action" disabled={replayDelivery.isPending} onClick={() => replayDelivery.mutate(delivery.id)}>Replay</button>
+                    </div>
+                  ))}
+                  {deliveries.data?.length === 0 ? <div className="settings-empty-row">No deliveries have been materialized yet.</div> : null}
+                </div>
+              </div>
+            ) : null}
+          </>
+        ) : <SettingsError message="Owner or admin access is required to manage webhooks." />}
+      </section>
+
+      <section className="panel settings-panel">
+        <div className="settings-panel-heading compact-settings-heading"><div><span className="eyebrow">Conflict policy</span><h2>How availability is calculated</h2></div></div>
+        <p>Booking availability combines workspace booking rules, minimum notice, buffers, existing reservations, and busy intervals returned by each active connected calendar. A slot must pass every check before it can be reserved.</p>
       </section>
     </div>
   );
 }
-
 function SecuritySettings() {
   const auth = useAuth();
   const queryClient = useQueryClient();
