@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { Interval } from '@nestjs/schedule';
 import { Prisma, WebhookDeliveryStatus } from '@prisma/client';
 import { SecurityService } from '../auth/security.service';
+import { BILLING_METRICS } from '../billing/billing-plans';
+import { BillingService } from '../billing/billing.service';
 import { WorkerPrismaService } from '../database/worker-prisma.service';
 import { WebhookHttpClient } from './webhook-http.client';
 import { signWebhookPayload } from './webhook-signature';
@@ -28,6 +30,7 @@ export class WebhookDeliveryWorker {
     private readonly prisma: WorkerPrismaService,
     private readonly config: ConfigService,
     private readonly security: SecurityService,
+    private readonly billing: BillingService,
     private readonly http: WebhookHttpClient,
   ) {}
 
@@ -190,6 +193,21 @@ export class WebhookDeliveryWorker {
             deliveredAt: new Date(),
           },
         });
+        try {
+          await this.billing.recordUsage({
+            organizationId: delivery.organizationId,
+            workspaceId: delivery.workspaceId,
+            metric: BILLING_METRICS.WEBHOOK_DELIVERIES,
+            quantity: 1n,
+            idempotencyKey: `webhook-delivery:${delivery.id}`,
+            sourceType: 'webhook_delivery',
+            sourceId: delivery.id,
+          });
+        } catch (usageError: unknown) {
+          this.logger.warn(
+            `Webhook delivered but usage accounting failed for ${delivery.id}: ${usageError instanceof Error ? usageError.message : 'unknown'}`,
+          );
+        }
       } catch (error: unknown) {
         await this.handleFailure(delivery.id, error);
       }
