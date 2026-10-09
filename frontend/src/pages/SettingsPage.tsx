@@ -5,7 +5,7 @@ import { useSearchParams } from 'react-router-dom';
 import { api, type ApiKeyRecord, type WebhookSubscriptionRecord, type WorkspaceMember } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 
-const TABS = ['workspace', 'members', 'workspaces', 'integrations', 'security'] as const;
+const TABS = ['workspace', 'members', 'workspaces', 'domains', 'integrations', 'security'] as const;
 type SettingsTab = (typeof TABS)[number];
 
 const MEMBER_ROLES: WorkspaceRole[] = ['ADMIN', 'HOST', 'MEMBER', 'ANALYST', 'GUEST'];
@@ -63,9 +63,11 @@ export function SettingsPage() {
                     ? '◎'
                     : item === 'workspaces'
                       ? '▦'
-                      : item === 'integrations'
-                        ? '⛓'
-                        : '⌾'}
+                      : item === 'domains'
+                        ? '◎'
+                        : item === 'integrations'
+                          ? '⛓'
+                          : '⌾'}
               </span>
               {item === 'workspace'
                 ? 'Workspace profile'
@@ -73,9 +75,11 @@ export function SettingsPage() {
                   ? 'Members and invites'
                   : item === 'workspaces'
                     ? 'Your workspaces'
-                    : item === 'integrations'
-                      ? 'Integrations'
-                      : 'Security'}
+                    : item === 'domains'
+                      ? 'Domains'
+                      : item === 'integrations'
+                        ? 'Integrations'
+                        : 'Security'}
             </button>
           ))}
         </nav>
@@ -83,6 +87,7 @@ export function SettingsPage() {
           {tab === 'workspace' ? <WorkspaceProfile /> : null}
           {tab === 'members' ? <MembersAndInvitations /> : null}
           {tab === 'workspaces' ? <WorkspaceDirectory /> : null}
+          {tab === 'domains' ? <DomainSettings /> : null}
           {tab === 'integrations' ? <IntegrationsSettings /> : null}
           {tab === 'security' ? <SecuritySettings /> : null}
         </section>
@@ -645,6 +650,130 @@ function WorkspaceDirectory() {
   );
 }
 
+function DomainSettings() {
+  const auth = useAuth();
+  const queryClient = useQueryClient();
+  const canManage = auth.me?.principal.roles.some((role) => ['OWNER', 'ADMIN'].includes(role)) ?? false;
+  const [hostname, setHostname] = useState('');
+
+  const domains = useQuery({
+    queryKey: ['custom-domains'],
+    queryFn: () => api.listCustomDomains(),
+    enabled: canManage,
+  });
+
+  const create = useMutation({
+    mutationFn: () => api.createCustomDomain(hostname.trim()),
+    onSuccess: async () => {
+      setHostname('');
+      await queryClient.invalidateQueries({ queryKey: ['custom-domains'] });
+    },
+  });
+  const verify = useMutation({
+    mutationFn: (id: string) => api.verifyCustomDomain(id),
+    onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['custom-domains'] }),
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) => api.deleteCustomDomain(id),
+    onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['custom-domains'] }),
+  });
+
+  return (
+    <div className="settings-stack">
+      <section className="panel settings-panel">
+        <div className="settings-panel-heading">
+          <div>
+            <span className="eyebrow">Branded routing</span>
+            <h2>Custom domains</h2>
+            <p>Map a verified customer hostname to this workspace. DNS ownership is checked before TLS provisioning is allowed to begin.</p>
+          </div>
+          <span className="count-pill">{domains.data?.length ?? 0}</span>
+        </div>
+
+        {!canManage ? <SettingsError message="Owner or admin access is required to manage custom domains." /> : null}
+        {canManage ? (
+          <>
+            <form className="settings-form domain-create-form" onSubmit={(event) => { event.preventDefault(); create.mutate(); }}>
+              <div className="settings-form-grid">
+                <label className="settings-grid-span">
+                  Branded hostname
+                  <input
+                    required
+                    minLength={4}
+                    value={hostname}
+                    onChange={(event) => setHostname(event.target.value.toLowerCase())}
+                    placeholder="meet.example.com"
+                  />
+                  <small>Enter the hostname only — no https://, path, port, or wildcard.</small>
+                </label>
+              </div>
+              <div className="settings-actions">
+                <button className="button primary" disabled={create.isPending || !hostname.trim()}>
+                  {create.isPending ? 'Adding…' : 'Add domain'}
+                </button>
+              </div>
+            </form>
+            {create.error ? <div className="error-banner">{create.error.message}</div> : null}
+
+            {domains.isLoading ? <SettingsLoading /> : null}
+            {domains.error ? <SettingsError message={domains.error.message} /> : null}
+            <div className="domain-card-grid">
+              {domains.data?.map((domain) => (
+                <article className="domain-card" key={domain.id}>
+                  <div className="domain-card-heading">
+                    <div>
+                      <strong>{domain.hostname}</strong>
+                      <small>Added {formatDate(domain.createdAt)}</small>
+                    </div>
+                    <span className={`invitation-status ${domain.status === 'VERIFIED' || domain.status === 'ACTIVE' ? 'status-accepted' : ''}`}>
+                      {domain.status.toLowerCase()}
+                    </span>
+                  </div>
+
+                  <div className="domain-dns-grid">
+                    <div>
+                      <span>CNAME</span>
+                      <code>{domain.dns.cname.name}</code>
+                      <small>→</small>
+                      <code>{domain.dns.cname.value}</code>
+                    </div>
+                    <div>
+                      <span>TXT ownership proof</span>
+                      <code>{domain.dns.txt.name}</code>
+                      <small>value</small>
+                      <code>{domain.dns.txt.value}</code>
+                    </div>
+                  </div>
+
+                  <div className="domain-status-row">
+                    <span><strong>DNS</strong><small>{domain.status.toLowerCase()}</small></span>
+                    <span><strong>TLS</strong><small>{domain.tlsStatus.toLowerCase()}</small></span>
+                    <span><strong>Last checked</strong><small>{formatDate(domain.lastCheckedAt)}</small></span>
+                  </div>
+                  {domain.lastError ? <div className="error-banner">{domain.lastError}</div> : null}
+                  <div className="settings-actions">
+                    <button type="button" className="button secondary" disabled={verify.isPending} onClick={() => verify.mutate(domain.id)}>
+                      {verify.isPending ? 'Checking…' : 'Verify DNS'}
+                    </button>
+                    <button type="button" className="button secondary danger-text" disabled={remove.isPending} onClick={() => { if (window.confirm(`Remove ${domain.hostname}?`)) remove.mutate(domain.id); }}>
+                      Remove
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+            {domains.data?.length === 0 ? <div className="settings-empty-row">No custom domains configured.</div> : null}
+          </>
+        ) : null}
+      </section>
+
+      <section className="panel settings-panel">
+        <div className="settings-panel-heading compact-settings-heading"><div><span className="eyebrow">Provisioning contract</span><h2>DNS before TLS</h2></div></div>
+        <p>Add both DNS records shown above, wait for propagation, then select Verify DNS. A verified domain enters the TLS provisioning queue; certificate issuance/routing remains provider infrastructure work and is intentionally not marked active until that layer confirms it.</p>
+      </section>
+    </div>
+  );
+}
 function IntegrationsSettings() {
   const auth = useAuth();
   const queryClient = useQueryClient();
