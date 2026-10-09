@@ -7,6 +7,7 @@ import { lookup } from 'node:dns/promises';
 import { AuthService, type AuthRequestMetadata } from '../auth/auth.service';
 import { SecurityService } from '../auth/security.service';
 import { WorkerPrismaService } from '../database/worker-prisma.service';
+import type { Principal } from '../common/auth/principal';
 
 type OidcConnection = {
   organization_id: string;
@@ -143,6 +144,29 @@ export class OidcLoginService {
     return target.toString();
   }
 
+  async logoutUrl(principal: Principal) {
+    if (!principal.sessionId) return { url: null };
+    const session = await this.prisma.authSession.findFirst({
+      where: {
+        id: principal.sessionId,
+        userId: principal.userId,
+        workspaceId: principal.workspaceId,
+        revokedAt: null,
+      },
+      select: { identityProvider: true },
+    });
+    if (session?.identityProvider !== 'OIDC') return { url: null };
+    const connection = await this.connectionForWorkspace(principal.workspaceId);
+    if (!connection?.end_session_endpoint) return { url: null };
+    await this.assertPublicHttpsUrl(connection.end_session_endpoint);
+    const target = new URL(connection.end_session_endpoint);
+    target.searchParams.set('client_id', connection.client_id);
+    target.searchParams.set(
+      'post_logout_redirect_uri',
+      new URL('/auth/login?loggedOut=1', this.config.getOrThrow<string>('WEB_APP_URL')).toString(),
+    );
+    return { url: target.toString() };
+  }
   async exchangeGrant(grant: string, metadata: AuthRequestMetadata) {
     const parsed = this.security.parseOpaqueToken(grant);
     if (!parsed) throw new UnauthorizedException('OIDC login grant is invalid');
