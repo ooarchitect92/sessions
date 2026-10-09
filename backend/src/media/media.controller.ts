@@ -17,6 +17,7 @@ import { MediaRoomQueryDto } from './dto/media-room-query.dto';
 import { MuteMediaTrackDto } from './dto/mute-media-track.dto';
 import { UpdateHandRaiseDto } from './dto/update-hand-raise.dto';
 import { UpdateMediaPublishingDto } from './dto/update-media-publishing.dto';
+import { UpdateSpotlightDto } from './dto/update-spotlight.dto';
 import { MediaService } from './media.service';
 
 @ApiTags('media')
@@ -65,6 +66,24 @@ export class MediaController {
       principal,
       sessionId,
       body.raised,
+      query.breakoutRoomId,
+    );
+  }
+
+  @Patch(':id/media-participants/:participantIdentity/spotlight')
+  setParticipantSpotlight(
+    @CurrentPrincipal() principal: Principal,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) sessionId: string,
+    @Param('participantIdentity', new ParseUUIDPipe({ version: '4' }))
+    participantIdentity: string,
+    @Query() query: MediaRoomQueryDto,
+    @Body() body: UpdateSpotlightDto,
+  ) {
+    return this.media.setParticipantSpotlight(
+      principal,
+      sessionId,
+      participantIdentity,
+      body.spotlighted,
       query.breakoutRoomId,
     );
   }
