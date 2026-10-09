@@ -330,6 +330,7 @@ export interface MediaParticipantRecord {
   isPublisher: boolean;
   canPublish: boolean;
   handRaised: boolean;
+  spotlighted: boolean;
   roles: string[];
   presenterRole: string | null;
   tracks: MediaParticipantTrack[];
@@ -1521,6 +1522,24 @@ export const api = {
       {
         method: 'PATCH',
         body: JSON.stringify({ raised }),
+      },
+    );
+  },
+
+  setMediaParticipantSpotlight(
+    sessionId: string,
+    participantIdentity: string,
+    spotlighted: boolean,
+    breakoutRoomId?: string | null,
+  ) {
+    const query = breakoutRoomId
+      ? `?breakoutRoomId=${encodeURIComponent(breakoutRoomId)}`
+      : '';
+    return request(
+      `/sessions/${sessionId}/media-participants/${participantIdentity}/spotlight${query}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ spotlighted }),
       },
     );
   },
