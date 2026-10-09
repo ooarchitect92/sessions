@@ -5,7 +5,7 @@ import { useSearchParams } from 'react-router-dom';
 import { api, type WorkspaceMember } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 
-const TABS = ['workspace', 'branding', 'members', 'workspaces', 'integrations', 'security'] as const;
+const TABS = ['workspace', 'branding', 'members', 'workspaces', 'integrations', 'billing', 'security'] as const;
 type SettingsTab = (typeof TABS)[number];
 
 const MEMBER_ROLES: WorkspaceRole[] = ['ADMIN', 'HOST', 'MEMBER', 'ANALYST', 'GUEST'];
@@ -67,7 +67,9 @@ export function SettingsPage() {
                         ? '▦'
                         : item === 'integrations'
                           ? '⛓'
-                          : '⌾'}
+                          : item === 'billing'
+                            ? '▤'
+                            : '⌾'}
               </span>
               {item === 'workspace'
                 ? 'Workspace profile'
@@ -79,7 +81,9 @@ export function SettingsPage() {
                       ? 'Your workspaces'
                       : item === 'integrations'
                         ? 'Integrations'
-                        : 'Security'}
+                        : item === 'billing'
+                          ? 'Billing and usage'
+                          : 'Security'}
             </button>
           ))}
         </nav>
@@ -89,6 +93,7 @@ export function SettingsPage() {
           {tab === 'members' ? <MembersAndInvitations /> : null}
           {tab === 'workspaces' ? <WorkspaceDirectory /> : null}
           {tab === 'integrations' ? <IntegrationsSettings /> : null}
+          {tab === 'billing' ? <BillingSettings /> : null}
           {tab === 'security' ? <SecuritySettings /> : null}
         </section>
       </div>
@@ -223,6 +228,171 @@ function WorkspaceProfile() {
           label="Audience workflows"
           value={workspace.data._count.events + workspace.data._count.bookingPages}
         />
+      </section>
+    </div>
+  );
+}
+
+function BillingSettings() {
+  const auth = useAuth();
+  const summary = useQuery({
+    queryKey: ['billing-summary'],
+    queryFn: () => api.getBillingSummary(),
+  });
+  const plans = useQuery({
+    queryKey: ['billing-plans'],
+    queryFn: () => api.listBillingPlans(),
+  });
+  const role = auth.me?.principal.roles[0] ?? 'GUEST';
+
+  if (summary.isLoading || plans.isLoading) return <SettingsLoading />;
+  if (summary.error) return <SettingsError message={summary.error.message} />;
+  if (plans.error) return <SettingsError message={plans.error.message} />;
+  if (!summary.data) return <SettingsError message="Billing summary is unavailable." />;
+
+  const subscription = summary.data.subscription;
+  const currentPlan = plans.data?.find(
+    (plan) => plan.code === subscription.planCode,
+  );
+
+  return (
+    <div className="settings-stack">
+      <section className="panel settings-panel">
+        <div className="settings-panel-heading">
+          <div>
+            <span className="eyebrow">Subscription</span>
+            <h2>{currentPlan?.name ?? subscription.planCode} plan</h2>
+            <p>
+              Subscription state, seat capacity, entitlements and usage are reconciled
+              from the billing ledger and current workspace membership.
+            </p>
+          </div>
+          <span className="settings-role-chip">
+            {subscription.status.toLowerCase()}
+          </span>
+        </div>
+
+        <div className="workspace-directory-grid">
+          <article className="workspace-directory-card">
+            <span>Seats</span>
+            <h3>
+              {subscription.seatsUsed} / {subscription.seatLimit}
+            </h3>
+            <p>
+              Active workspace memberships. Pending invitations also reserve capacity
+              before acceptance.
+            </p>
+          </article>
+          <article className="workspace-directory-card">
+            <span>Current period</span>
+            <h3>
+              {new Date(subscription.currentPeriodStart).toLocaleDateString()} –{' '}
+              {new Date(subscription.currentPeriodEnd).toLocaleDateString()}
+            </h3>
+            <p>
+              Last reconciled {formatDate(subscription.lastReconciledAt)}.
+            </p>
+          </article>
+          <article className="workspace-directory-card">
+            <span>Billing source</span>
+            <h3>{subscription.provider ?? 'Internal plan catalog'}</h3>
+            <p>
+              Plan changes stay provider-controlled; this UI never mutates billing
+              state directly.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section className="panel settings-panel">
+        <div className="settings-panel-heading">
+          <div>
+            <span className="eyebrow">Usage governance</span>
+            <h2>Quotas</h2>
+            <p>
+              Usage is backed by an immutable idempotent ledger. Active reservations
+              are shown separately so concurrent work cannot overspend a quota.
+            </p>
+          </div>
+          <span className="count-pill">{summary.data.quotas.length}</span>
+        </div>
+
+        <div className="settings-table">
+          {summary.data.quotas.map((quota) => {
+            const consumed = quota.used + quota.reserved;
+            const percent =
+              quota.limit && quota.limit > 0
+                ? Math.min(100, Math.round((consumed / quota.limit) * 100))
+                : 0;
+            return (
+              <div className="settings-table-row" key={quota.metric}>
+                <div className="member-copy">
+                  <strong>{quota.metric.replaceAll('_', ' ')}</strong>
+                  <span>
+                    {quota.used.toLocaleString()} used
+                    {quota.reserved
+                      ? ` · ${quota.reserved.toLocaleString()} reserved`
+                      : ''}
+                  </span>
+                  <small>
+                    {quota.limit === null
+                      ? 'Unlimited on this plan'
+                      : `${quota.remaining?.toLocaleString() ?? 0} remaining of ${quota.limit.toLocaleString()}`}
+                  </small>
+                  {quota.limit !== null ? (
+                    <div
+                      aria-label={`${percent}% of ${quota.metric} quota consumed`}
+                      style={{
+                        height: '6px',
+                        maxWidth: '420px',
+                        overflow: 'hidden',
+                        borderRadius: '999px',
+                        background: 'var(--border-subtle, #e5e7eb)',
+                      }}
+                    >
+                      <div
+                        style={{
+                          height: '100%',
+                          width: `${percent}%`,
+                          background: 'var(--accent, #5B5FF5)',
+                        }}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="panel settings-panel">
+        <div className="settings-panel-heading">
+          <div>
+            <span className="eyebrow">Plan catalog</span>
+            <h2>Available tiers</h2>
+            <p>
+              Provider checkout/webhook qualification is intentionally separate from
+              this entitlement engine. Current role: {role.toLowerCase()}.
+            </p>
+          </div>
+        </div>
+        <div className="workspace-directory-grid">
+          {plans.data?.map((plan) => (
+            <article className="workspace-directory-card" key={plan.code}>
+              <span>{plan.code === subscription.planCode ? 'Current plan' : 'Plan'}</span>
+              <h3>{plan.name}</h3>
+              <p>{plan.seatLimit.toLocaleString()} seats</p>
+              <div className="mini-tags">
+                {Object.entries(plan.entitlements)
+                  .filter(([, enabled]) => enabled)
+                  .map(([entitlement]) => (
+                    <span key={entitlement}>{entitlement}</span>
+                  ))}
+              </div>
+            </article>
+          ))}
+        </div>
       </section>
     </div>
   );
