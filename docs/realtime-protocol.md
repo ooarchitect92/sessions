@@ -65,6 +65,12 @@ Webinar attendee questions enter moderation; ordinary meeting questions may be a
 - `whiteboard.operation.appended` — emitted after a durable operation commit.
 - `whiteboard.cursor.updated { sessionId, userId, displayName, x, y, visible, occurredAt }` — ephemeral collaborator cursor state. Cursor state is intentionally not persisted and is cleared when the sender leaves the canvas or disconnects.
 
+### Co-browse
+
+- `cobrowse.updated` — emitted only after a tenant-scoped start, navigation, control-grant or stop command commits. Clients invalidate and reread the authoritative co-browse state.
+- Shared navigation commands remain HTTP mutations so URL validation, host/controller authorization, optimistic version checks, audit evidence and outbox publication complete before realtime broadcast.
+- Arbitrary cross-origin click/type forwarding is intentionally not emulated inside the browser iframe; that requires a separately governed remote-browser provider and isolation qualification.
+
 ### Live captions
 
 - `caption.final { sessionId, sequence, speakerUserId, speakerName, text, language, provider, occurredAt }` — provider-backed final text for a short participant audio chunk. It is broadcast to the authenticated session room.
