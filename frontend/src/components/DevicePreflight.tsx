@@ -94,16 +94,18 @@ export function DevicePreflight({
         active = await navigator.mediaDevices.getUserMedia({
           video: cameraEnabled
             ? {
-                deviceId: cameraDeviceId ? { exact: cameraDeviceId } : undefined,
+                ...(cameraDeviceId
+                  ? { deviceId: { exact: cameraDeviceId } }
+                  : {}),
                 width: { ideal: 1280 },
                 height: { ideal: 720 },
               }
             : false,
           audio: microphoneEnabled
             ? {
-                deviceId: microphoneDeviceId
-                  ? { exact: microphoneDeviceId }
-                  : undefined,
+                ...(microphoneDeviceId
+                  ? { deviceId: { exact: microphoneDeviceId } }
+                  : {}),
                 echoCancellation: true,
                 noiseSuppression: true,
                 autoGainControl: true,
