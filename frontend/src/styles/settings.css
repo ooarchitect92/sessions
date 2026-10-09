@@ -1205,3 +1205,24 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+.settings-policy-note {
+  padding: 12px 14px;
+  border: 1px solid #e1e4de;
+  border-radius: 11px;
+  background: #f7f8f5;
+  color: #66746f;
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.warning-banner {
+  padding: 10px 12px;
+  border: 1px solid #e3c98b;
+  border-radius: 10px;
+  background: #fff7df;
+  color: #72591f;
+  font-size: 9px;
+  line-height: 1.45;
+}
