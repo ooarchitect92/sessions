@@ -1226,3 +1226,20 @@
   font-size: 9px;
   line-height: 1.45;
 }
+
+
+.button.danger {
+  border-color: #c66b6b;
+  background: #fff4f4;
+  color: #9a3030;
+}
+
+.button.danger:hover:not(:disabled) {
+  border-color: #a64a4a;
+  background: #ffe9e9;
+}
+
+.button.danger:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
