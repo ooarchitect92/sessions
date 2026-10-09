@@ -18,7 +18,26 @@ export function LoginPage() {
   const [mfaCode, setMfaCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [ssoSubmitting, setSsoSubmitting] = useState(false);
 
+  const startSso = async () => {
+    if (!workspaceSlug.trim()) {
+      setError('Enter your workspace slug to continue with enterprise SSO.');
+      return;
+    }
+    setSsoSubmitting(true);
+    setError(null);
+    try {
+      const result = await api.startEnterpriseSso({
+        workspaceSlug: workspaceSlug.trim(),
+        returnTo,
+      });
+      window.location.assign(result.authorizationUrl);
+    } catch (caught: unknown) {
+      setError(caught instanceof Error ? caught.message : 'Enterprise SSO could not be started');
+      setSsoSubmitting(false);
+    }
+  };
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setSubmitting(true);
@@ -127,11 +146,21 @@ export function LoginPage() {
           )}
 
           {error ? <div className="auth-error">{error}</div> : null}
-          {import.meta.env.VITE_AUTH_MODE === 'oidc' ? (
-            <div className="auth-note">
-              OIDC mode is selected, but an identity-provider redirect has not been configured in
-              this environment.
-            </div>
+          {!challengeToken ? (
+            <>
+              <div className="auth-divider"><span>or</span></div>
+              <button
+                className="auth-secondary-button"
+                type="button"
+                disabled={ssoSubmitting || !workspaceSlug.trim()}
+                onClick={() => void startSso()}
+              >
+                {ssoSubmitting ? 'Redirecting…' : 'Continue with enterprise SSO'}
+              </button>
+              <div className="auth-note">
+                Enterprise sign-in uses your workspace OIDC configuration with state, nonce, and PKCE protection.
+              </div>
+            </>
           ) : null}
           <button
             className="auth-primary-button"
