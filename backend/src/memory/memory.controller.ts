@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentPrincipal } from '../common/auth/current-principal.decorator';
+import { ApiKeyScopes } from '../integrations/api-key-scopes';
 import type { Principal } from '../common/auth/principal';
 import { CreateCrmNoteDto } from './dto/create-crm-note.dto';
 import { CreateFollowUpEmailDto } from './dto/create-follow-up-email.dto';
@@ -32,6 +33,7 @@ function parseVersion(value: string | undefined): number {
 
 @ApiTags('memory')
 @ApiBearerAuth()
+@ApiKeyScopes('memory:read')
 @Controller('memory')
 export class MemoryController {
   constructor(private readonly memory: MemoryService) {}
@@ -59,6 +61,7 @@ export class MemoryController {
   }
 
   @Post(':sessionId/follow-ups/email/draft')
+  @ApiKeyScopes('memory:write')
   createFollowUpEmailDraft(
     @CurrentPrincipal() principal: Principal,
     @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
@@ -68,6 +71,7 @@ export class MemoryController {
   }
 
   @Post(':sessionId/follow-ups/crm-note/draft')
+  @ApiKeyScopes('memory:write')
   createCrmNoteDraft(
     @CurrentPrincipal() principal: Principal,
     @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
@@ -77,6 +81,7 @@ export class MemoryController {
   }
 
   @Patch(':sessionId/follow-ups/:actionId')
+  @ApiKeyScopes('memory:write')
   updateExternalAction(
     @CurrentPrincipal() principal: Principal,
     @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
@@ -94,6 +99,7 @@ export class MemoryController {
   }
 
   @Post(':sessionId/follow-ups/:actionId/approve')
+  @ApiKeyScopes('memory:write')
   approveExternalAction(
     @CurrentPrincipal() principal: Principal,
     @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
@@ -109,6 +115,7 @@ export class MemoryController {
   }
 
   @Post(':sessionId/follow-ups/:actionId/retry')
+  @ApiKeyScopes('memory:write')
   retryExternalAction(
     @CurrentPrincipal() principal: Principal,
     @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
@@ -118,6 +125,7 @@ export class MemoryController {
   }
 
   @Post(':sessionId/follow-ups/:actionId/cancel')
+  @ApiKeyScopes('memory:write')
   cancelExternalAction(
     @CurrentPrincipal() principal: Principal,
     @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
@@ -135,6 +143,7 @@ export class MemoryController {
   }
 
   @Patch(':sessionId/transcript')
+  @ApiKeyScopes('memory:write')
   updateTranscript(
     @CurrentPrincipal() principal: Principal,
     @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
@@ -150,6 +159,7 @@ export class MemoryController {
   }
 
   @Post(':sessionId/transcript/revisions/:revisionId/restore')
+  @ApiKeyScopes('memory:write')
   restoreTranscriptRevision(
     @CurrentPrincipal() principal: Principal,
     @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
@@ -165,6 +175,7 @@ export class MemoryController {
   }
 
   @Patch(':sessionId/summary')
+  @ApiKeyScopes('memory:write')
   updateSummary(
     @CurrentPrincipal() principal: Principal,
     @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
@@ -180,6 +191,7 @@ export class MemoryController {
   }
 
   @Post(':sessionId/semantic-index/retry')
+  @ApiKeyScopes('memory:write')
   retrySemanticIndex(
     @CurrentPrincipal() principal: Principal,
     @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,
@@ -188,6 +200,7 @@ export class MemoryController {
   }
 
   @Post(':sessionId/retry')
+  @ApiKeyScopes('memory:write')
   retryFailed(
     @CurrentPrincipal() principal: Principal,
     @Param('sessionId', new ParseUUIDPipe({ version: '4' })) sessionId: string,

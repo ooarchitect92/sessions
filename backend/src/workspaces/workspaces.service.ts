@@ -14,6 +14,7 @@ import {
 } from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
 import { AuditService } from '../audit/audit.service';
+import { BillingService } from '../billing/billing.service';
 import { SecurityService } from '../auth/security.service';
 import {
   ADMIN_ROLES,
@@ -45,6 +46,7 @@ export class WorkspacesService {
     private readonly prisma: WorkerPrismaService,
     private readonly security: SecurityService,
     private readonly config: ConfigService,
+    private readonly billing: BillingService,
     private readonly audit: AuditService,
     private readonly outbox: OutboxService,
   ) {}
@@ -175,6 +177,11 @@ export class WorkspacesService {
           role: WorkspaceRole.OWNER,
         },
       });
+      await this.billing.createDefaultSubscription(
+        transaction,
+        principal.organizationId,
+        workspace.id,
+      );
       const newPrincipal: Principal = {
         ...principal,
         workspaceId: workspace.id,
@@ -337,6 +344,16 @@ export class WorkspacesService {
           revokedAt: null,
         },
       });
+      if (!pending) {
+        // New invitations consume reserved seat capacity so concurrent invites
+        // cannot oversubscribe the plan before acceptance.
+        await this.billing.assertSeatCapacity(
+          transaction,
+          principal.organizationId,
+          principal.workspaceId,
+          1,
+        );
+      }
       const invitationId = pending?.id ?? randomUUID();
       const opaque = this.security.createOpaqueToken(invitationId);
       const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60_000);

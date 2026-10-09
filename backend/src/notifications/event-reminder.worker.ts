@@ -337,6 +337,8 @@ export class EventReminderWorker {
 
       try {
         const result = await this.provider.send({
+          organizationId: delivery.organizationId,
+          workspaceId: delivery.workspaceId,
           to: delivery.recipientEmail,
           subject: delivery.subject,
           text: delivery.bodyText,

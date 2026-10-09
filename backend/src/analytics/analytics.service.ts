@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -8,6 +9,7 @@ import {
   Prisma,
   RegistrationStatus,
 } from '@prisma/client';
+import { AuditService } from '../audit/audit.service';
 import {
   HOST_ROLES,
   hasAnyRole,
@@ -15,6 +17,8 @@ import {
 } from '../common/auth/principal';
 import { TenantDatabaseService } from '../database/tenant-database.service';
 import { mergeAttendanceRanges } from './attendance-math';
+import type { WorkspaceAnalyticsRangeDto } from './dto/workspace-analytics-range.dto';
+import { analyticsRowsToCsv } from './workspace-analytics-csv';
 
 type IntervalLike = {
   userId: string;
@@ -24,7 +28,10 @@ type IntervalLike = {
 
 @Injectable()
 export class AnalyticsService {
-  constructor(private readonly database: TenantDatabaseService) {}
+  constructor(
+    private readonly database: TenantDatabaseService,
+    private readonly audit: AuditService,
+  ) {}
 
   async openAttendance(
     principal: Principal,
@@ -282,6 +289,167 @@ export class AnalyticsService {
         ),
       };
     });
+  }
+
+  async workspaceAnalytics(
+    principal: Principal,
+    input: WorkspaceAnalyticsRangeDto,
+  ) {
+    this.assertAnalyst(principal);
+    const range = this.analyticsRange(input);
+
+    return this.database.run(principal, async (transaction) => {
+      const rows = await transaction.workspaceAnalyticsDaily.findMany({
+        where: {
+          date: { gte: range.from, lt: range.toExclusive },
+        },
+        orderBy: { date: 'asc' },
+      });
+      const projected = rows.map((row) => this.projectRollup(row));
+      return {
+        range: {
+          from: range.fromLabel,
+          to: range.toLabel,
+          days: range.days,
+        },
+        totals: projected.reduce(
+          (totals, row) => ({
+            sessionsScheduled:
+              totals.sessionsScheduled + row.sessionsScheduled,
+            uniqueAttendees: totals.uniqueAttendees + row.uniqueAttendees,
+            attendanceSeconds:
+              totals.attendanceSeconds + row.attendanceSeconds,
+            engagementEvents:
+              totals.engagementEvents + row.engagementEvents,
+            eventsScheduled: totals.eventsScheduled + row.eventsScheduled,
+            registrationsCreated:
+              totals.registrationsCreated + row.registrationsCreated,
+            bookingReservationsCreated:
+              totals.bookingReservationsCreated +
+              row.bookingReservationsCreated,
+          }),
+          {
+            sessionsScheduled: 0,
+            uniqueAttendees: 0,
+            attendanceSeconds: 0,
+            engagementEvents: 0,
+            eventsScheduled: 0,
+            registrationsCreated: 0,
+            bookingReservationsCreated: 0,
+          },
+        ),
+        lastComputedAt:
+          rows.length > 0
+            ? new Date(
+                Math.max(...rows.map((row) => row.computedAt.getTime())),
+              )
+            : null,
+        days: projected,
+      };
+    });
+  }
+
+  async exportWorkspaceAnalytics(
+    principal: Principal,
+    input: WorkspaceAnalyticsRangeDto,
+  ) {
+    this.assertAnalyst(principal);
+    const range = this.analyticsRange(input);
+
+    return this.database.run(principal, async (transaction) => {
+      const rows = await transaction.workspaceAnalyticsDaily.findMany({
+        where: {
+          date: { gte: range.from, lt: range.toExclusive },
+        },
+        orderBy: { date: 'asc' },
+      });
+      const projected = rows.map((row) => this.projectRollup(row));
+
+      await this.audit.record(transaction, principal, {
+        action: 'analytics.workspace.exported',
+        resourceType: 'workspace',
+        resourceId: principal.workspaceId,
+        metadata: {
+          from: range.fromLabel,
+          to: range.toLabel,
+          rowCount: projected.length,
+          format: 'csv',
+          aggregateOnly: true,
+        },
+      });
+
+      return {
+        filename: `sessions-workspace-analytics-${range.fromLabel}-${range.toLabel}.csv`,
+        contentType: 'text/csv; charset=utf-8',
+        csv: analyticsRowsToCsv(projected),
+      };
+    });
+  }
+
+  private projectRollup(row: {
+    date: Date;
+    sessionsScheduled: number;
+    uniqueAttendees: number;
+    attendanceSeconds: bigint;
+    engagementEvents: number;
+    eventsScheduled: number;
+    registrationsCreated: number;
+    bookingReservationsCreated: number;
+    computedAt: Date;
+  }) {
+    return {
+      date: row.date.toISOString().slice(0, 10),
+      sessionsScheduled: row.sessionsScheduled,
+      uniqueAttendees: row.uniqueAttendees,
+      attendanceSeconds: Number(row.attendanceSeconds),
+      engagementEvents: row.engagementEvents,
+      eventsScheduled: row.eventsScheduled,
+      registrationsCreated: row.registrationsCreated,
+      bookingReservationsCreated: row.bookingReservationsCreated,
+      computedAt: row.computedAt,
+    };
+  }
+
+  private analyticsRange(input: WorkspaceAnalyticsRangeDto) {
+    const today = new Date();
+    const todayUtc = new Date(
+      Date.UTC(
+        today.getUTCFullYear(),
+        today.getUTCMonth(),
+        today.getUTCDate(),
+      ),
+    );
+    const to = input.to ? this.parseDateOnly(input.to) : todayUtc;
+    const from = input.from
+      ? this.parseDateOnly(input.from)
+      : new Date(to.getTime() - 29 * 24 * 60 * 60 * 1000);
+    if (from > to) {
+      throw new BadRequestException('Analytics from date must not be after to date');
+    }
+    const days =
+      Math.floor((to.getTime() - from.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+    if (days > 366) {
+      throw new BadRequestException('Analytics range cannot exceed 366 days');
+    }
+    return {
+      from,
+      to,
+      toExclusive: new Date(to.getTime() + 24 * 60 * 60 * 1000),
+      fromLabel: from.toISOString().slice(0, 10),
+      toLabel: to.toISOString().slice(0, 10),
+      days,
+    };
+  }
+
+  private parseDateOnly(value: string): Date {
+    const date = new Date(`${value}T00:00:00.000Z`);
+    if (
+      Number.isNaN(date.getTime()) ||
+      date.toISOString().slice(0, 10) !== value
+    ) {
+      throw new BadRequestException('Analytics dates must be valid YYYY-MM-DD values');
+    }
+    return date;
   }
 
   private summarizeAttendance<

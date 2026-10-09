@@ -71,11 +71,20 @@
 
 ## Phase 5 — platform and enterprise
 
-- [ ] API keys, webhook subscriptions, HMAC signatures, replay and reconciliation
-- [ ] provider integration framework, credential governance and SSRF-safe egress
-- [ ] branding, email templates, custom domains and automated TLS
-- [ ] analytics aggregation and governed exports
-- [ ] plans, subscriptions, entitlements, seats, quota ledger and reconciliation
+- [x] tenant-scoped API-key and webhook-subscription administration with encrypted signing secrets, audit evidence and outbox events
+- [x] default-deny API-key bearer authentication with current-membership validation, supported scope catalog and read/write endpoint enforcement
+- [x] HMAC webhook delivery worker with durable retries, dead-letter state, replay and reconciliation history
+- [x] SSRF-safe pinned HTTPS webhook egress boundary with redirect blocking, timeout and bounded responses
+- [x] tenant-scoped email/CRM provider connection vault with encrypted rotation, lifecycle, health evidence and SSRF-safe runtime egress
+- [ ] OAuth connector consolidation and real-provider qualification
+- [x] tenant-scoped branding profile, white-label settings and DNS-verified custom-domain control plane
+- [x] TLS provisioning request handoff with explicit pending/active/error state
+- [ ] automated TLS issuance/renewal and edge-router reconciliation
+- [x] scheduled daily workspace analytics rollups with reconnect-safe attendance aggregation
+- [x] role/scoped aggregate analytics API and audited CSV exports
+- [x] plan catalog, workspace subscriptions, transactional seat enforcement, immutable usage ledger, quota reservations and reconciliation
+- [x] webhook and AI external-action quota reservation/commit/release metering
+- [ ] signature-verified billing-provider checkout/webhooks and recording/transcription/storage metering
 - [ ] SAML/OIDC enterprise SSO, SCIM, audit exports and retention policies
 - [ ] localization, accessibility certification, regional cells and disaster-recovery qualification
 

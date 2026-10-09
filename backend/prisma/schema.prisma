@@ -201,6 +201,85 @@ enum AiExternalActionStatus {
   CANCELLED
 }
 
+enum ApiKeyStatus {
+  ACTIVE
+  REVOKED
+}
+
+enum WebhookDeliveryStatus {
+  PENDING
+  SENDING
+  DELIVERED
+  FAILED
+  DEAD_LETTER
+}
+
+enum ProviderConnectionKind {
+  EMAIL_HTTP
+  CRM_HTTP
+}
+
+enum ProviderConnectionStatus {
+  ACTIVE
+  DISABLED
+  ERROR
+}
+
+enum CustomDomainStatus {
+  PENDING_VERIFICATION
+  VERIFIED
+  DISABLED
+  ERROR
+}
+
+enum CustomDomainTlsStatus {
+  NOT_REQUESTED
+  PENDING
+  ACTIVE
+  ERROR
+}
+
+enum PlanCode {
+  FREE
+  PRO
+  BUSINESS
+  ENTERPRISE
+}
+
+enum WorkspaceSubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+}
+
+enum QuotaReservationStatus {
+  ACTIVE
+  COMMITTED
+  RELEASED
+  EXPIRED
+}
+
+enum EnterpriseIdentityProviderKind {
+  OIDC
+  SAML
+}
+
+enum EnterpriseIdentityProviderStatus {
+  ACTIVE
+  DISABLED
+  ERROR
+}
+
+enum EnterpriseIdentityKind {
+  OIDC
+}
+
+enum ScimTokenStatus {
+  ACTIVE
+  REVOKED
+}
+
 model Organization {
   id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name                String                @db.VarChar(160)
@@ -246,6 +325,20 @@ model Organization {
   calendarConnections CalendarConnection[]
   calendarOAuthStates CalendarOAuthState[]
   aiExternalActions    AiExternalAction[]
+  apiKeys              ApiKey[]
+  webhookSubscriptions WebhookSubscription[]
+  webhookDeliveries    WebhookDelivery[]
+  providerConnections  ProviderConnection[]
+  workspaceBrandings   WorkspaceBranding[]
+  customDomains        CustomDomain[]
+  workspaceAnalyticsDaily WorkspaceAnalyticsDaily[]
+  workspaceSubscriptions WorkspaceSubscription[]
+  usageLedgerEntries    UsageLedgerEntry[]
+  quotaReservations     QuotaReservation[]
+  enterpriseIdentityProviders EnterpriseIdentityProvider[]
+  enterpriseIdentities EnterpriseIdentity[]
+  oidcLoginStates      OidcLoginState[]
+  scimTokens           ScimToken[]
 
   @@map("organizations")
 }
@@ -299,6 +392,20 @@ model Workspace {
   calendarConnections CalendarConnection[]
   calendarOAuthStates CalendarOAuthState[]
   aiExternalActions    AiExternalAction[]
+  apiKeys              ApiKey[]
+  webhookSubscriptions WebhookSubscription[]
+  webhookDeliveries    WebhookDelivery[]
+  providerConnections  ProviderConnection[]
+  branding             WorkspaceBranding?
+  customDomains        CustomDomain[]
+  analyticsDaily       WorkspaceAnalyticsDaily[]
+  subscription         WorkspaceSubscription?
+  usageLedgerEntries   UsageLedgerEntry[]
+  quotaReservations    QuotaReservation[]
+  enterpriseIdentityProviders EnterpriseIdentityProvider[]
+  enterpriseIdentities EnterpriseIdentity[]
+  oidcLoginStates      OidcLoginState[]
+  scimTokens           ScimToken[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -346,6 +453,11 @@ model User {
   calendarConnections      CalendarConnection[]
   calendarOAuthStates      CalendarOAuthState[]
   approvedAiExternalActions AiExternalAction[] @relation("AiExternalActionApprover")
+  createdApiKeys          ApiKey[]                @relation("ApiKeyCreator")
+  createdWebhookSubscriptions WebhookSubscription[] @relation("WebhookSubscriptionCreator")
+  createdProviderConnections ProviderConnection[] @relation("ProviderConnectionCreator")
+  enterpriseIdentities EnterpriseIdentity[]
+  createdScimTokens    ScimToken[] @relation("ScimTokenCreator")
 
   @@index([status])
   @@map("users")
@@ -1245,6 +1357,345 @@ model QuestionVote {
   @@unique([questionId, voterKey])
   @@index([organizationId, workspaceId, questionId])
   @@map("question_votes")
+}
+
+
+model ApiKey {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  workspaceId    String       @map("workspace_id") @db.Uuid
+  createdById    String       @map("created_by_id") @db.Uuid
+  name           String       @db.VarChar(160)
+  prefix         String       @db.VarChar(24)
+  secretHash     String       @map("secret_hash") @db.VarChar(64)
+  scopes         Json         @default("[]")
+  status         ApiKeyStatus @default(ACTIVE)
+  lastUsedAt     DateTime?    @map("last_used_at") @db.Timestamptz(6)
+  expiresAt      DateTime?    @map("expires_at") @db.Timestamptz(6)
+  revokedAt      DateTime?    @map("revoked_at") @db.Timestamptz(6)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy      User         @relation("ApiKeyCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@unique([workspaceId, prefix])
+  @@index([organizationId, workspaceId, status, createdAt])
+  @@index([secretHash])
+  @@map("api_keys")
+}
+
+model WebhookSubscription {
+  id               String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String       @map("organization_id") @db.Uuid
+  workspaceId      String       @map("workspace_id") @db.Uuid
+  createdById      String       @map("created_by_id") @db.Uuid
+  name             String       @db.VarChar(160)
+  endpointUrl      String       @map("endpoint_url") @db.Text
+  eventTypes       Json         @default("[]") @map("event_types")
+  secretCiphertext String       @map("secret_ciphertext") @db.Text
+  enabled          Boolean      @default(true)
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace        Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy        User         @relation("WebhookSubscriptionCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  deliveries       WebhookDelivery[]
+
+  @@index([organizationId, workspaceId, enabled, createdAt])
+  @@map("webhook_subscriptions")
+}
+
+model WebhookDelivery {
+  id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId      String                @map("organization_id") @db.Uuid
+  workspaceId         String                @map("workspace_id") @db.Uuid
+  subscriptionId      String                @map("subscription_id") @db.Uuid
+  outboxEventId       String                @map("outbox_event_id") @db.Uuid
+  eventType           String                @map("event_type") @db.VarChar(160)
+  payload             Json
+  status              WebhookDeliveryStatus @default(PENDING)
+  attempts            Int                   @default(0)
+  nextAttemptAt       DateTime?             @default(now()) @map("next_attempt_at") @db.Timestamptz(6)
+  lastAttemptAt       DateTime?             @map("last_attempt_at") @db.Timestamptz(6)
+  responseStatus      Int?                  @map("response_status")
+  responseBodySnippet String?               @map("response_body_snippet") @db.VarChar(1000)
+  lastError           String?               @map("last_error") @db.VarChar(1000)
+  deliveredAt         DateTime?             @map("delivered_at") @db.Timestamptz(6)
+  replayCount         Int                   @default(0) @map("replay_count")
+  createdAt           DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization        Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace           Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  subscription        WebhookSubscription   @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@unique([subscriptionId, outboxEventId])
+  @@index([organizationId, workspaceId, status, nextAttemptAt])
+  @@index([subscriptionId, createdAt])
+  @@map("webhook_deliveries")
+}
+
+model EnterpriseIdentityProvider {
+  id                     String                           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId         String                           @map("organization_id") @db.Uuid
+  workspaceId            String                           @map("workspace_id") @db.Uuid
+  kind                   EnterpriseIdentityProviderKind
+  name                   String                           @db.VarChar(160)
+  status                 EnterpriseIdentityProviderStatus @default(ACTIVE)
+  issuer                 String?                          @db.Text
+  clientId               String?                          @map("client_id") @db.VarChar(500)
+  clientSecretCiphertext String?                          @map("client_secret_ciphertext") @db.Text
+  authorizationEndpoint  String?                          @map("authorization_endpoint") @db.Text
+  tokenEndpoint          String?                          @map("token_endpoint") @db.Text
+  jwksUri                String?                          @map("jwks_uri") @db.Text
+  scopes                 String[]                         @default(["openid", "email", "profile"])
+  allowedDomains         String[]                         @default([]) @map("allowed_domains")
+  emailClaim             String                           @default("email") @map("email_claim") @db.VarChar(100)
+  nameClaim              String                           @default("name") @map("name_claim") @db.VarChar(100)
+  defaultRole            WorkspaceRole                    @default(MEMBER) @map("default_role")
+  enforceSso             Boolean                          @default(false) @map("enforce_sso")
+  metadata               Json                             @default("{}")
+  lastValidatedAt        DateTime?                        @map("last_validated_at") @db.Timestamptz(6)
+  lastError              String?                          @map("last_error") @db.VarChar(1000)
+  createdAt              DateTime                         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime                         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization           Organization                     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace              Workspace                        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  identities             EnterpriseIdentity[]
+  oidcLoginStates        OidcLoginState[]
+  scimTokens             ScimToken[]
+
+  @@unique([workspaceId, name])
+  @@index([organizationId, workspaceId, kind, status])
+  @@map("enterprise_identity_providers")
+}
+
+model EnterpriseIdentity {
+  id             String                           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String                           @map("organization_id") @db.Uuid
+  workspaceId    String                           @map("workspace_id") @db.Uuid
+  providerId     String                           @map("provider_id") @db.Uuid
+  userId         String                           @map("user_id") @db.Uuid
+  kind           EnterpriseIdentityKind           @default(OIDC)
+  externalSubject String                          @map("external_subject") @db.VarChar(500)
+  linkedEmail    String                           @map("linked_email") @db.Citext
+  createdAt      DateTime                         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime                         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization                     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      Workspace                        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  provider       EnterpriseIdentityProvider       @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  user           User                             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, kind, externalSubject])
+  @@unique([providerId, userId, kind])
+  @@index([organizationId, workspaceId, userId])
+  @@map("enterprise_identities")
+}
+
+model OidcLoginState {
+  id                     String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId         String                     @map("organization_id") @db.Uuid
+  workspaceId            String                     @map("workspace_id") @db.Uuid
+  providerId             String                     @map("provider_id") @db.Uuid
+  stateHash              String                     @map("state_hash") @db.VarChar(64)
+  nonceHash              String                     @map("nonce_hash") @db.VarChar(64)
+  codeVerifierCiphertext String                     @map("code_verifier_ciphertext") @db.Text
+  redirectUri            String                     @map("redirect_uri") @db.Text
+  expiresAt              DateTime                   @map("expires_at") @db.Timestamptz(6)
+  consumedAt             DateTime?                  @map("consumed_at") @db.Timestamptz(6)
+  createdAt              DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization           Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace              Workspace                  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  provider               EnterpriseIdentityProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@unique([stateHash])
+  @@index([providerId, expiresAt, consumedAt])
+  @@map("oidc_login_states")
+}
+
+model ScimToken {
+  id             String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String                     @map("organization_id") @db.Uuid
+  workspaceId    String                     @map("workspace_id") @db.Uuid
+  providerId     String                     @map("provider_id") @db.Uuid
+  createdById    String                     @map("created_by_id") @db.Uuid
+  name           String                     @db.VarChar(160)
+  prefix         String                     @db.VarChar(24)
+  secretHash     String                     @map("secret_hash") @db.VarChar(64)
+  status         ScimTokenStatus            @default(ACTIVE)
+  lastUsedAt     DateTime?                  @map("last_used_at") @db.Timestamptz(6)
+  expiresAt      DateTime?                  @map("expires_at") @db.Timestamptz(6)
+  revokedAt      DateTime?                  @map("revoked_at") @db.Timestamptz(6)
+  createdAt      DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization   Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      Workspace                  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  provider       EnterpriseIdentityProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  createdBy      User                       @relation("ScimTokenCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@unique([workspaceId, prefix])
+  @@index([providerId, status, createdAt])
+  @@index([secretHash])
+  @@map("scim_tokens")
+}
+
+model WorkspaceSubscription {
+  id                     String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId         String                      @map("organization_id") @db.Uuid
+  workspaceId            String                      @unique @map("workspace_id") @db.Uuid
+  planCode               PlanCode                    @default(FREE) @map("plan_code")
+  status                 WorkspaceSubscriptionStatus @default(ACTIVE)
+  seatLimit              Int                         @default(5) @map("seat_limit")
+  seatsUsed              Int                         @default(0) @map("seats_used")
+  entitlements           Json                        @default("{}")
+  quotaLimits            Json                        @default("{}") @map("quota_limits")
+  provider               String?                     @db.VarChar(80)
+  providerCustomerId     String?                     @map("provider_customer_id") @db.VarChar(255)
+  providerSubscriptionId String?                     @map("provider_subscription_id") @db.VarChar(255)
+  currentPeriodStart     DateTime                    @map("current_period_start") @db.Timestamptz(6)
+  currentPeriodEnd       DateTime                    @map("current_period_end") @db.Timestamptz(6)
+  lastReconciledAt       DateTime?                   @map("last_reconciled_at") @db.Timestamptz(6)
+  createdAt              DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime                    @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization           Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace              Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerSubscriptionId])
+  @@index([organizationId, workspaceId, status])
+  @@map("workspace_subscriptions")
+}
+
+model UsageLedgerEntry {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  workspaceId    String       @map("workspace_id") @db.Uuid
+  metric         String       @db.VarChar(80)
+  quantity       BigInt
+  idempotencyKey String       @map("idempotency_key") @db.VarChar(200)
+  sourceType     String       @map("source_type") @db.VarChar(100)
+  sourceId       String?      @map("source_id") @db.VarChar(200)
+  occurredAt     DateTime     @default(now()) @map("occurred_at") @db.Timestamptz(6)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, idempotencyKey])
+  @@index([organizationId, workspaceId, metric, occurredAt])
+  @@map("usage_ledger_entries")
+}
+
+model QuotaReservation {
+  id             String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String                 @map("organization_id") @db.Uuid
+  workspaceId    String                 @map("workspace_id") @db.Uuid
+  metric         String                 @db.VarChar(80)
+  quantity       BigInt
+  reservationKey String                 @map("reservation_key") @db.VarChar(200)
+  status         QuotaReservationStatus @default(ACTIVE)
+  expiresAt      DateTime               @map("expires_at") @db.Timestamptz(6)
+  committedAt    DateTime?              @map("committed_at") @db.Timestamptz(6)
+  releasedAt     DateTime?              @map("released_at") @db.Timestamptz(6)
+  createdAt      DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, reservationKey])
+  @@index([organizationId, workspaceId, metric, status, expiresAt])
+  @@map("quota_reservations")
+}
+
+model WorkspaceAnalyticsDaily {
+  id                         String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId             String       @map("organization_id") @db.Uuid
+  workspaceId                String       @map("workspace_id") @db.Uuid
+  date                       DateTime     @db.Date
+  sessionsScheduled          Int          @default(0) @map("sessions_scheduled")
+  uniqueAttendees            Int          @default(0) @map("unique_attendees")
+  attendanceSeconds          BigInt       @default(0) @map("attendance_seconds")
+  engagementEvents           Int          @default(0) @map("engagement_events")
+  eventsScheduled            Int          @default(0) @map("events_scheduled")
+  registrationsCreated       Int          @default(0) @map("registrations_created")
+  bookingReservationsCreated Int          @default(0) @map("booking_reservations_created")
+  computedAt                 DateTime     @default(now()) @map("computed_at") @db.Timestamptz(6)
+  createdAt                  DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                  DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization               Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace                  Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, date])
+  @@index([organizationId, workspaceId, date])
+  @@map("workspace_analytics_daily")
+}
+
+model WorkspaceBranding {
+  id                   String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId       String       @map("organization_id") @db.Uuid
+  workspaceId          String       @unique @map("workspace_id") @db.Uuid
+  displayName          String?      @map("display_name") @db.VarChar(160)
+  logoUrl              String?      @map("logo_url") @db.Text
+  faviconUrl           String?      @map("favicon_url") @db.Text
+  primaryColor         String?      @map("primary_color") @db.VarChar(7)
+  accentColor          String?      @map("accent_color") @db.VarChar(7)
+  emailFromName        String?      @map("email_from_name") @db.VarChar(160)
+  supportUrl           String?      @map("support_url") @db.Text
+  hideSessionsBranding Boolean      @default(false) @map("hide_sessions_branding")
+  createdAt            DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace            Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, workspaceId])
+  @@map("workspace_brandings")
+}
+
+model CustomDomain {
+  id                String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId    String                @map("organization_id") @db.Uuid
+  workspaceId       String                @map("workspace_id") @db.Uuid
+  hostname          String                @unique @db.Citext
+  verificationName  String                @map("verification_name") @db.VarChar(253)
+  verificationValue String                @map("verification_value") @db.VarChar(255)
+  status            CustomDomainStatus    @default(PENDING_VERIFICATION)
+  tlsStatus         CustomDomainTlsStatus @default(NOT_REQUESTED) @map("tls_status")
+  verifiedAt        DateTime?             @map("verified_at") @db.Timestamptz(6)
+  lastCheckedAt     DateTime?             @map("last_checked_at") @db.Timestamptz(6)
+  tlsProvisionedAt  DateTime?             @map("tls_provisioned_at") @db.Timestamptz(6)
+  lastError         String?               @map("last_error") @db.VarChar(1000)
+  createdAt         DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization      Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace         Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, workspaceId, status])
+  @@index([workspaceId, createdAt])
+  @@map("custom_domains")
+}
+
+model ProviderConnection {
+  id                  String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId      String                   @map("organization_id") @db.Uuid
+  workspaceId         String                   @map("workspace_id") @db.Uuid
+  createdById         String                   @map("created_by_id") @db.Uuid
+  kind                ProviderConnectionKind
+  name                String                   @db.VarChar(160)
+  endpointUrl         String                   @map("endpoint_url") @db.Text
+  secretCiphertext    String                   @map("secret_ciphertext") @db.Text
+  credentialVersion   Int                      @default(1) @map("credential_version")
+  config              Json                     @default("{}")
+  status              ProviderConnectionStatus @default(ACTIVE)
+  lastUsedAt          DateTime?                @map("last_used_at") @db.Timestamptz(6)
+  lastSuccessAt       DateTime?                @map("last_success_at") @db.Timestamptz(6)
+  lastFailureAt       DateTime?                @map("last_failure_at") @db.Timestamptz(6)
+  lastError           String?                  @map("last_error") @db.VarChar(1000)
+  createdAt           DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization        Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace           Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy           User                     @relation("ProviderConnectionCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@unique([workspaceId, kind])
+  @@index([organizationId, workspaceId, status])
+  @@map("provider_connections")
 }
 
 model IdempotencyKey {

@@ -5,7 +5,7 @@ import { useSearchParams } from 'react-router-dom';
 import { api, type WorkspaceMember } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 
-const TABS = ['workspace', 'members', 'workspaces', 'integrations', 'security'] as const;
+const TABS = ['workspace', 'branding', 'members', 'workspaces', 'integrations', 'billing', 'security'] as const;
 type SettingsTab = (typeof TABS)[number];
 
 const MEMBER_ROLES: WorkspaceRole[] = ['ADMIN', 'HOST', 'MEMBER', 'ANALYST', 'GUEST'];
@@ -59,31 +59,41 @@ export function SettingsPage() {
               <span>
                 {item === 'workspace'
                   ? '◇'
-                  : item === 'members'
-                    ? '◎'
-                    : item === 'workspaces'
-                      ? '▦'
-                      : item === 'integrations'
-                        ? '⛓'
-                        : '⌾'}
+                  : item === 'branding'
+                    ? '✦'
+                    : item === 'members'
+                      ? '◎'
+                      : item === 'workspaces'
+                        ? '▦'
+                        : item === 'integrations'
+                          ? '⛓'
+                          : item === 'billing'
+                            ? '▤'
+                            : '⌾'}
               </span>
               {item === 'workspace'
                 ? 'Workspace profile'
-                : item === 'members'
-                  ? 'Members and invites'
-                  : item === 'workspaces'
-                    ? 'Your workspaces'
-                    : item === 'integrations'
-                      ? 'Integrations'
-                      : 'Security'}
+                : item === 'branding'
+                  ? 'Branding and domains'
+                  : item === 'members'
+                    ? 'Members and invites'
+                    : item === 'workspaces'
+                      ? 'Your workspaces'
+                      : item === 'integrations'
+                        ? 'Integrations'
+                        : item === 'billing'
+                          ? 'Billing and usage'
+                          : 'Security'}
             </button>
           ))}
         </nav>
         <section className="settings-content">
           {tab === 'workspace' ? <WorkspaceProfile /> : null}
+          {tab === 'branding' ? <BrandingSettings /> : null}
           {tab === 'members' ? <MembersAndInvitations /> : null}
           {tab === 'workspaces' ? <WorkspaceDirectory /> : null}
           {tab === 'integrations' ? <IntegrationsSettings /> : null}
+          {tab === 'billing' ? <BillingSettings /> : null}
           {tab === 'security' ? <SecuritySettings /> : null}
         </section>
       </div>
@@ -218,6 +228,526 @@ function WorkspaceProfile() {
           label="Audience workflows"
           value={workspace.data._count.events + workspace.data._count.bookingPages}
         />
+      </section>
+    </div>
+  );
+}
+
+function BillingSettings() {
+  const auth = useAuth();
+  const summary = useQuery({
+    queryKey: ['billing-summary'],
+    queryFn: () => api.getBillingSummary(),
+  });
+  const plans = useQuery({
+    queryKey: ['billing-plans'],
+    queryFn: () => api.listBillingPlans(),
+  });
+  const role = auth.me?.principal.roles[0] ?? 'GUEST';
+
+  if (summary.isLoading || plans.isLoading) return <SettingsLoading />;
+  if (summary.error) return <SettingsError message={summary.error.message} />;
+  if (plans.error) return <SettingsError message={plans.error.message} />;
+  if (!summary.data) return <SettingsError message="Billing summary is unavailable." />;
+
+  const subscription = summary.data.subscription;
+  const currentPlan = plans.data?.find(
+    (plan) => plan.code === subscription.planCode,
+  );
+
+  return (
+    <div className="settings-stack">
+      <section className="panel settings-panel">
+        <div className="settings-panel-heading">
+          <div>
+            <span className="eyebrow">Subscription</span>
+            <h2>{currentPlan?.name ?? subscription.planCode} plan</h2>
+            <p>
+              Subscription state, seat capacity, entitlements and usage are reconciled
+              from the billing ledger and current workspace membership.
+            </p>
+          </div>
+          <span className="settings-role-chip">
+            {subscription.status.toLowerCase()}
+          </span>
+        </div>
+
+        <div className="workspace-directory-grid">
+          <article className="workspace-directory-card">
+            <span>Seats</span>
+            <h3>
+              {subscription.seatsUsed} / {subscription.seatLimit}
+            </h3>
+            <p>
+              Active workspace memberships. Pending invitations also reserve capacity
+              before acceptance.
+            </p>
+          </article>
+          <article className="workspace-directory-card">
+            <span>Current period</span>
+            <h3>
+              {new Date(subscription.currentPeriodStart).toLocaleDateString()} –{' '}
+              {new Date(subscription.currentPeriodEnd).toLocaleDateString()}
+            </h3>
+            <p>
+              Last reconciled {formatDate(subscription.lastReconciledAt)}.
+            </p>
+          </article>
+          <article className="workspace-directory-card">
+            <span>Billing source</span>
+            <h3>{subscription.provider ?? 'Internal plan catalog'}</h3>
+            <p>
+              Plan changes stay provider-controlled; this UI never mutates billing
+              state directly.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section className="panel settings-panel">
+        <div className="settings-panel-heading">
+          <div>
+            <span className="eyebrow">Usage governance</span>
+            <h2>Quotas</h2>
+            <p>
+              Usage is backed by an immutable idempotent ledger. Active reservations
+              are shown separately so concurrent work cannot overspend a quota.
+            </p>
+          </div>
+          <span className="count-pill">{summary.data.quotas.length}</span>
+        </div>
+
+        <div className="settings-table">
+          {summary.data.quotas.map((quota) => {
+            const consumed = quota.used + quota.reserved;
+            const percent =
+              quota.limit && quota.limit > 0
+                ? Math.min(100, Math.round((consumed / quota.limit) * 100))
+                : 0;
+            return (
+              <div className="settings-table-row" key={quota.metric}>
+                <div className="member-copy">
+                  <strong>{quota.metric.replaceAll('_', ' ')}</strong>
+                  <span>
+                    {quota.used.toLocaleString()} used
+                    {quota.reserved
+                      ? ` · ${quota.reserved.toLocaleString()} reserved`
+                      : ''}
+                  </span>
+                  <small>
+                    {quota.limit === null
+                      ? 'Unlimited on this plan'
+                      : `${quota.remaining?.toLocaleString() ?? 0} remaining of ${quota.limit.toLocaleString()}`}
+                  </small>
+                  {quota.limit !== null ? (
+                    <div
+                      aria-label={`${percent}% of ${quota.metric} quota consumed`}
+                      style={{
+                        height: '6px',
+                        maxWidth: '420px',
+                        overflow: 'hidden',
+                        borderRadius: '999px',
+                        background: 'var(--border-subtle, #e5e7eb)',
+                      }}
+                    >
+                      <div
+                        style={{
+                          height: '100%',
+                          width: `${percent}%`,
+                          background: 'var(--accent, #5B5FF5)',
+                        }}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="panel settings-panel">
+        <div className="settings-panel-heading">
+          <div>
+            <span className="eyebrow">Plan catalog</span>
+            <h2>Available tiers</h2>
+            <p>
+              Provider checkout/webhook qualification is intentionally separate from
+              this entitlement engine. Current role: {role.toLowerCase()}.
+            </p>
+          </div>
+        </div>
+        <div className="workspace-directory-grid">
+          {plans.data?.map((plan) => (
+            <article className="workspace-directory-card" key={plan.code}>
+              <span>{plan.code === subscription.planCode ? 'Current plan' : 'Plan'}</span>
+              <h3>{plan.name}</h3>
+              <p>{plan.seatLimit.toLocaleString()} seats</p>
+              <div className="mini-tags">
+                {Object.entries(plan.entitlements)
+                  .filter(([, enabled]) => enabled)
+                  .map(([entitlement]) => (
+                    <span key={entitlement}>{entitlement}</span>
+                  ))}
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function BrandingSettings() {
+  const auth = useAuth();
+  const queryClient = useQueryClient();
+  const currentRole = auth.me?.principal.roles[0] ?? 'GUEST';
+  const canManage = ['OWNER', 'ADMIN'].includes(currentRole);
+
+  const branding = useQuery({
+    queryKey: ['workspace-branding'],
+    queryFn: () => api.getWorkspaceBranding(),
+  });
+  const domains = useQuery({
+    queryKey: ['custom-domains'],
+    queryFn: () => api.listCustomDomains(),
+    enabled: canManage,
+  });
+
+  const [displayName, setDisplayName] = useState('');
+  const [logoUrl, setLogoUrl] = useState('');
+  const [faviconUrl, setFaviconUrl] = useState('');
+  const [primaryColor, setPrimaryColor] = useState('#5B5FF5');
+  const [accentColor, setAccentColor] = useState('#14B8A6');
+  const [emailFromName, setEmailFromName] = useState('');
+  const [supportUrl, setSupportUrl] = useState('');
+  const [hideSessionsBranding, setHideSessionsBranding] = useState(false);
+  const [hostname, setHostname] = useState('');
+
+  useEffect(() => {
+    if (!branding.data) return;
+    setDisplayName(branding.data.displayName ?? '');
+    setLogoUrl(branding.data.logoUrl ?? '');
+    setFaviconUrl(branding.data.faviconUrl ?? '');
+    setPrimaryColor(branding.data.primaryColor ?? '#5B5FF5');
+    setAccentColor(branding.data.accentColor ?? '#14B8A6');
+    setEmailFromName(branding.data.emailFromName ?? '');
+    setSupportUrl(branding.data.supportUrl ?? '');
+    setHideSessionsBranding(branding.data.hideSessionsBranding);
+  }, [branding.data]);
+
+  const saveBranding = useMutation({
+    mutationFn: () =>
+      api.updateWorkspaceBranding({
+        displayName: displayName.trim() || null,
+        logoUrl: logoUrl.trim() || null,
+        faviconUrl: faviconUrl.trim() || null,
+        primaryColor,
+        accentColor,
+        emailFromName: emailFromName.trim() || null,
+        supportUrl: supportUrl.trim() || null,
+        hideSessionsBranding,
+      }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['workspace-branding'] });
+    },
+  });
+
+  const addDomain = useMutation({
+    mutationFn: () => api.createCustomDomain(hostname.trim()),
+    onSuccess: async () => {
+      setHostname('');
+      await queryClient.invalidateQueries({ queryKey: ['custom-domains'] });
+    },
+  });
+
+  const verifyDomain = useMutation({
+    mutationFn: (domainId: string) => api.verifyCustomDomain(domainId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['custom-domains'] });
+    },
+  });
+
+  const disableDomain = useMutation({
+    mutationFn: (domainId: string) => api.disableCustomDomain(domainId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['custom-domains'] });
+    },
+  });
+
+  if (branding.isLoading) return <SettingsLoading />;
+  if (branding.error) return <SettingsError message={branding.error.message} />;
+
+  return (
+    <div className="settings-stack">
+      <section className="panel settings-panel">
+        <div className="settings-panel-heading">
+          <div>
+            <span className="eyebrow">Workspace identity</span>
+            <h2>Brand appearance</h2>
+            <p>
+              Apply a workspace-owned identity to public and customer-facing experiences.
+              Brand assets remain isolated to the current tenant.
+            </p>
+          </div>
+          <span className="settings-role-chip">{currentRole.toLowerCase()}</span>
+        </div>
+
+        <form
+          className="settings-form"
+          onSubmit={(event: FormEvent) => {
+            event.preventDefault();
+            saveBranding.mutate();
+          }}
+        >
+          <div className="settings-form-grid">
+            <label>
+              Display name
+              <input
+                disabled={!canManage}
+                maxLength={160}
+                value={displayName}
+                onChange={(event) => setDisplayName(event.target.value)}
+                placeholder="Your company"
+              />
+            </label>
+            <label>
+              Email sender name
+              <input
+                disabled={!canManage}
+                maxLength={160}
+                value={emailFromName}
+                onChange={(event) => setEmailFromName(event.target.value)}
+                placeholder="Your company"
+              />
+            </label>
+            <label className="settings-grid-span">
+              Logo URL
+              <input
+                disabled={!canManage}
+                type="url"
+                value={logoUrl}
+                onChange={(event) => setLogoUrl(event.target.value)}
+                placeholder="https://cdn.example.com/logo.svg"
+              />
+            </label>
+            <label className="settings-grid-span">
+              Favicon URL
+              <input
+                disabled={!canManage}
+                type="url"
+                value={faviconUrl}
+                onChange={(event) => setFaviconUrl(event.target.value)}
+                placeholder="https://cdn.example.com/favicon.png"
+              />
+            </label>
+            <label>
+              Primary color
+              <input
+                disabled={!canManage}
+                type="color"
+                value={primaryColor}
+                onChange={(event) => setPrimaryColor(event.target.value.toUpperCase())}
+              />
+            </label>
+            <label>
+              Accent color
+              <input
+                disabled={!canManage}
+                type="color"
+                value={accentColor}
+                onChange={(event) => setAccentColor(event.target.value.toUpperCase())}
+              />
+            </label>
+            <label className="settings-grid-span">
+              Support URL
+              <input
+                disabled={!canManage}
+                type="url"
+                value={supportUrl}
+                onChange={(event) => setSupportUrl(event.target.value)}
+                placeholder="https://support.example.com"
+              />
+            </label>
+          </div>
+
+          <label className="settings-toggle-row">
+            <input
+              disabled={!canManage}
+              type="checkbox"
+              checked={hideSessionsBranding}
+              onChange={(event) => setHideSessionsBranding(event.target.checked)}
+            />
+            <span>
+              <strong>Hide Sessions branding</strong>
+              <small>
+                Remove the platform brand from customer-facing surfaces where white-label
+                presentation is supported.
+              </small>
+            </span>
+          </label>
+
+          <div className="workspace-directory-grid">
+            <article className="workspace-directory-card">
+              <span>Live preview</span>
+              <h3>{displayName.trim() || 'Your workspace'}</h3>
+              {logoUrl ? (
+                <img
+                  src={logoUrl}
+                  alt="Brand logo preview"
+                  style={{ maxWidth: '160px', maxHeight: '56px', objectFit: 'contain' }}
+                />
+              ) : (
+                <p>Add an HTTPS logo URL to preview the brand asset.</p>
+              )}
+              <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                <span
+                  aria-label="Primary brand color"
+                  style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '8px',
+                    background: primaryColor,
+                  }}
+                />
+                <span
+                  aria-label="Accent brand color"
+                  style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '8px',
+                    background: accentColor,
+                  }}
+                />
+              </div>
+            </article>
+          </div>
+
+          {saveBranding.error ? (
+            <div className="error-banner">{saveBranding.error.message}</div>
+          ) : null}
+          {saveBranding.isSuccess ? (
+            <div className="success-banner">Brand settings saved.</div>
+          ) : null}
+          <div className="settings-actions">
+            <button
+              className="button primary"
+              disabled={!canManage || saveBranding.isPending}
+            >
+              {saveBranding.isPending ? 'Saving…' : 'Save branding'}
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <section className="panel settings-panel">
+        <div className="settings-panel-heading">
+          <div>
+            <span className="eyebrow">Verified customer hostnames</span>
+            <h2>Custom domains</h2>
+            <p>
+              Prove DNS ownership first. After verification, the platform requests TLS
+              provisioning through the infrastructure event pipeline.
+            </p>
+          </div>
+          <span className="count-pill">{domains.data?.length ?? 0}</span>
+        </div>
+
+        <form
+          className="invite-row"
+          onSubmit={(event: FormEvent) => {
+            event.preventDefault();
+            addDomain.mutate();
+          }}
+        >
+          <input
+            disabled={!canManage}
+            required
+            value={hostname}
+            onChange={(event) => setHostname(event.target.value)}
+            placeholder="meet.example.com"
+          />
+          <button
+            className="button primary"
+            disabled={!canManage || addDomain.isPending || hostname.trim().length < 4}
+          >
+            {addDomain.isPending ? 'Adding…' : 'Add domain'}
+          </button>
+        </form>
+
+        {domains.isLoading ? <SettingsLoading /> : null}
+        {domains.error ? <SettingsError message={domains.error.message} /> : null}
+        {addDomain.error ? <div className="error-banner">{addDomain.error.message}</div> : null}
+        {verifyDomain.error ? (
+          <div className="error-banner">{verifyDomain.error.message}</div>
+        ) : null}
+        {disableDomain.error ? (
+          <div className="error-banner">{disableDomain.error.message}</div>
+        ) : null}
+
+        <div className="settings-table">
+          {domains.data?.map((domain) => (
+            <div className="settings-table-row" key={domain.id}>
+              <div className="member-copy">
+                <strong>{domain.hostname}</strong>
+                <span>
+                  Domain {domain.status.toLowerCase().replaceAll('_', ' ')} · TLS{' '}
+                  {domain.tlsStatus.toLowerCase().replaceAll('_', ' ')}
+                </span>
+                <small>
+                  Last checked {formatDate(domain.lastCheckedAt)} · verified{' '}
+                  {formatDate(domain.verifiedAt)}
+                </small>
+                <div className="development-token-box">
+                  <div>
+                    <strong>1. Ownership TXT record</strong>
+                    <small>{domain.verification.type}</small>
+                  </div>
+                  <code>{domain.verification.name}</code>
+                  <code>{domain.verification.value}</code>
+                </div>
+                <div className="development-token-box">
+                  <div>
+                    <strong>2. Routing record</strong>
+                    <small>{domain.routing.type}</small>
+                  </div>
+                  <code>{domain.routing.name}</code>
+                  <code>{domain.routing.value}</code>
+                </div>
+                {domain.lastError ? (
+                  <div className="error-banner">{domain.lastError}</div>
+                ) : null}
+              </div>
+              {domain.status !== 'DISABLED' && domain.status !== 'VERIFIED' ? (
+                <button
+                  type="button"
+                  className="button primary"
+                  disabled={!canManage || verifyDomain.isPending}
+                  onClick={() => verifyDomain.mutate(domain.id)}
+                >
+                  Verify DNS
+                </button>
+              ) : null}
+              {domain.status !== 'DISABLED' ? (
+                <button
+                  type="button"
+                  className="settings-row-action danger-text"
+                  disabled={!canManage || disableDomain.isPending}
+                  onClick={() => {
+                    if (window.confirm(`Disable ${domain.hostname}?`)) {
+                      disableDomain.mutate(domain.id);
+                    }
+                  }}
+                >
+                  Disable
+                </button>
+              ) : null}
+            </div>
+          ))}
+          {domains.data?.length === 0 ? (
+            <div className="settings-empty-row">No custom domains configured.</div>
+          ) : null}
+        </div>
       </section>
     </div>
   );

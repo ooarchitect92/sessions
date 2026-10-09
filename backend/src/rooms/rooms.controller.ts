@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentPrincipal } from '../common/auth/current-principal.decorator';
+import { ApiKeyScopes } from '../integrations/api-key-scopes';
 import type { Principal } from '../common/auth/principal';
 import { CreateRoomDto } from './dto/create-room.dto';
 import { UpdateRoomDto } from './dto/update-room.dto';
@@ -28,6 +29,7 @@ function parseVersion(value: string | undefined): number {
 
 @ApiTags('rooms')
 @ApiBearerAuth()
+@ApiKeyScopes('rooms:read')
 @Controller('rooms')
 export class RoomsController {
   constructor(private readonly rooms: RoomsService) {}
@@ -43,6 +45,7 @@ export class RoomsController {
   }
 
   @Post()
+  @ApiKeyScopes('rooms:write')
   create(
     @CurrentPrincipal() principal: Principal,
     @Body() body: CreateRoomDto,
@@ -55,6 +58,7 @@ export class RoomsController {
   }
 
   @Patch(':id')
+  @ApiKeyScopes('rooms:write')
   update(
     @CurrentPrincipal() principal: Principal,
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -65,6 +69,7 @@ export class RoomsController {
   }
 
   @Delete(':id')
+  @ApiKeyScopes('rooms:write')
   remove(
     @CurrentPrincipal() principal: Principal,
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,

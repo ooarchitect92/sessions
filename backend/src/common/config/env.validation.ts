@@ -110,10 +110,21 @@ const environmentSchema = z
     EMAIL_FROM: z.string().email().default('no-reply@sessions.local'),
     NOTIFICATION_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(5),
     NOTIFICATION_RETRY_BASE_SECONDS: z.coerce.number().int().min(10).max(3600).default(60),
+    WEBHOOK_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(8),
+    WEBHOOK_RETRY_BASE_SECONDS: z.coerce.number().int().min(5).max(3600).default(30),
+    WEBHOOK_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(10000),
+    WEBHOOK_RESPONSE_MAX_BYTES: z.coerce.number().int().min(1024).max(1048576).default(65536),
+    ANALYTICS_ROLLUP_LOOKBACK_DAYS: z.coerce.number().int().min(1).max(14).default(2),
+    ANALYTICS_ROLLUP_WORKSPACE_BATCH: z.coerce.number().int().min(10).max(1000).default(100),
     CRM_WRITE_PROVIDER: z.enum(['disabled', 'mock', 'http']).default('disabled'),
     CRM_WRITE_HTTP_ENDPOINT: z.string().url().optional(),
     CRM_WRITE_HTTP_API_KEY: z.string().min(1).optional(),
     WEB_APP_URL: z.string().url().default('http://localhost:3000'),
+    CUSTOM_DOMAIN_CNAME_TARGET: z
+      .string()
+      .min(4)
+      .max(253)
+      .default('domains.sessions.local'),
     GOOGLE_CALENDAR_CLIENT_ID: z.string().min(1).optional(),
     GOOGLE_CALENDAR_CLIENT_SECRET: z.string().min(1).optional(),
     MICROSOFT_CALENDAR_CLIENT_ID: z.string().min(1).optional(),

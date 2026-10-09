@@ -6,11 +6,14 @@ import { AgendasModule } from "./agendas/agendas.module";
 import { AnalyticsModule } from "./analytics/analytics.module";
 import { AiModule } from "./ai/ai.module";
 import { AuthModule } from "./auth/auth.module";
+import { BillingModule } from "./billing/billing.module";
 import { BookingsModule } from "./bookings/bookings.module";
+import { BrandingModule } from "./branding/branding.module";
 import { CalendarModule } from "./calendar/calendar.module";
 import { BreakoutsModule } from "./breakouts/breakouts.module";
 import { CollaborationModule } from "./collaboration/collaboration.module";
 import { ContentModule } from "./content/content.module";
+import { ApiKeyScopeGuard } from "./common/auth/api-key-scope.guard";
 import { PrincipalGuard } from "./common/auth/principal.guard";
 import { validateEnvironment } from "./common/config/env.validation";
 import { ApiEnvelopeInterceptor } from "./common/http/api-envelope.interceptor";
@@ -19,6 +22,7 @@ import { PrismaModule } from "./database/prisma.module";
 import { EventsModule } from "./events/events.module";
 import { HealthModule } from "./health/health.module";
 import { InfrastructureModule } from "./infrastructure/infrastructure.module";
+import { IntegrationsModule } from "./integrations/integrations.module";
 import { MediaModule } from "./media/media.module";
 import { MemoryModule } from "./memory/memory.module";
 import { NotificationsModule } from "./notifications/notifications.module";
@@ -42,6 +46,7 @@ import { WorkspacesModule } from "./workspaces/workspaces.module";
     ScheduleModule.forRoot(),
     PrismaModule,
     InfrastructureModule,
+    IntegrationsModule,
     AnalyticsModule,
     AiModule,
     AuthModule,
@@ -59,6 +64,8 @@ import { WorkspacesModule } from "./workspaces/workspaces.module";
     AgendasModule,
     EventsModule,
     BookingsModule,
+    BrandingModule,
+    BillingModule,
     BreakoutsModule,
     CollaborationModule,
     ContentModule,
@@ -68,6 +75,7 @@ import { WorkspacesModule } from "./workspaces/workspaces.module";
   ],
   providers: [
     { provide: APP_GUARD, useClass: PrincipalGuard },
+    { provide: APP_GUARD, useClass: ApiKeyScopeGuard },
     { provide: APP_FILTER, useClass: ApiExceptionFilter },
     { provide: APP_INTERCEPTOR, useClass: ApiEnvelopeInterceptor },
   ],

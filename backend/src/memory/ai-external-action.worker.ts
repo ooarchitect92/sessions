@@ -6,6 +6,8 @@ import {
   ArtifactStatus,
   Prisma,
 } from '@prisma/client';
+import { BILLING_METRICS } from '../billing/billing-plans';
+import { BillingService } from '../billing/billing.service';
 import { WorkerPrismaService } from '../database/worker-prisma.service';
 import { EmailDeliveryProvider } from '../notifications/email-delivery.provider';
 import { OutboxService } from '../outbox/outbox.service';
@@ -20,6 +22,7 @@ export class AiExternalActionWorker {
     private readonly prisma: WorkerPrismaService,
     private readonly email: EmailDeliveryProvider,
     private readonly crm: CrmWriteProvider,
+    private readonly billing: BillingService,
     private readonly outbox: OutboxService,
   ) {}
 
@@ -53,6 +56,7 @@ export class AiExternalActionWorker {
     sessionId: string;
     kind: AiExternalActionKind;
     sourceSummaryVersion: number;
+    version: number;
     recipientEmail: string | null;
     subject: string | null;
     bodyText: string;
@@ -72,6 +76,7 @@ export class AiExternalActionWorker {
     });
     if (claimed.count === 0) return;
 
+    let quotaReservationId: string | null = null;
     try {
       const summary = await this.prisma.memorySummary.findUnique({
         where: { sessionId: action.sessionId },
@@ -92,6 +97,16 @@ export class AiExternalActionWorker {
         });
         return;
       }
+
+      const quotaReservation = await this.billing.reserveQuota({
+        organizationId: action.organizationId,
+        workspaceId: action.workspaceId,
+        metric: BILLING_METRICS.AI_EXTERNAL_ACTIONS,
+        quantity: 1n,
+        reservationKey: `ai-external-action:${action.id}:version:${action.version}`,
+        ttlSeconds: 15 * 60,
+      });
+      quotaReservationId = quotaReservation.id;
 
       const idempotencyKey = `ai-external-action:${action.id}`;
       const result =
@@ -130,7 +145,21 @@ export class AiExternalActionWorker {
           },
         );
       });
+      try {
+        await this.billing.commitReservation(
+          quotaReservationId,
+          'ai_external_action',
+          action.id,
+        );
+      } catch (usageError: unknown) {
+        this.logger.warn(
+          `AI external action succeeded but usage accounting failed for ${action.id}: ${usageError instanceof Error ? usageError.message : 'unknown'}`,
+        );
+      }
     } catch (error: unknown) {
+      if (quotaReservationId) {
+        await this.billing.releaseReservation(quotaReservationId);
+      }
       const failureCode = this.message(error);
       await this.prisma.$transaction(async (transaction) => {
         await transaction.aiExternalAction.update({
@@ -166,6 +195,8 @@ export class AiExternalActionWorker {
   private async sendEmail(
     action: {
       id: string;
+      organizationId: string;
+      workspaceId: string;
       recipientEmail: string | null;
       subject: string | null;
       bodyText: string;
@@ -176,6 +207,8 @@ export class AiExternalActionWorker {
       throw new Error('followup_email_missing_recipient_or_subject');
     }
     const result = await this.email.send({
+      organizationId: action.organizationId,
+      workspaceId: action.workspaceId,
       to: action.recipientEmail,
       subject: action.subject,
       text: action.bodyText,
@@ -186,6 +219,8 @@ export class AiExternalActionWorker {
 
   private async writeCrmNote(
     action: {
+      organizationId: string;
+      workspaceId: string;
       targetProvider: string | null;
       targetRecordId: string | null;
       bodyText: string;
@@ -196,6 +231,8 @@ export class AiExternalActionWorker {
       throw new Error('crm_note_missing_target');
     }
     return this.crm.writeNote({
+      organizationId: action.organizationId,
+      workspaceId: action.workspaceId,
       targetProvider: action.targetProvider,
       targetRecordId: action.targetRecordId,
       note: action.bodyText,

@@ -10,6 +10,7 @@ import { JwtService } from '@nestjs/jwt';
 import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { AuthService } from '../../auth/auth.service';
+import { ApiKeyAuthService } from '../../integrations/api-key-auth.service';
 import { IS_PUBLIC_KEY } from './public.decorator';
 import type { AccessTokenClaims, Principal } from './principal';
 
@@ -32,6 +33,7 @@ export class PrincipalGuard implements CanActivate {
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly auth: AuthService,
+    private readonly apiKeys: ApiKeyAuthService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -50,6 +52,12 @@ export class PrincipalGuard implements CanActivate {
     }
 
     const token = authorization.slice('Bearer '.length).trim();
+
+    if (token.startsWith('sess_')) {
+      request.principal = await this.apiKeys.resolvePrincipal(token);
+      return true;
+    }
+
     try {
       const claims = await this.jwt.verifyAsync<AccessTokenClaims>(token, {
         issuer: this.config.getOrThrow<string>('JWT_ISSUER'),

@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentPrincipal } from '../common/auth/current-principal.decorator';
+import { ApiKeyScopes } from '../integrations/api-key-scopes';
 import type { Principal } from '../common/auth/principal';
 import { CreateSessionDto } from './dto/create-session.dto';
 import { ListSessionsQuery } from './dto/list-sessions.query';
@@ -30,11 +31,13 @@ function parseIfMatch(value: string | undefined): number {
 
 @ApiTags('sessions')
 @ApiBearerAuth()
+@ApiKeyScopes('sessions:read')
 @Controller('sessions')
 export class SessionsController {
   constructor(private readonly sessions: SessionsService) {}
 
   @Post()
+  @ApiKeyScopes('sessions:write')
   create(
     @CurrentPrincipal() principal: Principal,
     @Body() body: CreateSessionDto,
@@ -60,6 +63,7 @@ export class SessionsController {
   }
 
   @Patch(':id')
+  @ApiKeyScopes('sessions:write')
   update(
     @CurrentPrincipal() principal: Principal,
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -70,6 +74,7 @@ export class SessionsController {
   }
 
   @Post(':id/publish')
+  @ApiKeyScopes('sessions:write')
   publish(
     @CurrentPrincipal() principal: Principal,
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -79,6 +84,7 @@ export class SessionsController {
   }
 
   @Post(':id/start')
+  @ApiKeyScopes('sessions:write')
   start(
     @CurrentPrincipal() principal: Principal,
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -88,6 +94,7 @@ export class SessionsController {
   }
 
   @Post(':id/end')
+  @ApiKeyScopes('sessions:write')
   end(
     @CurrentPrincipal() principal: Principal,
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -97,6 +104,7 @@ export class SessionsController {
   }
 
   @Post(':id/cancel')
+  @ApiKeyScopes('sessions:write')
   cancel(
     @CurrentPrincipal() principal: Principal,
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,

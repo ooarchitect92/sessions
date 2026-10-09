@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { IntegrationsModule } from '../integrations/integrations.module';
 import { OutboxModule } from '../outbox/outbox.module';
 import { BookingReminderWorker } from './booking-reminder.worker';
 import { EmailDeliveryProvider } from './email-delivery.provider';
@@ -7,7 +8,7 @@ import { NotificationsController } from './notifications.controller';
 import { NotificationsService } from './notifications.service';
 
 @Module({
-  imports: [OutboxModule],
+  imports: [IntegrationsModule, OutboxModule],
   controllers: [NotificationsController],
   providers: [
     NotificationsService,

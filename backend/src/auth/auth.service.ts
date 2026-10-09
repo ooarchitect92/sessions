@@ -10,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import {
   AuthChallengePurpose,
+  EnterpriseIdentityKind,
   Prisma,
   UserStatus,
   WorkspaceRole,
@@ -17,6 +18,7 @@ import {
 } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { AuditService } from '../audit/audit.service';
+import { BillingService } from '../billing/billing.service';
 import type { AccessTokenClaims, Principal } from '../common/auth/principal';
 import { WorkerPrismaService } from '../database/worker-prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
@@ -78,6 +80,7 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly security: SecurityService,
+    private readonly billing: BillingService,
     private readonly audit: AuditService,
     private readonly outbox: OutboxService,
   ) {}
@@ -183,6 +186,11 @@ export class AuthService {
         },
         include: { workspace: { include: { organization: true } } },
       });
+      await this.billing.createDefaultSubscription(
+        transaction,
+        organization.id,
+        workspace.id,
+      );
       const principal = this.principalFor(user, membership);
       await this.audit.record(transaction, principal, {
         action: 'auth.account.created',
@@ -802,6 +810,25 @@ export class AuthService {
           },
         });
       }
+      const existingMembership = await transaction.workspaceMembership.findUnique({
+        where: {
+          workspaceId_userId: {
+            workspaceId: current.workspaceId,
+            userId: user.id,
+          },
+        },
+        select: { id: true },
+      });
+      if (!existingMembership) {
+        // The invitation itself already occupies one pending seat, so acceptance
+        // validates current occupied capacity without adding another seat.
+        await this.billing.assertSeatCapacity(
+          transaction,
+          current.organizationId,
+          current.workspaceId,
+          0,
+        );
+      }
       const membership = await transaction.workspaceMembership.upsert({
         where: {
           workspaceId_userId: {
@@ -838,6 +865,140 @@ export class AuthService {
       if (factor?.verifiedAt && !factor.disabledAt) {
         return this.createMfaChallenge(user, membership, transaction);
       }
+      return this.issueTokens(transaction, user, membership, metadata);
+    });
+  }
+
+  async completeFederatedLogin(
+    input: {
+      providerId: string;
+      organizationId: string;
+      workspaceId: string;
+      externalSubject: string;
+      email: string;
+      displayName: string;
+      defaultRole: WorkspaceRole;
+    },
+    metadata: AuthRequestMetadata,
+  ): Promise<TokenBundle> {
+    const email = input.email.trim().toLowerCase();
+    return this.prisma.$transaction(async (transaction) => {
+      const lockKey = `enterprise-identity:${input.providerId}:${input.externalSubject}`;
+      await transaction.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
+
+      const existingIdentity = await transaction.enterpriseIdentity.findUnique({
+        where: {
+          providerId_kind_externalSubject: {
+            providerId: input.providerId,
+            kind: EnterpriseIdentityKind.OIDC,
+            externalSubject: input.externalSubject,
+          },
+        },
+        include: { user: true },
+      });
+
+      let user = existingIdentity?.user ?? null;
+      if (existingIdentity) {
+        if (
+          existingIdentity.organizationId !== input.organizationId ||
+          existingIdentity.workspaceId !== input.workspaceId ||
+          existingIdentity.linkedEmail.toLowerCase() !== email ||
+          user?.status !== UserStatus.ACTIVE
+        ) {
+          throw new ForbiddenException('Enterprise identity access is unavailable');
+        }
+      } else {
+        user = await transaction.user.findUnique({ where: { email } });
+        if (user && user.status !== UserStatus.ACTIVE) {
+          throw new ForbiddenException('The account is unavailable');
+        }
+        if (!user) {
+          user = await transaction.user.create({
+            data: {
+              email,
+              displayName: input.displayName.trim().slice(0, 160) || email,
+              passwordHash: null,
+              emailVerifiedAt: new Date(),
+            },
+          });
+        }
+      }
+
+      let membership = await transaction.workspaceMembership.findUnique({
+        where: {
+          workspaceId_userId: {
+            workspaceId: input.workspaceId,
+            userId: user.id,
+          },
+        },
+        include: { workspace: { include: { organization: true } } },
+      });
+
+      if (!membership) {
+        if (existingIdentity) {
+          throw new ForbiddenException('Workspace access is no longer available');
+        }
+        await this.billing.assertSeatCapacity(
+          transaction,
+          input.organizationId,
+          input.workspaceId,
+          1,
+        );
+        membership = await transaction.workspaceMembership.create({
+          data: {
+            organizationId: input.organizationId,
+            workspaceId: input.workspaceId,
+            userId: user.id,
+            role: input.defaultRole,
+          },
+          include: { workspace: { include: { organization: true } } },
+        });
+      }
+      if (membership.organizationId !== input.organizationId) {
+        throw new ForbiddenException('Enterprise workspace access is unavailable');
+      }
+
+      if (!existingIdentity) {
+        await transaction.enterpriseIdentity.create({
+          data: {
+            organizationId: input.organizationId,
+            workspaceId: input.workspaceId,
+            providerId: input.providerId,
+            userId: user.id,
+            kind: EnterpriseIdentityKind.OIDC,
+            externalSubject: input.externalSubject,
+            linkedEmail: email,
+          },
+        });
+        const principal = this.principalFor(user, membership);
+        await this.audit.record(transaction, principal, {
+          action: 'auth.enterprise_identity.linked',
+          resourceType: 'user',
+          resourceId: user.id,
+          metadata: {
+            providerId: input.providerId,
+            externalSubject: input.externalSubject,
+          },
+        });
+        await this.outbox.enqueue(transaction, principal, {
+          aggregateType: 'user',
+          aggregateId: user.id,
+          eventType: 'auth.enterprise_identity.linked',
+          payload: {
+            userId: user.id,
+            providerId: input.providerId,
+            workspaceId: input.workspaceId,
+          },
+        });
+      }
+
+      await transaction.user.update({
+        where: { id: user.id },
+        data: {
+          lastLoginAt: new Date(),
+          emailVerifiedAt: user.emailVerifiedAt ?? new Date(),
+        },
+      });
       return this.issueTokens(transaction, user, membership, metadata);
     });
   }

@@ -125,6 +125,98 @@ export interface CalendarConnectionRecord {
   updatedAt: string;
 }
 
+export interface WorkspaceBrandingRecord {
+  id: string | null;
+  displayName: string | null;
+  logoUrl: string | null;
+  faviconUrl: string | null;
+  primaryColor: string | null;
+  accentColor: string | null;
+  emailFromName: string | null;
+  supportUrl: string | null;
+  hideSessionsBranding: boolean;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface CustomDomainRecord {
+  id: string;
+  hostname: string;
+  verification: {
+    type: 'TXT';
+    name: string;
+    value: string;
+  };
+  routing: {
+    type: 'CNAME';
+    name: string;
+    value: string;
+  };
+  status: 'PENDING_VERIFICATION' | 'VERIFIED' | 'DISABLED' | 'ERROR';
+  tlsStatus: 'NOT_REQUESTED' | 'PENDING' | 'ACTIVE' | 'ERROR';
+  verifiedAt: string | null;
+  lastCheckedAt: string | null;
+  tlsProvisionedAt: string | null;
+  lastError: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BillingPlanRecord {
+  code: 'FREE' | 'PRO' | 'BUSINESS' | 'ENTERPRISE';
+  name: string;
+  seatLimit: number;
+  entitlements: Record<string, boolean>;
+  quotaLimits: Record<string, number | null>;
+}
+
+export interface BillingSummaryRecord {
+  subscription: {
+    id: string;
+    planCode: BillingPlanRecord['code'];
+    status: 'TRIALING' | 'ACTIVE' | 'PAST_DUE' | 'CANCELED';
+    seatLimit: number;
+    seatsUsed: number;
+    entitlements: Record<string, boolean>;
+    currentPeriodStart: string;
+    currentPeriodEnd: string;
+    provider: string | null;
+    lastReconciledAt: string | null;
+  };
+  quotas: Array<{
+    metric: string;
+    limit: number | null;
+    used: number;
+    reserved: number;
+    remaining: number | null;
+  }>;
+}
+
+export interface WorkspaceAnalyticsDay {
+  date: string;
+  sessionsScheduled: number;
+  uniqueAttendees: number;
+  attendanceSeconds: number;
+  engagementEvents: number;
+  eventsScheduled: number;
+  registrationsCreated: number;
+  bookingReservationsCreated: number;
+  computedAt: string;
+}
+
+export interface WorkspaceAnalyticsRecord {
+  range: { from: string; to: string; days: number };
+  totals: Omit<WorkspaceAnalyticsDay, 'date' | 'computedAt'>;
+  lastComputedAt: string | null;
+  days: WorkspaceAnalyticsDay[];
+}
+
+export interface WorkspaceAnalyticsExport {
+  filename: string;
+  contentType: string;
+  csv: string;
+}
+
 export interface WorkspaceInvitation {
   id: string;
   email: string;
@@ -923,6 +1015,52 @@ export const api = {
     });
   },
 
+  listBillingPlans(): Promise<BillingPlanRecord[]> {
+    return request<BillingPlanRecord[]>('/billing/plans');
+  },
+
+  getBillingSummary(): Promise<BillingSummaryRecord> {
+    return request<BillingSummaryRecord>('/billing/summary');
+  },
+
+  getWorkspaceBranding(): Promise<WorkspaceBrandingRecord> {
+    return request<WorkspaceBrandingRecord>('/branding');
+  },
+
+  updateWorkspaceBranding(
+    input: Partial<Omit<WorkspaceBrandingRecord, 'id' | 'createdAt' | 'updatedAt'>>,
+  ): Promise<WorkspaceBrandingRecord> {
+    return request<WorkspaceBrandingRecord>('/branding', {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    });
+  },
+
+  listCustomDomains(): Promise<CustomDomainRecord[]> {
+    return request<CustomDomainRecord[]>('/branding/domains');
+  },
+
+  createCustomDomain(hostname: string): Promise<CustomDomainRecord> {
+    return request<CustomDomainRecord>('/branding/domains', {
+      method: 'POST',
+      body: JSON.stringify({ hostname }),
+    });
+  },
+
+  verifyCustomDomain(domainId: string): Promise<CustomDomainRecord> {
+    return request<CustomDomainRecord>(
+      `/branding/domains/${domainId}/verify`,
+      { method: 'POST' },
+    );
+  },
+
+  disableCustomDomain(domainId: string): Promise<CustomDomainRecord> {
+    return request<CustomDomainRecord>(
+      `/branding/domains/${domainId}/disable`,
+      { method: 'POST' },
+    );
+  },
+
   listWorkspaceMembers(): Promise<WorkspaceMember[]> {
     return request('/workspaces/current/members');
   },
@@ -1326,6 +1464,30 @@ export const api = {
 
   getSessionAnalytics(sessionId: string): Promise<SessionAnalyticsRecord> {
     return request<SessionAnalyticsRecord>(`/analytics/sessions/${sessionId}`);
+  },
+
+  getWorkspaceAnalytics(
+    from?: string,
+    to?: string,
+  ): Promise<WorkspaceAnalyticsRecord> {
+    const params = new URLSearchParams();
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    const query = params.size ? `?${params.toString()}` : '';
+    return request<WorkspaceAnalyticsRecord>(`/analytics/workspace${query}`);
+  },
+
+  exportWorkspaceAnalytics(
+    from?: string,
+    to?: string,
+  ): Promise<WorkspaceAnalyticsExport> {
+    const params = new URLSearchParams();
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    const query = params.size ? `?${params.toString()}` : '';
+    return request<WorkspaceAnalyticsExport>(
+      `/analytics/workspace/export${query}`,
+    );
   },
 
   updateEvent(
