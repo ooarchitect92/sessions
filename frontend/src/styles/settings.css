@@ -896,3 +896,120 @@
     grid-template-columns: 48px minmax(0, 1fr);
   }
 }
+
+
+.domain-create-form {
+  margin-bottom: 18px;
+}
+
+.domain-create-form small {
+  color: #7a8581;
+  font-size: 9px;
+  font-weight: 650;
+}
+
+.domain-card-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.domain-card {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid #d9ddd8;
+  border-radius: 14px;
+  background: #fafbf8;
+}
+
+.domain-card-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.domain-card-heading strong,
+.domain-card-heading small {
+  display: block;
+}
+
+.domain-card-heading strong {
+  font-size: 13px;
+}
+
+.domain-card-heading small {
+  margin-top: 4px;
+  color: #78837f;
+  font-size: 9px;
+}
+
+.domain-dns-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.domain-dns-grid > div {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid #e1e4df;
+  border-radius: 11px;
+  background: #fff;
+}
+
+.domain-dns-grid span {
+  color: #697570;
+  font-size: 9px;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.domain-dns-grid code {
+  overflow-wrap: anywhere;
+  color: #254f44;
+  font-size: 9px;
+}
+
+.domain-dns-grid small {
+  color: #87908d;
+  font-size: 8px;
+}
+
+.domain-status-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.domain-status-row span {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f0f3ef;
+}
+
+.domain-status-row strong,
+.domain-status-row small {
+  display: block;
+}
+
+.domain-status-row strong {
+  color: #4f625c;
+  font-size: 9px;
+}
+
+.domain-status-row small {
+  margin-top: 3px;
+  color: #7c8883;
+  font-size: 9px;
+}
+
+@media (max-width: 720px) {
+  .domain-dns-grid,
+  .domain-status-row {
+    grid-template-columns: 1fr;
+  }
+}
