@@ -69,6 +69,8 @@ export class MediaService {
           canPublish: participant.permission?.canPublish ?? false,
           handRaised:
             participant.attributes?.['sessions.handRaised'] === 'true',
+          spotlighted:
+            participant.attributes?.['sessions.spotlighted'] === 'true',
           roles: context.roles,
           presenterRole: context.presenterRole,
           tracks: participant.tracks.map((track) => ({
@@ -179,6 +181,72 @@ export class MediaService {
       sessionId,
       participantIdentity: principal.userId,
       raised,
+      breakoutRoomId: breakoutRoomId ?? null,
+    };
+  }
+
+  async setParticipantSpotlight(
+    principal: Principal,
+    sessionId: string,
+    participantIdentity: string,
+    spotlighted: boolean,
+    breakoutRoomId?: string,
+  ) {
+    this.assertHost(principal);
+    const roomName = await this.resolveRoomName(
+      principal,
+      sessionId,
+      breakoutRoomId,
+    );
+    const participants = await this.listRoomParticipants(roomName);
+    const participant = participants.find(
+      (candidate) => candidate.identity === participantIdentity,
+    );
+    if (!participant) throw new NotFoundException('Participant is not connected');
+
+    const service = this.roomService();
+    try {
+      if (spotlighted) {
+        for (const candidate of participants) {
+          if (
+            candidate.identity !== participantIdentity &&
+            candidate.attributes?.['sessions.spotlighted'] === 'true'
+          ) {
+            await service.updateParticipant(roomName, candidate.identity, {
+              attributes: { 'sessions.spotlighted': '' },
+            });
+          }
+        }
+      }
+      await service.updateParticipant(roomName, participantIdentity, {
+        attributes: {
+          'sessions.spotlighted': spotlighted ? 'true' : '',
+        },
+      });
+    } catch {
+      throw new ServiceUnavailableException(
+        'Unable to update participant spotlight right now',
+      );
+    }
+
+    await this.database.run(principal, (transaction) =>
+      this.audit.record(transaction, principal, {
+        action: spotlighted
+          ? 'media.participant.spotlighted'
+          : 'media.participant.spotlight_cleared',
+        resourceType: 'session',
+        resourceId: sessionId,
+        metadata: {
+          participantIdentity,
+          breakoutRoomId: breakoutRoomId ?? null,
+        },
+      }),
+    );
+
+    return {
+      sessionId,
+      participantIdentity,
+      spotlighted,
       breakoutRoomId: breakoutRoomId ?? null,
     };
   }
