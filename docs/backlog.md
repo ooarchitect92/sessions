@@ -72,6 +72,7 @@
 ## Phase 5 — platform and enterprise
 
 - [x] tenant-scoped API-key and webhook-subscription administration with encrypted signing secrets, audit evidence and outbox events
+- [x] default-deny API-key bearer authentication with current-membership validation, supported scope catalog and read/write endpoint enforcement
 - [x] HMAC webhook delivery worker with durable retries, dead-letter state, replay and reconciliation history
 - [x] SSRF-safe pinned HTTPS webhook egress boundary with redirect blocking, timeout and bounded responses
 - [ ] broader provider integration framework and credential governance
