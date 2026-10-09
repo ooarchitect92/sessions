@@ -11,6 +11,8 @@ export const API_KEY_SCOPE_CATALOG = [
   'events:write',
   'memory:read',
   'memory:write',
+  'analytics:read',
+  'analytics:export',
 ] as const;
 
 export type ApiKeyScope = (typeof API_KEY_SCOPE_CATALOG)[number];
