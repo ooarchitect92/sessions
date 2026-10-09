@@ -140,6 +140,66 @@ export class MediaService {
     };
   }
 
+  async setParticipantPublishing(
+    principal: Principal,
+    sessionId: string,
+    participantIdentity: string,
+    canPublish: boolean,
+    breakoutRoomId?: string,
+  ) {
+    this.assertHost(principal);
+    if (participantIdentity === principal.userId) {
+      throw new ConflictException(
+        'Change your own camera and microphone from the meeting controls',
+      );
+    }
+
+    const roomName = await this.resolveRoomName(
+      principal,
+      sessionId,
+      breakoutRoomId,
+    );
+    const participants = await this.listRoomParticipants(roomName);
+    const participant = participants.find(
+      (candidate) => candidate.identity === participantIdentity,
+    );
+    if (!participant) throw new NotFoundException('Participant is not connected');
+
+    try {
+      await this.roomService().updateParticipant(roomName, participantIdentity, {
+        permission: {
+          ...(participant.permission ?? {}),
+          canPublish,
+        },
+      });
+    } catch {
+      throw new ServiceUnavailableException(
+        'Unable to update participant publishing permission right now',
+      );
+    }
+
+    await this.database.run(principal, (transaction) =>
+      this.audit.record(transaction, principal, {
+        action: canPublish
+          ? 'media.participant.publishing_enabled'
+          : 'media.participant.publishing_disabled',
+        resourceType: 'session',
+        resourceId: sessionId,
+        metadata: {
+          participantIdentity,
+          breakoutRoomId: breakoutRoomId ?? null,
+        },
+      }),
+    );
+
+    return {
+      sessionId,
+      participantIdentity,
+      canPublish,
+      breakoutRoomId: breakoutRoomId ?? null,
+    };
+  }
+
   async removeParticipant(
     principal: Principal,
     sessionId: string,
