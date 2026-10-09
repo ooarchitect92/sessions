@@ -25,8 +25,15 @@ describe('CalendarTokenVaultService', () => {
   it('rejects tampered ciphertext', () => {
     const service = vault();
     const encrypted = service.encrypt('secret-refresh-token');
-    const tampered = encrypted.slice(0, -1) + (encrypted.endsWith('A') ? 'B' : 'A');
+    const parts = encrypted.split('.');
+    const ciphertext = parts[3]!;
+    const index = Math.floor(ciphertext.length / 2);
+    const replacement = ciphertext[index] === 'A' ? 'B' : 'A';
+    parts[3] =
+      ciphertext.slice(0, index) + replacement + ciphertext.slice(index + 1);
+    const tampered = parts.join('.');
 
+    expect(tampered).not.toBe(encrypted);
     expect(() => service.decrypt(tampered)).toThrow();
   });
 });
