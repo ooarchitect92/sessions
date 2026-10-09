@@ -8,6 +8,37 @@ function realtimeUrl(): string {
   return `${api.origin}/realtime`;
 }
 
+export interface WhiteboardCursorRealtimePayload {
+  sessionId: string;
+  userId: string;
+  displayName: string;
+  x: number;
+  y: number;
+  visible: boolean;
+  occurredAt: string;
+}
+
+const activeSessionSockets = new Map<string, Socket>();
+
+export function publishWhiteboardCursor(
+  sessionId: string,
+  input: { x: number; y: number; visible: boolean },
+): void {
+  const socket = activeSessionSockets.get(sessionId);
+  if (!socket?.connected) return;
+  socket.emit('whiteboard.cursor', { sessionId, ...input });
+}
+
+function dispatchWhiteboardCursor(payload: WhiteboardCursorRealtimePayload): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(
+    new CustomEvent<WhiteboardCursorRealtimePayload>(
+      `sessions:whiteboard-cursor:${payload.sessionId}`,
+      { detail: payload },
+    ),
+  );
+}
+
 export function useSessionRealtime(sessionId: string): void {
   const queryClient = useQueryClient();
 
@@ -24,7 +55,9 @@ export function useSessionRealtime(sessionId: string): void {
         auth: { token },
       });
       socket.on('connect', () => {
-        socket?.emit('session.join', { sessionId });
+        if (!socket) return;
+        activeSessionSockets.set(sessionId, socket);
+        socket.emit('session.join', { sessionId });
       });
       socket.on('agenda.activated', () => {
         void queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
@@ -43,6 +76,12 @@ export function useSessionRealtime(sessionId: string): void {
       socket.on('whiteboard.operation.appended', () => {
         void queryClient.invalidateQueries({ queryKey: ['whiteboard', sessionId] });
       });
+      socket.on(
+        'whiteboard.cursor.updated',
+        (payload: WhiteboardCursorRealtimePayload) => {
+          if (payload?.sessionId === sessionId) dispatchWhiteboardCursor(payload);
+        },
+      );
       for (const eventName of ['breakouts.updated', 'breakouts.announcement']) {
         socket.on(eventName, () => {
           void queryClient.invalidateQueries({ queryKey: ['breakouts', sessionId] });
@@ -78,6 +117,8 @@ export function useSessionRealtime(sessionId: string): void {
     void connect();
     return () => {
       disposed = true;
+      const current = activeSessionSockets.get(sessionId);
+      if (current && current === socket) activeSessionSockets.delete(sessionId);
       socket?.disconnect();
     };
   }, [queryClient, sessionId]);
