@@ -6,6 +6,7 @@ export interface EmailMessage {
   to: string;
   subject: string;
   text: string;
+  html?: string;
   idempotencyKey: string;
 }
 
@@ -55,6 +56,7 @@ export class EmailDeliveryProvider {
         to: message.to,
         subject: message.subject,
         text: message.text,
+        ...(message.html ? { html: message.html } : {}),
       }),
     });
     if (!response.ok) {
