@@ -47,7 +47,7 @@ function applyOperation(
   if (
     !rawObject ||
     typeof rawObject.id !== 'string' ||
-    !['stroke', 'shape', 'note', 'text'].includes(String(rawObject.type))
+    !['stroke', 'shape', 'note', 'text', 'image'].includes(String(rawObject.type))
   ) {
     return objects;
   }
