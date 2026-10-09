@@ -268,6 +268,7 @@ export class AuthService {
     if (!membership) {
       throw new ForbiddenException('This account does not have an active workspace');
     }
+    await this.assertLocalLoginAllowed(membership.workspaceId);
 
     await this.prisma.user.update({
       where: { id: user.id },
@@ -914,6 +915,19 @@ export class AuthService {
     };
   }
 
+  private async assertLocalLoginAllowed(workspaceId: string): Promise<void> {
+    const rows = await this.prisma.$queryRaw<Array<{ enforce_sso: boolean }>>`
+      SELECT enforce_sso
+      FROM enterprise_identity_connections
+      WHERE workspace_id = ${workspaceId}::uuid
+        AND enabled = TRUE
+        AND protocol IN ('OIDC', 'SAML')
+      LIMIT 1
+    `;
+    if (rows[0]?.enforce_sso) {
+      throw new ForbiddenException('This workspace requires enterprise SSO');
+    }
+  }
   private async recordFailedLogin(userId: string): Promise<void> {
     await this.prisma.$transaction(async (transaction) => {
       await transaction.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${userId}, 0))`;
