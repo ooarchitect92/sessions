@@ -17,6 +17,11 @@ export class IntegrationsController {
     return this.integrations.listApiKeys(principal);
   }
 
+  @Get('api-keys/scopes')
+  listApiKeyScopes(@CurrentPrincipal() principal: Principal) {
+    return this.integrations.listApiKeyScopes(principal);
+  }
+
   @Post('api-keys')
   createApiKey(@CurrentPrincipal() principal: Principal, @Body() input: CreateApiKeyDto) {
     return this.integrations.createApiKey(principal, input);
