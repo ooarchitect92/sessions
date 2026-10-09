@@ -11,6 +11,7 @@ import { WorkerPrismaService } from '../database/worker-prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { EmailDeliveryProvider } from './email-delivery.provider';
 import { renderWorkspaceEmailTemplate } from './workspace-email-template';
+import { renderBrandedEmailHtml, workspaceEmailBrand } from './branded-email.renderer';
 
 const REMINDERS = [
   {
@@ -283,10 +284,19 @@ export class BookingReminderWorker {
               variables,
             )
           : fallbackBody;
+        const workspace = await this.prisma.workspace.findUnique({
+          where: { id: delivery.workspaceId },
+          select: { name: true, settings: true },
+        });
         const result = await this.provider.send({
           to: delivery.recipientEmail,
           subject,
           text: body,
+          html: renderBrandedEmailHtml({
+            brand: workspaceEmailBrand(workspace),
+            heading: title,
+            text: body,
+          }),
           idempotencyKey: `booking-reminder:${delivery.id}`,
         });
 
