@@ -18,8 +18,11 @@ type OidcConnection = {
   token_endpoint: string;
   userinfo_endpoint: string | null;
   jwks_uri: string;
+  end_session_endpoint: string | null;
   scopes: string[];
   email_domains: string[];
+  role_attribute: string | null;
+  role_mappings: Record<string, WorkspaceRole>;
   default_role: WorkspaceRole;
 };
 
@@ -36,6 +39,7 @@ type IdTokenClaims = {
   email_verified?: boolean;
   name?: string;
   preferred_username?: string;
+  [claim: string]: unknown;
 };
 
 @Injectable()
@@ -159,7 +163,7 @@ export class OidcLoginService {
   private async connectionForWorkspace(workspaceId: string): Promise<OidcConnection | null> {
     const rows = await this.prisma.$queryRaw<OidcConnection[]>`
       SELECT organization_id, workspace_id, issuer_url, client_id, encrypted_client_secret,
-             authorization_endpoint, token_endpoint, userinfo_endpoint, jwks_uri, scopes, email_domains, default_role
+             authorization_endpoint, token_endpoint, userinfo_endpoint, jwks_uri, end_session_endpoint, scopes, email_domains, role_attribute, role_mappings, default_role
       FROM enterprise_identity_connections
       WHERE workspace_id = ${workspaceId}::uuid
         AND enabled = TRUE
@@ -240,6 +244,7 @@ export class OidcLoginService {
   private async resolveUser(connection: OidcConnection, claims: Required<Pick<IdTokenClaims, 'sub' | 'email'>> & IdTokenClaims) {
     const email = claims.email.trim().toLowerCase();
     const domain = email.split('@')[1] ?? '';
+    const mappedRole = this.roleFromClaims(connection, claims);
     if (connection.email_domains.length && !connection.email_domains.includes(domain)) throw new ForbiddenException('Email domain is not allowed for this workspace');
     return this.prisma.$transaction(async (transaction) => {
       const identities = await transaction.$queryRaw<Array<{ user_id: string }>>`
@@ -260,8 +265,8 @@ export class OidcLoginService {
       if (user.status !== UserStatus.ACTIVE) throw new ForbiddenException('Enterprise user account is not active');
       await transaction.workspaceMembership.upsert({
         where: { workspaceId_userId: { workspaceId: connection.workspace_id, userId: user.id } },
-        create: { organizationId: connection.organization_id, workspaceId: connection.workspace_id, userId: user.id, role: connection.default_role },
-        update: {},
+        create: { organizationId: connection.organization_id, workspaceId: connection.workspace_id, userId: user.id, role: mappedRole ?? connection.default_role },
+        update: mappedRole ? { role: mappedRole } : {},
       });
       await transaction.$executeRaw`
         INSERT INTO enterprise_oidc_identities (organization_id, workspace_id, user_id, issuer, subject, email)
@@ -273,6 +278,26 @@ export class OidcLoginService {
     });
   }
 
+  private roleFromClaims(connection: OidcConnection, claims: IdTokenClaims): WorkspaceRole | null {
+    if (!connection.role_attribute) return null;
+    const raw = this.claimAtPath(claims, connection.role_attribute);
+    const values = Array.isArray(raw) ? raw : raw === undefined || raw === null ? [] : [raw];
+    for (const value of values) {
+      if (typeof value !== 'string' && typeof value !== 'number') continue;
+      const role = connection.role_mappings[String(value).trim()];
+      if (role && role !== WorkspaceRole.OWNER) return role;
+    }
+    return null;
+  }
+
+  private claimAtPath(claims: IdTokenClaims, path: string): unknown {
+    let current: unknown = claims;
+    for (const part of path.split('.')) {
+      if (!current || typeof current !== 'object' || Array.isArray(current)) return undefined;
+      current = (current as Record<string, unknown>)[part];
+    }
+    return current;
+  }
   private decodeJson<T>(value: string): T {
     try { return JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as T; }
     catch { throw new UnauthorizedException('OIDC token payload is invalid'); }
