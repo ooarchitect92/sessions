@@ -28,6 +28,7 @@ import { MediaModule } from "./media/media.module";
 import { MemoryModule } from "./memory/memory.module";
 import { NotificationsModule } from "./notifications/notifications.module";
 import { OutboxModule } from "./outbox/outbox.module";
+import { PrivacyModule } from "./privacy/privacy.module";
 import { RealtimeModule } from "./realtime/realtime.module";
 import { RecordingsModule } from "./recordings/recordings.module";
 import { RoomsModule } from "./rooms/rooms.module";
@@ -56,6 +57,7 @@ import { WorkspacesModule } from "./workspaces/workspaces.module";
     WorkspacesModule,
     HealthModule,
     OutboxModule,
+    PrivacyModule,
     MemoryModule,
     NotificationsModule,
     RecordingsModule,
