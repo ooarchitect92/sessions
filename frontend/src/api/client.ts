@@ -513,6 +513,23 @@ export interface BillingPlanRecord {
   limits: BillingCurrentRecord['plan']['limits'];
   features: Record<string, boolean>;
 }
+export interface RetentionPolicyRecord {
+  id: string;
+  recordingDays: number;
+  transcriptDays: number;
+  auditDays: number;
+  deleteOnExpiry: boolean;
+  legalHold: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AuditExportRecord {
+  filename: string;
+  columns: string[];
+  rows: Array<Record<string, string | number | boolean | null>>;
+  truncated: boolean;
+}
 export interface EnterpriseIdentityConnectionRecord {
   id: string;
   protocol: 'OIDC' | 'SAML';
@@ -1492,6 +1509,30 @@ export const api = {
     );
   },
 
+  getRetentionPolicy(): Promise<RetentionPolicyRecord> {
+    return request<RetentionPolicyRecord>('/governance/retention');
+  },
+
+  saveRetentionPolicy(input: {
+    recordingDays: number;
+    transcriptDays: number;
+    auditDays: number;
+    deleteOnExpiry: boolean;
+    legalHold: boolean;
+  }): Promise<RetentionPolicyRecord> {
+    return request<RetentionPolicyRecord>('/governance/retention', {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    });
+  },
+
+  exportAuditLog(from?: string, to?: string): Promise<AuditExportRecord> {
+    const query = new URLSearchParams();
+    if (from) query.set('from', from);
+    if (to) query.set('to', to);
+    const suffix = query.size ? `?${query.toString()}` : '';
+    return request<AuditExportRecord>(`/governance/audit/export${suffix}`);
+  },
   getEnterpriseIdentity(): Promise<EnterpriseIdentityConnectionRecord | null> {
     return request<EnterpriseIdentityConnectionRecord | null>('/enterprise/identity');
   },
