@@ -162,6 +162,36 @@ export interface CustomDomainRecord {
   updatedAt: string;
 }
 
+export interface BillingPlanRecord {
+  code: 'FREE' | 'PRO' | 'BUSINESS' | 'ENTERPRISE';
+  name: string;
+  seatLimit: number;
+  entitlements: Record<string, boolean>;
+  quotaLimits: Record<string, number | null>;
+}
+
+export interface BillingSummaryRecord {
+  subscription: {
+    id: string;
+    planCode: BillingPlanRecord['code'];
+    status: 'TRIALING' | 'ACTIVE' | 'PAST_DUE' | 'CANCELED';
+    seatLimit: number;
+    seatsUsed: number;
+    entitlements: Record<string, boolean>;
+    currentPeriodStart: string;
+    currentPeriodEnd: string;
+    provider: string | null;
+    lastReconciledAt: string | null;
+  };
+  quotas: Array<{
+    metric: string;
+    limit: number | null;
+    used: number;
+    reserved: number;
+    remaining: number | null;
+  }>;
+}
+
 export interface WorkspaceAnalyticsDay {
   date: string;
   sessionsScheduled: number;
@@ -983,6 +1013,14 @@ export const api = {
       headers: { 'if-match': String(version) },
       body: JSON.stringify(input),
     });
+  },
+
+  listBillingPlans(): Promise<BillingPlanRecord[]> {
+    return request<BillingPlanRecord[]>('/billing/plans');
+  },
+
+  getBillingSummary(): Promise<BillingSummaryRecord> {
+    return request<BillingSummaryRecord>('/billing/summary');
   },
 
   getWorkspaceBranding(): Promise<WorkspaceBrandingRecord> {
