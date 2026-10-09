@@ -30,6 +30,16 @@ describe('environment validation', () => {
     expect(environment.REFRESH_TOKEN_TTL_DAYS).toBe(30);
   });
 
+  it('requires the HTTP STT adapter credentials together', () => {
+    expect(() =>
+      validateEnvironment({
+        ...base,
+        STT_PROVIDER: 'http',
+        STT_HTTP_ENDPOINT: 'https://stt.example.test/transcribe',
+      }),
+    ).toThrow('STT_HTTP_API_KEY is required');
+  });
+
   it('rejects deterministic development authentication in production', () => {
     expect(() =>
       validateEnvironment({
