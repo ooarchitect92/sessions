@@ -69,16 +69,12 @@ jobs:
           git clone --depth 1 --branch v0.8.7 https://github.com/pgvector/pgvector.git /tmp/pgvector
           make -C /tmp/pgvector OPTFLAGS="" with_llvm=no
           sudo make -C /tmp/pgvector install with_llvm=no
-          sudo -u postgres psql -v ON_ERROR_STOP=1 <<'SQL'
-          DO $
-          BEGIN
-            IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'sessions') THEN
-              CREATE ROLE sessions LOGIN PASSWORD 'sessions' SUPERUSER;
-            END IF;
-          END
-          $;
-          SQL
-          sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='sessions'" | grep -q 1             || sudo -u postgres createdb -O sessions sessions
+          if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='sessions'" | grep -q 1; then
+            sudo -u postgres psql -v ON_ERROR_STOP=1 -c "CREATE ROLE sessions LOGIN PASSWORD 'sessions' SUPERUSER"
+          fi
+          if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='sessions'" | grep -q 1; then
+            sudo -u postgres createdb -O sessions sessions
+          fi
       - run: cp .env.example .env
       - run: npm install --no-audit --no-fund
       - run: npm run db:generate
