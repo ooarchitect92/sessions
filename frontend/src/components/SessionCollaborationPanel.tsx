@@ -110,6 +110,31 @@ export function SessionCollaborationPanel({
     },
   });
 
+  const setSpotlight = useMutation({
+    mutationFn: ({
+      participantIdentity,
+      spotlighted,
+    }: {
+      participantIdentity: string;
+      spotlighted: boolean;
+    }) =>
+      api.setMediaParticipantSpotlight(
+        sessionId,
+        participantIdentity,
+        spotlighted,
+        activeBreakoutRoomId ?? null,
+      ),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: [
+          'media-participants',
+          sessionId,
+          activeBreakoutRoomId ?? 'main',
+        ],
+      });
+    },
+  });
+
   const setPublishing = useMutation({
     mutationFn: ({
       participantIdentity,
@@ -294,6 +319,9 @@ export function SessionCollaborationPanel({
                       {participant.handRaised ? (
                         <span className="participant-hand-raised">✋ Raised</span>
                       ) : null}
+                      {participant.spotlighted ? (
+                        <span className="participant-spotlight-state">Spotlight</span>
+                      ) : null}
                       <span
                         className={
                           participant.isPublisher
@@ -357,6 +385,19 @@ export function SessionCollaborationPanel({
                     <div className="participant-moderation-actions">
                       <button
                         type="button"
+                        className="participant-spotlight-action"
+                        disabled={setSpotlight.isPending}
+                        onClick={() =>
+                          setSpotlight.mutate({
+                            participantIdentity: participant.identity,
+                            spotlighted: !participant.spotlighted,
+                          })
+                        }
+                      >
+                        {participant.spotlighted ? 'Clear spotlight' : 'Spotlight'}
+                      </button>
+                      <button
+                        type="button"
                         className="participant-publishing-action"
                         disabled={setPublishing.isPending}
                         onClick={() =>
@@ -409,6 +450,11 @@ export function SessionCollaborationPanel({
           {setTrackMuted.error ? (
             <div className="error-banner compact-error">
               {setTrackMuted.error.message}
+            </div>
+          ) : null}
+          {setSpotlight.error ? (
+            <div className="error-banner compact-error">
+              {setSpotlight.error.message}
             </div>
           ) : null}
           {setPublishing.error ? (
