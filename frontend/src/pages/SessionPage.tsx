@@ -880,7 +880,9 @@ export function SessionPage() {
               audio={
                 devicePreferences.microphoneEnabled
                   ? {
-                      deviceId: devicePreferences.microphoneDeviceId ?? undefined,
+                      ...(devicePreferences.microphoneDeviceId
+                        ? { deviceId: devicePreferences.microphoneDeviceId }
+                        : {}),
                       echoCancellation: true,
                       noiseSuppression: true,
                       autoGainControl: true,
@@ -890,7 +892,9 @@ export function SessionPage() {
               video={
                 devicePreferences.cameraEnabled
                   ? {
-                      deviceId: devicePreferences.cameraDeviceId ?? undefined,
+                      ...(devicePreferences.cameraDeviceId
+                        ? { deviceId: devicePreferences.cameraDeviceId }
+                        : {}),
                       resolution: { width: 1280, height: 720 },
                     }
                   : false
