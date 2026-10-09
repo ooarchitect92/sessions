@@ -187,6 +187,13 @@ const environmentSchema = z
 
     if (value.NODE_ENV !== 'production') return;
 
+    if (value.CUSTOM_DOMAIN_CNAME_TARGET.endsWith('.local')) {
+      issue(
+        'CUSTOM_DOMAIN_CNAME_TARGET',
+        'Production custom-domain CNAME target must be a publicly routable hostname',
+      );
+    }
+
     if (value.AUTH_MODE === 'development') {
       issue('AUTH_MODE', 'AUTH_MODE=development is forbidden in production');
     }
