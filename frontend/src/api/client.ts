@@ -93,6 +93,18 @@ export interface WorkspaceRecord {
   };
 }
 
+export interface WorkspaceDomainRecord {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  hostname: string;
+  status: 'PENDING' | 'VERIFIED';
+  verificationToken: string;
+  verifiedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface WorkspaceMember {
   id: string;
   role: WorkspaceRole;
@@ -915,6 +927,29 @@ export const api = {
       method: 'PATCH',
       headers: { 'if-match': String(version) },
       body: JSON.stringify(input),
+    });
+  },
+
+  listWorkspaceDomains(): Promise<WorkspaceDomainRecord[]> {
+    return request('/workspaces/current/domains');
+  },
+
+  createWorkspaceDomain(hostname: string): Promise<WorkspaceDomainRecord> {
+    return request('/workspaces/current/domains', {
+      method: 'POST',
+      body: JSON.stringify({ hostname }),
+    });
+  },
+
+  verifyWorkspaceDomain(domainId: string): Promise<WorkspaceDomainRecord> {
+    return request(`/workspaces/current/domains/${domainId}/verify`, {
+      method: 'POST',
+    });
+  },
+
+  removeWorkspaceDomain(domainId: string): Promise<{ id: string; removed: true }> {
+    return request(`/workspaces/current/domains/${domainId}`, {
+      method: 'DELETE',
     });
   },
 

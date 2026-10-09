@@ -209,6 +209,11 @@ enum WebhookDeliveryStatus {
   DEAD_LETTER
 }
 
+enum WorkspaceDomainStatus {
+  PENDING
+  VERIFIED
+}
+
 model Organization {
   id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name                String                @db.VarChar(160)
@@ -254,6 +259,7 @@ model Organization {
   calendarConnections CalendarConnection[]
   calendarOAuthStates CalendarOAuthState[]
   aiExternalActions    AiExternalAction[]
+  workspaceDomains     WorkspaceDomain[]
 
   @@map("organizations")
 }
@@ -307,10 +313,28 @@ model Workspace {
   calendarConnections CalendarConnection[]
   calendarOAuthStates CalendarOAuthState[]
   aiExternalActions    AiExternalAction[]
+  domains              WorkspaceDomain[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
   @@map("workspaces")
+}
+
+model WorkspaceDomain {
+  id                String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId    String                @map("organization_id") @db.Uuid
+  workspaceId       String                @map("workspace_id") @db.Uuid
+  hostname          String                @unique @db.VarChar(253)
+  status            WorkspaceDomainStatus @default(PENDING)
+  verificationToken String                @map("verification_token") @db.VarChar(96)
+  verifiedAt        DateTime?             @map("verified_at") @db.Timestamptz(6)
+  createdAt         DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization      Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace         Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, workspaceId, status])
+  @@map("workspace_domains")
 }
 
 model User {

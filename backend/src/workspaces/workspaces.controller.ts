@@ -13,6 +13,7 @@ import {
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentPrincipal } from '../common/auth/current-principal.decorator';
 import type { Principal } from '../common/auth/principal';
+import { CreateWorkspaceDomainDto } from './dto/create-workspace-domain.dto';
 import { CreateWorkspaceDto } from './dto/create-workspace.dto';
 import { InviteMemberDto } from './dto/invite-member.dto';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
@@ -63,6 +64,35 @@ export class WorkspacesController {
     @Body() body: UpdateWorkspaceDto,
   ) {
     return this.workspaces.updateCurrent(principal, parseVersion(ifMatch), body);
+  }
+
+  @Get('current/domains')
+  listDomains(@CurrentPrincipal() principal: Principal) {
+    return this.workspaces.listDomains(principal);
+  }
+
+  @Post('current/domains')
+  createDomain(
+    @CurrentPrincipal() principal: Principal,
+    @Body() body: CreateWorkspaceDomainDto,
+  ) {
+    return this.workspaces.createDomain(principal, body.hostname);
+  }
+
+  @Post('current/domains/:domainId/verify')
+  verifyDomain(
+    @CurrentPrincipal() principal: Principal,
+    @Param('domainId', new ParseUUIDPipe({ version: '4' })) domainId: string,
+  ) {
+    return this.workspaces.verifyDomain(principal, domainId);
+  }
+
+  @Delete('current/domains/:domainId')
+  removeDomain(
+    @CurrentPrincipal() principal: Principal,
+    @Param('domainId', new ParseUUIDPipe({ version: '4' })) domainId: string,
+  ) {
+    return this.workspaces.removeDomain(principal, domainId);
   }
 
   @Get('current/members')
