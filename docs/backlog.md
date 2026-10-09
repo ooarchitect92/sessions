@@ -17,7 +17,8 @@
 - [x] workspace invitations, owner-preserving role management and multi-workspace switching
 - [x] TOTP MFA with encrypted secrets and single-use recovery codes
 - [ ] production OIDC/SAML, IdP logout, SCIM, rate limiting and identity-provider qualification
-- [ ] device preflight, host moderation, reconnect and media qualification
+- [x] browser device preflight with permission handling, camera preview, camera/microphone selection and constrained LiveKit capture
+- [ ] host moderation, reconnect hardening and TURN/SFU media qualification
 
 ## Phase 2 — collaboration and reliable capture
 
