@@ -847,6 +847,11 @@ model Transcript {
   provider       String?             @db.VarChar(100)
   objectKey      String?             @map("object_key") @db.Text
   fullText       String?             @map("full_text") @db.Text
+  normalized     Boolean             @default(false)
+  normalizedMimeType String?         @map("normalized_mime_type") @db.VarChar(160)
+  diarized       Boolean             @default(false)
+  speakerCount   Int?                @map("speaker_count")
+  qualityMetadata Json               @default("{}") @map("quality_metadata")
   completedAt    DateTime?           @map("completed_at") @db.Timestamptz(6)
   failureCode    String?             @map("failure_code") @db.VarChar(160)
   version        Int                 @default(1)
