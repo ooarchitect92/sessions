@@ -974,6 +974,19 @@ export const api = {
     return publicRequest('/auth/login', { method: 'POST', body: JSON.stringify(input) });
   },
 
+  startEnterpriseSso(input: { workspaceSlug: string; returnTo?: string }): Promise<{ authorizationUrl: string }> {
+    return publicRequest('/enterprise/sso/start', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  exchangeEnterpriseSsoGrant(grant: string): Promise<AuthTokenBundle> {
+    return publicRequest<AuthTokenBundle>('/enterprise/sso/exchange', {
+      method: 'POST',
+      body: JSON.stringify({ grant }),
+    });
+  },
   completeMfa(input: { challengeToken: string; code: string }): Promise<AuthTokenBundle> {
     return publicRequest<AuthTokenBundle>('/auth/mfa/complete', {
       method: 'POST',
