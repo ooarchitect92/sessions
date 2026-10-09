@@ -14,6 +14,7 @@ import {
 } from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
 import { AuditService } from '../audit/audit.service';
+import { BillingService } from '../billing/billing.service';
 import { SecurityService } from '../auth/security.service';
 import {
   ADMIN_ROLES,
@@ -47,6 +48,7 @@ export class WorkspacesService {
     private readonly config: ConfigService,
     private readonly audit: AuditService,
     private readonly outbox: OutboxService,
+    private readonly billing: BillingService,
   ) {}
 
   async listAccessible(principal: Principal) {
@@ -338,7 +340,10 @@ export class WorkspacesService {
           revokedAt: null,
         },
       });
-      const invitationId = pending?.id ?? randomUUID();
+      if (!pending) {
+        await this.billing.assertSeatAvailable(transaction, principal);
+      }
+            const invitationId = pending?.id ?? randomUUID();
       const opaque = this.security.createOpaqueToken(invitationId);
       const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60_000);
       const invitation = pending
