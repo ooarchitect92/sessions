@@ -260,6 +260,26 @@ enum QuotaReservationStatus {
   EXPIRED
 }
 
+enum EnterpriseIdentityProviderKind {
+  OIDC
+  SAML
+}
+
+enum EnterpriseIdentityProviderStatus {
+  ACTIVE
+  DISABLED
+  ERROR
+}
+
+enum EnterpriseIdentityKind {
+  OIDC
+}
+
+enum ScimTokenStatus {
+  ACTIVE
+  REVOKED
+}
+
 model Organization {
   id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name                String                @db.VarChar(160)
@@ -315,6 +335,10 @@ model Organization {
   workspaceSubscriptions WorkspaceSubscription[]
   usageLedgerEntries    UsageLedgerEntry[]
   quotaReservations     QuotaReservation[]
+  enterpriseIdentityProviders EnterpriseIdentityProvider[]
+  enterpriseIdentities EnterpriseIdentity[]
+  oidcLoginStates      OidcLoginState[]
+  scimTokens           ScimToken[]
 
   @@map("organizations")
 }
@@ -378,6 +402,10 @@ model Workspace {
   subscription         WorkspaceSubscription?
   usageLedgerEntries   UsageLedgerEntry[]
   quotaReservations    QuotaReservation[]
+  enterpriseIdentityProviders EnterpriseIdentityProvider[]
+  enterpriseIdentities EnterpriseIdentity[]
+  oidcLoginStates      OidcLoginState[]
+  scimTokens           ScimToken[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -428,6 +456,8 @@ model User {
   createdApiKeys          ApiKey[]                @relation("ApiKeyCreator")
   createdWebhookSubscriptions WebhookSubscription[] @relation("WebhookSubscriptionCreator")
   createdProviderConnections ProviderConnection[] @relation("ProviderConnectionCreator")
+  enterpriseIdentities EnterpriseIdentity[]
+  createdScimTokens    ScimToken[] @relation("ScimTokenCreator")
 
   @@index([status])
   @@map("users")
@@ -1403,6 +1433,109 @@ model WebhookDelivery {
   @@index([organizationId, workspaceId, status, nextAttemptAt])
   @@index([subscriptionId, createdAt])
   @@map("webhook_deliveries")
+}
+
+model EnterpriseIdentityProvider {
+  id                     String                           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId         String                           @map("organization_id") @db.Uuid
+  workspaceId            String                           @map("workspace_id") @db.Uuid
+  kind                   EnterpriseIdentityProviderKind
+  name                   String                           @db.VarChar(160)
+  status                 EnterpriseIdentityProviderStatus @default(ACTIVE)
+  issuer                 String?                          @db.Text
+  clientId               String?                          @map("client_id") @db.VarChar(500)
+  clientSecretCiphertext String?                          @map("client_secret_ciphertext") @db.Text
+  authorizationEndpoint  String?                          @map("authorization_endpoint") @db.Text
+  tokenEndpoint          String?                          @map("token_endpoint") @db.Text
+  jwksUri                String?                          @map("jwks_uri") @db.Text
+  scopes                 String[]                         @default(["openid", "email", "profile"])
+  allowedDomains         String[]                         @default([]) @map("allowed_domains")
+  emailClaim             String                           @default("email") @map("email_claim") @db.VarChar(100)
+  nameClaim              String                           @default("name") @map("name_claim") @db.VarChar(100)
+  defaultRole            WorkspaceRole                    @default(MEMBER) @map("default_role")
+  enforceSso             Boolean                          @default(false) @map("enforce_sso")
+  metadata               Json                             @default("{}")
+  lastValidatedAt        DateTime?                        @map("last_validated_at") @db.Timestamptz(6)
+  lastError              String?                          @map("last_error") @db.VarChar(1000)
+  createdAt              DateTime                         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime                         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization           Organization                     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace              Workspace                        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  identities             EnterpriseIdentity[]
+  oidcLoginStates        OidcLoginState[]
+  scimTokens             ScimToken[]
+
+  @@unique([workspaceId, name])
+  @@index([organizationId, workspaceId, kind, status])
+  @@map("enterprise_identity_providers")
+}
+
+model EnterpriseIdentity {
+  id             String                           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String                           @map("organization_id") @db.Uuid
+  workspaceId    String                           @map("workspace_id") @db.Uuid
+  providerId     String                           @map("provider_id") @db.Uuid
+  userId         String                           @map("user_id") @db.Uuid
+  kind           EnterpriseIdentityKind           @default(OIDC)
+  externalSubject String                          @map("external_subject") @db.VarChar(500)
+  linkedEmail    String                           @map("linked_email") @db.Citext
+  createdAt      DateTime                         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime                         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization                     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      Workspace                        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  provider       EnterpriseIdentityProvider       @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  user           User                             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, kind, externalSubject])
+  @@unique([providerId, userId, kind])
+  @@index([organizationId, workspaceId, userId])
+  @@map("enterprise_identities")
+}
+
+model OidcLoginState {
+  id                     String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId         String                     @map("organization_id") @db.Uuid
+  workspaceId            String                     @map("workspace_id") @db.Uuid
+  providerId             String                     @map("provider_id") @db.Uuid
+  stateHash              String                     @map("state_hash") @db.VarChar(64)
+  nonceHash              String                     @map("nonce_hash") @db.VarChar(64)
+  codeVerifierCiphertext String                     @map("code_verifier_ciphertext") @db.Text
+  redirectUri            String                     @map("redirect_uri") @db.Text
+  expiresAt              DateTime                   @map("expires_at") @db.Timestamptz(6)
+  consumedAt             DateTime?                  @map("consumed_at") @db.Timestamptz(6)
+  createdAt              DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization           Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace              Workspace                  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  provider               EnterpriseIdentityProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@unique([stateHash])
+  @@index([providerId, expiresAt, consumedAt])
+  @@map("oidc_login_states")
+}
+
+model ScimToken {
+  id             String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String                     @map("organization_id") @db.Uuid
+  workspaceId    String                     @map("workspace_id") @db.Uuid
+  providerId     String                     @map("provider_id") @db.Uuid
+  createdById    String                     @map("created_by_id") @db.Uuid
+  name           String                     @db.VarChar(160)
+  prefix         String                     @db.VarChar(24)
+  secretHash     String                     @map("secret_hash") @db.VarChar(64)
+  status         ScimTokenStatus            @default(ACTIVE)
+  lastUsedAt     DateTime?                  @map("last_used_at") @db.Timestamptz(6)
+  expiresAt      DateTime?                  @map("expires_at") @db.Timestamptz(6)
+  revokedAt      DateTime?                  @map("revoked_at") @db.Timestamptz(6)
+  createdAt      DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization   Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      Workspace                  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  provider       EnterpriseIdentityProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  createdBy      User                       @relation("ScimTokenCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@unique([workspaceId, prefix])
+  @@index([providerId, status, createdAt])
+  @@index([secretHash])
+  @@map("scim_tokens")
 }
 
 model WorkspaceSubscription {
