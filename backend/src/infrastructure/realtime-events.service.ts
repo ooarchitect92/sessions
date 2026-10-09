@@ -29,6 +29,7 @@ export interface SessionRealtimeEvent {
     | 'whiteboard.operation.appended'
     | 'breakouts.updated'
     | 'breakouts.announcement'
+    | 'cobrowse.updated'
     | 'memory.updated';
   payload: unknown;
 }
