@@ -78,7 +78,7 @@
 - [x] workspace email-template editor with versioned event/booking reminder defaults, variable validation, signature support, and worker rendering
 - [x] branded HTML email rendering with workspace logo/colors and escaped text fallback
 - [ ] provider-backed automated TLS issuance/routing
-- [ ] analytics aggregation and governed exports
+- [x] workspace analytics aggregation with attendance, engagement, event-registration and booking metrics plus audited CSV exports
 - [ ] plans, subscriptions, entitlements, seats, quota ledger and reconciliation
 - [ ] SAML/OIDC enterprise SSO, SCIM, audit exports and retention policies
 - [ ] localization, accessibility certification, regional cells and disaster-recovery qualification
