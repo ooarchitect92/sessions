@@ -63,8 +63,8 @@ jobs:
       - name: Prepare PostgreSQL with pgvector
         run: |
           sudo apt-get update
-          sudo apt-get install -y postgresql postgresql-server-dev-all build-essential
-          sudo systemctl start postgresql
+          sudo apt-get install -y postgresql-17 postgresql-server-dev-17 build-essential
+          sudo pg_ctlcluster 17 main start
           rm -rf /tmp/pgvector
           git clone --depth 1 --branch v0.8.7 https://github.com/pgvector/pgvector.git /tmp/pgvector
           make -C /tmp/pgvector OPTFLAGS=""
