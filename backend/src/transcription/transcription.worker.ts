@@ -5,7 +5,9 @@ import { ArtifactStatus, Prisma, SessionStatus } from '@prisma/client';
 import { WorkerPrismaService } from '../database/worker-prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { S3ObjectStoreService } from '../recordings/s3-object-store.service';
+import { MediaNormalizerService } from './media-normalizer.service';
 import { TranscriptionProviderService } from './transcription-provider.service';
+import { summarizeTranscriptionQuality } from './transcription-quality';
 
 @Injectable()
 export class TranscriptionWorker {
@@ -18,6 +20,7 @@ export class TranscriptionWorker {
     private readonly outbox: OutboxService,
     private readonly objectStore: S3ObjectStoreService,
     private readonly provider: TranscriptionProviderService,
+    private readonly normalizer: MediaNormalizerService,
   ) {}
 
   @Interval(2500)
@@ -78,12 +81,27 @@ export class TranscriptionWorker {
           maxBytes,
         );
         const mimeType = transcript.recording.mimeType ?? 'video/mp4';
-        const result = await this.provider.transcribe({
+        const normalized = await this.normalizer.normalize({
           media,
           mimeType,
           filename: `session-${transcript.sessionId}.mp4`,
+        });
+        const result = await this.provider.transcribe({
+          media: normalized.media,
+          mimeType: normalized.mimeType,
+          filename: normalized.filename,
           language: transcript.language,
         });
+        const quality = summarizeTranscriptionQuality(result.segments);
+        if (!quality.orderedTimestamps) {
+          throw new Error('stt_provider_invalid_segment_timestamps');
+        }
+        if (
+          this.config.get<boolean>('STT_REQUIRE_DIARIZATION', false) &&
+          !quality.diarized
+        ) {
+          throw new Error('stt_diarization_required_but_missing');
+        }
 
         await this.prisma.$transaction(async (transaction) => {
           await transaction.transcriptSegment.deleteMany({
@@ -110,6 +128,14 @@ export class TranscriptionWorker {
               provider: result.provider,
               language: result.language ?? transcript.language,
               fullText: result.fullText,
+              normalized: normalized.normalized,
+              normalizedMimeType: normalized.mimeType,
+              diarized: quality.diarized,
+              speakerCount: quality.speakerCount,
+              qualityMetadata: {
+                ...quality,
+                normalization: normalized.metadata,
+              },
               completedAt: new Date(),
               failureCode: null,
               version: { increment: 1 },
@@ -131,6 +157,9 @@ export class TranscriptionWorker {
                 provider: result.provider,
                 language: result.language ?? transcript.language,
                 segmentCount: result.segments.length,
+                normalized: normalized.normalized,
+                diarized: quality.diarized,
+                speakerCount: quality.speakerCount,
               } as Prisma.InputJsonObject,
             },
           );
