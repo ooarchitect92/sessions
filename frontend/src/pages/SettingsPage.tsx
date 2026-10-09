@@ -5,7 +5,7 @@ import { useSearchParams } from 'react-router-dom';
 import { api, type ApiKeyRecord, type WebhookSubscriptionRecord, type WorkspaceEmailTemplateKind, type WorkspaceMember } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 
-const TABS = ['workspace', 'members', 'workspaces', 'billing', 'domains', 'emails', 'integrations', 'enterprise', 'compliance', 'security'] as const;
+const TABS = ['workspace', 'members', 'workspaces', 'billing', 'domains', 'emails', 'integrations', 'enterprise', 'compliance', 'privacy', 'security'] as const;
 type SettingsTab = (typeof TABS)[number];
 
 const MEMBER_ROLES: WorkspaceRole[] = ['ADMIN', 'HOST', 'MEMBER', 'ANALYST', 'GUEST'];
@@ -26,6 +26,17 @@ function downloadCsv(input: { filename: string; columns: string[]; rows: Array<R
   const anchor = document.createElement('a');
   anchor.href = url;
   anchor.download = input.filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+function downloadJson(filename: string, value: unknown) {
+  const blob = new Blob([JSON.stringify(value, null, 2)], { type: 'application/json;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
@@ -95,7 +106,9 @@ export function SettingsPage() {
                               ? '◆'
                               : item === 'compliance'
                                 ? '▣'
-                                : '⌾'}
+                                : item === 'privacy'
+                                  ? '◉'
+                                  : '⌾'}
               </span>
               {item === 'workspace'
                 ? 'Workspace profile'
@@ -115,7 +128,9 @@ export function SettingsPage() {
                             ? 'Enterprise'
                             : item === 'compliance'
                               ? 'Compliance'
-                              : 'Security'}
+                              : item === 'privacy'
+                                ? 'Privacy'
+                                : 'Security'}
             </button>
           ))}
         </nav>
@@ -129,6 +144,7 @@ export function SettingsPage() {
           {tab === 'integrations' ? <IntegrationsSettings /> : null}
           {tab === 'enterprise' ? <EnterpriseSettings /> : null}
           {tab === 'compliance' ? <ComplianceSettings /> : null}
+          {tab === 'privacy' ? <PrivacySettings /> : null}
           {tab === 'security' ? <SecuritySettings /> : null}
         </section>
       </div>
@@ -986,6 +1002,70 @@ function EnterpriseSettings() {
         <div className="invite-row"><label>Token name<input value={scimName} onChange={(event) => setScimName(event.target.value)} /></label><span /><button className="button primary" type="button" disabled={createToken.isPending} onClick={() => createToken.mutate()}>Create token</button></div>
         {issuedToken ? <div className="development-token-box"><strong>Copy this token now</strong><code>{issuedToken}</code></div> : null}
         <div className="settings-list">{tokens.data?.map((token) => <article key={token.id} className="settings-list-row"><div><strong>{token.name}</strong><small>{token.key_prefix ?? token.keyPrefix} · last used {formatDate(token.last_used_at ?? null)}</small></div><button className="button secondary" type="button" disabled={Boolean(token.revoked_at) || revoke.isPending} onClick={() => revoke.mutate(token.id)}>{token.revoked_at ? 'Revoked' : 'Revoke'}</button></article>)}</div>
+      </section>
+    </div>
+  );
+}
+function PrivacySettings() {
+  const auth = useAuth();
+  const [confirmation, setConfirmation] = useState('');
+  const [exportedRequestId, setExportedRequestId] = useState<string | null>(null);
+
+  const dataExport = useMutation({
+    mutationFn: () => api.exportMyPrivacyData(),
+    onSuccess: (result) => {
+      setExportedRequestId(result.requestId);
+      downloadJson(`sessions-privacy-export-${result.requestId}.json`, result);
+    },
+  });
+
+  const erasure = useMutation({
+    mutationFn: () => api.eraseMyAccount(),
+    onSuccess: async () => {
+      setConfirmation('');
+      await auth.signOut();
+    },
+  });
+
+  return (
+    <div className="settings-stack">
+      <section className="panel settings-panel">
+        <div className="settings-panel-heading">
+          <div>
+            <span className="eyebrow">Your data</span>
+            <h2>Privacy export</h2>
+            <p>Download a machine-readable copy of your account profile, workspace memberships, authored content references, activity records, and integration metadata. Secrets and stored credentials are excluded.</p>
+          </div>
+          <button className="button secondary" type="button" disabled={dataExport.isPending} onClick={() => dataExport.mutate()}>
+            {dataExport.isPending ? 'Preparing…' : 'Download JSON export'}
+          </button>
+        </div>
+        {dataExport.error ? <div className="error-banner">{dataExport.error.message}</div> : null}
+        {exportedRequestId ? <div className="success-banner">Privacy export completed. Request ID: {exportedRequestId}</div> : null}
+        <div className="settings-policy-note">Exports are generated for the authenticated user only and the export action is written to the audit trail.</div>
+      </section>
+
+      <section className="panel settings-panel">
+        <div className="settings-panel-heading">
+          <div>
+            <span className="eyebrow">Account erasure</span>
+            <h2>Erase my account</h2>
+            <p>This permanently removes account credentials and direct personal activity where possible, revokes all sessions, removes workspace memberships, and irreversibly pseudonymizes authorship that must remain for shared workspace integrity.</p>
+          </div>
+        </div>
+        <div className="warning-banner">If you are the only owner of any workspace, transfer ownership first. This action cannot be undone.</div>
+        <form className="settings-form" onSubmit={(event) => { event.preventDefault(); if (confirmation === 'DELETE MY ACCOUNT') erasure.mutate(); }}>
+          <label className="settings-grid-span">
+            Type <strong>DELETE MY ACCOUNT</strong> to confirm
+            <input value={confirmation} onChange={(event) => setConfirmation(event.target.value)} autoComplete="off" />
+          </label>
+          {erasure.error ? <div className="error-banner">{erasure.error.message}</div> : null}
+          <div className="settings-actions">
+            <button className="button danger" disabled={erasure.isPending || confirmation !== 'DELETE MY ACCOUNT'}>
+              {erasure.isPending ? 'Erasing account…' : 'Erase account permanently'}
+            </button>
+          </div>
+        </form>
       </section>
     </div>
   );
