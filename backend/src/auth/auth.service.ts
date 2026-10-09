@@ -138,6 +138,10 @@ export class AuthService {
     if (!membership) {
       throw new ForbiddenException('Workspace access is unavailable');
     }
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { failedLoginAttempts: 0, lockedUntil: null, lastLoginAt: new Date() },
+    });
     return this.prisma.$transaction((transaction) =>
       this.issueTokens(transaction, user, membership, metadata),
     );
