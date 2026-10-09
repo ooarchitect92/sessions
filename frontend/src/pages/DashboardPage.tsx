@@ -3,6 +3,7 @@ import type { CreateSessionInput, Session } from '@sessions/contracts';
 import { FormEvent, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../api/client';
+import { useAuth } from '../auth/AuthContext';
 
 function formatSessionTime(value: string): string {
   return new Intl.DateTimeFormat(undefined, {
@@ -146,12 +147,35 @@ function CreateSessionDialog({ onClose }: { onClose: () => void }) {
 }
 
 export function DashboardPage() {
+  const auth = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const sessions = useQuery({
     queryKey: ['sessions'],
     queryFn: () => api.listSessions(),
+  });
+  const canViewAnalytics = auth.me?.principal.roles.some((role) =>
+    ['OWNER', 'ADMIN', 'HOST', 'ANALYST'].includes(role),
+  ) ?? false;
+  const analytics = useQuery({
+    queryKey: ['workspace-analytics', 'dashboard'],
+    queryFn: () => api.getWorkspaceAnalytics(),
+    enabled: canViewAnalytics,
+  });
+  const exportAnalytics = useMutation({
+    mutationFn: () => api.exportWorkspaceAnalytics(),
+    onSuccess: (result) => {
+      const blob = new Blob([result.csv], { type: result.contentType });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = result.filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    },
   });
   const instant = useMutation({
     mutationFn: async () => {
@@ -184,6 +208,15 @@ export function DashboardPage() {
           <p>Plan the flow, bring the right content, and keep one reliable record of what happened.</p>
         </div>
         <div className="heading-actions">
+          {canViewAnalytics ? (
+            <button
+              className="button secondary"
+              onClick={() => exportAnalytics.mutate()}
+              disabled={exportAnalytics.isPending}
+            >
+              {exportAnalytics.isPending ? 'Exporting…' : 'Export 30d metrics'}
+            </button>
+          ) : null}
           <button className="button secondary" onClick={() => instant.mutate()} disabled={instant.isPending}>{instant.isPending ? 'Starting…' : 'Start instant'}</button>
           <button className="button primary" onClick={() => setDialogOpen(true)}>＋ New session</button>
         </div>
@@ -202,15 +235,33 @@ export function DashboardPage() {
         </article>
         <article className="metric-card">
           <span className="metric-icon">◇</span>
-          <div><strong>0</strong><span>Memory items</span></div>
-          <small>Recording pipeline comes next</small>
+          <div>
+            <strong>{canViewAnalytics ? (analytics.data?.totals.sessionsScheduled ?? 0) : '—'}</strong>
+            <span>Sessions · 30d</span>
+          </div>
+          <small>
+            {canViewAnalytics
+              ? `${analytics.data?.totals.uniqueAttendees ?? 0} daily attendee appearances`
+              : 'Host or analyst access required'}
+          </small>
         </article>
         <article className="metric-card">
           <span className="metric-icon">↗</span>
-          <div><strong>—</strong><span>Engagement</span></div>
-          <small>Analytics events not active yet</small>
+          <div>
+            <strong>{canViewAnalytics ? (analytics.data?.totals.engagementEvents ?? 0) : '—'}</strong>
+            <span>Engagement · 30d</span>
+          </div>
+          <small>
+            {canViewAnalytics
+              ? `${Math.round((analytics.data?.totals.attendanceSeconds ?? 0) / 3600)} attendance hours`
+              : 'Aggregate metrics are role governed'}
+          </small>
         </article>
       </section>
+
+      {exportAnalytics.error ? (
+        <div className="error-banner">{exportAnalytics.error.message}</div>
+      ) : null}
 
       <section className="dashboard-grid">
         <div className="panel sessions-panel">
