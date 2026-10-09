@@ -16,6 +16,7 @@ RUN npm run build --workspace @sessions/contracts \
  && npm run build --workspace @sessions/backend
 
 FROM node:22-alpine AS runtime
+RUN apk add --no-cache ffmpeg
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build /app/node_modules ./node_modules
