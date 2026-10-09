@@ -67,6 +67,8 @@ export class MediaService {
               : null,
           isPublisher: participant.isPublisher,
           canPublish: participant.permission?.canPublish ?? false,
+          handRaised:
+            participant.attributes?.['sessions.handRaised'] === 'true',
           roles: context.roles,
           presenterRole: context.presenterRole,
           tracks: participant.tracks.map((track) => ({
@@ -136,6 +138,47 @@ export class MediaService {
       participantIdentity,
       trackSid,
       muted,
+      breakoutRoomId: breakoutRoomId ?? null,
+    };
+  }
+
+  async setHandRaised(
+    principal: Principal,
+    sessionId: string,
+    raised: boolean,
+    breakoutRoomId?: string,
+  ) {
+    const roomName = await this.resolveRoomName(
+      principal,
+      sessionId,
+      breakoutRoomId,
+    );
+    const participants = await this.listRoomParticipants(roomName);
+    const participant = participants.find(
+      (candidate) => candidate.identity === principal.userId,
+    );
+    if (!participant) {
+      throw new ConflictException(
+        'Join the media room before changing your hand-raise state',
+      );
+    }
+
+    try {
+      await this.roomService().updateParticipant(roomName, principal.userId, {
+        attributes: {
+          'sessions.handRaised': raised ? 'true' : '',
+        },
+      });
+    } catch {
+      throw new ServiceUnavailableException(
+        'Unable to update hand-raise state right now',
+      );
+    }
+
+    return {
+      sessionId,
+      participantIdentity: principal.userId,
+      raised,
       breakoutRoomId: breakoutRoomId ?? null,
     };
   }
