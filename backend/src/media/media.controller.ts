@@ -15,6 +15,7 @@ import type { Principal } from '../common/auth/principal';
 import { CreateMediaTokenDto } from './dto/create-media-token.dto';
 import { MediaRoomQueryDto } from './dto/media-room-query.dto';
 import { MuteMediaTrackDto } from './dto/mute-media-track.dto';
+import { UpdateHandRaiseDto } from './dto/update-hand-raise.dto';
 import { UpdateMediaPublishingDto } from './dto/update-media-publishing.dto';
 import { MediaService } from './media.service';
 
