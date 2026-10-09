@@ -17,6 +17,7 @@ import {
 } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { AuditService } from '../audit/audit.service';
+import { BillingService } from '../billing/billing.service';
 import type { AccessTokenClaims, Principal } from '../common/auth/principal';
 import { WorkerPrismaService } from '../database/worker-prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
@@ -78,6 +79,7 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly security: SecurityService,
+    private readonly billing: BillingService,
     private readonly audit: AuditService,
     private readonly outbox: OutboxService,
   ) {}
@@ -183,6 +185,11 @@ export class AuthService {
         },
         include: { workspace: { include: { organization: true } } },
       });
+      await this.billing.createDefaultSubscription(
+        transaction,
+        organization.id,
+        workspace.id,
+      );
       const principal = this.principalFor(user, membership);
       await this.audit.record(transaction, principal, {
         action: 'auth.account.created',
@@ -801,6 +808,25 @@ export class AuthService {
             emailVerifiedAt: new Date(),
           },
         });
+      }
+      const existingMembership = await transaction.workspaceMembership.findUnique({
+        where: {
+          workspaceId_userId: {
+            workspaceId: current.workspaceId,
+            userId: user.id,
+          },
+        },
+        select: { id: true },
+      });
+      if (!existingMembership) {
+        // The invitation itself already occupies one pending seat, so acceptance
+        // validates current occupied capacity without adding another seat.
+        await this.billing.assertSeatCapacity(
+          transaction,
+          current.organizationId,
+          current.workspaceId,
+          0,
+        );
       }
       const membership = await transaction.workspaceMembership.upsert({
         where: {
