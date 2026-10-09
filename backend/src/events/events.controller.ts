@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentPrincipal } from '../common/auth/current-principal.decorator';
+import { ApiKeyScopes } from '../integrations/api-key-scopes';
 import type { Principal } from '../common/auth/principal';
 import { CreateEventDto } from './dto/create-event.dto';
 import { CreateEventPresenterDto } from './dto/create-event-presenter.dto';
@@ -30,11 +31,13 @@ function parseVersion(value: string | undefined): number {
 
 @ApiTags('events')
 @ApiBearerAuth()
+@ApiKeyScopes('events:read')
 @Controller('events')
 export class EventsController {
   constructor(private readonly events: EventsService) {}
 
   @Post()
+  @ApiKeyScopes('events:write')
   create(
     @CurrentPrincipal() principal: Principal,
     @Body() body: CreateEventDto,
@@ -60,6 +63,7 @@ export class EventsController {
   }
 
   @Patch(':id')
+  @ApiKeyScopes('events:write')
   update(
     @CurrentPrincipal() principal: Principal,
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -70,6 +74,7 @@ export class EventsController {
   }
 
   @Post(':id/publish')
+  @ApiKeyScopes('events:write')
   publish(
     @CurrentPrincipal() principal: Principal,
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -79,6 +84,7 @@ export class EventsController {
   }
 
   @Post(':id/cancel')
+  @ApiKeyScopes('events:write')
   cancel(
     @CurrentPrincipal() principal: Principal,
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -96,6 +102,7 @@ export class EventsController {
   }
 
   @Post(':id/presenters')
+  @ApiKeyScopes('events:write')
   createPresenter(
     @CurrentPrincipal() principal: Principal,
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -105,6 +112,7 @@ export class EventsController {
   }
 
   @Patch(':eventId/presenters/:presenterId')
+  @ApiKeyScopes('events:write')
   updatePresenter(
     @CurrentPrincipal() principal: Principal,
     @Param('eventId', new ParseUUIDPipe({ version: '4' })) eventId: string,
@@ -120,6 +128,7 @@ export class EventsController {
   }
 
   @Post(':eventId/presenters/:presenterId/remove')
+  @ApiKeyScopes('events:write')
   deletePresenter(
     @CurrentPrincipal() principal: Principal,
     @Param('eventId', new ParseUUIDPipe({ version: '4' })) eventId: string,
@@ -137,6 +146,7 @@ export class EventsController {
   }
 
   @Patch(':eventId/registrations/:registrationId')
+  @ApiKeyScopes('events:write')
   updateRegistration(
     @CurrentPrincipal() principal: Principal,
     @Param('eventId', new ParseUUIDPipe({ version: '4' })) eventId: string,
