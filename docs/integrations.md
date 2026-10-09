@@ -58,3 +58,17 @@ Webhook deletion is implemented as disablement so delivery history is preserved 
 Webhook transport resolves the destination host before connecting, rejects loopback, RFC1918, carrier-grade NAT, link-local, multicast/reserved IPv4 ranges, IPv6 loopback/ULA/link-local/multicast addresses and local-name suffixes. The validated address is pinned into the TLS socket lookup so a second DNS resolution cannot redirect the connection to an internal target. Redirects are not followed because delivery uses a direct HTTPS request. Response bodies are bounded and request timeouts are enforced.
 
 This is an application-level egress boundary; production infrastructure should still enforce network egress policy at the VPC/firewall/proxy layer.
+
+
+## Governed provider connections
+
+Workspace owners/admins can configure one governed connection per supported provider kind:
+
+- `EMAIL_HTTP`
+- `CRM_HTTP`
+
+Provider credentials are encrypted with the shared AES-256-GCM sensitive-value boundary and are never returned by list/update APIs. Rotation increments a credential version and re-encrypts the replacement secret under a version-specific purpose. Provider config is stored separately from credentials, and config keys that look like secrets/tokens/passwords/API keys are rejected to prevent plaintext secret sprawl.
+
+Provider endpoints must resolve to public HTTPS addresses before create, update, or re-enable. Runtime email/CRM calls use the DNS-pinned bounded HTTPS transport already used by webhook delivery, so tenant-configured endpoints inherit the same application-level SSRF boundary. Provider execution records last-used/success/failure timestamps and bounded error state.
+
+The existing environment-configured email/CRM adapters remain as backward-compatible fallback when a workspace has no governed provider connection. Google/Microsoft Calendar continue to use their existing OAuth-specific connection/token lifecycle. Consolidating OAuth providers behind the generic connection framework and completing real-provider qualification remain later release gates.
