@@ -19,6 +19,7 @@
 - [ ] production OIDC/SAML, IdP logout, SCIM, rate limiting and identity-provider qualification
 - [x] browser device preflight with permission handling, camera preview, camera/microphone selection and constrained LiveKit capture
 - [x] host moderation with live participant inventory, track mute/unmute, publishing permission controls, room ejection and audit evidence
+- [x] participant hand raise/lower state propagated through LiveKit participant attributes
 - [x] reconnect hardening with connection-state feedback, browser network awareness, media-device failure reporting and fresh-token retry
 - [ ] TURN/SFU scale, cross-browser and multi-region media qualification
 
