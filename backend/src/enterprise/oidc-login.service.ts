@@ -1,7 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { UserStatus, WorkspaceRole } from '@prisma/client';
-import { createPublicKey, randomBytes, randomUUID, verify as verifySignature } from 'node:crypto';
+import { createHash, createPublicKey, randomBytes, randomUUID, verify as verifySignature } from 'node:crypto';
 import { isIP } from 'node:net';
 import { lookup } from 'node:dns/promises';
 import { AuthService, type AuthRequestMetadata } from '../auth/auth.service';
@@ -59,7 +59,7 @@ export class OidcLoginService {
     const state = randomBytes(32).toString('base64url');
     const nonce = randomBytes(32).toString('base64url');
     const verifier = randomBytes(64).toString('base64url');
-    const challenge = this.security.digestToken(verifier);
+    const challenge = createHash('sha256').update(verifier).digest('base64url');
     const id = randomUUID();
     const safeReturnTo = this.safeReturnTo(returnTo);
     await this.prisma.$executeRaw`
