@@ -18,7 +18,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
       - run: cp .env.example .env
@@ -57,7 +57,7 @@ jobs:
       MIGRATION_DATABASE_URL: postgresql://sessions:sessions@localhost:5432/sessions?schema=public
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
       - name: Prepare PostgreSQL with pgvector
