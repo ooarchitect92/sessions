@@ -189,10 +189,25 @@ export class EnterpriseIdentityService {
     return this.worker.$transaction(async (transaction) => {
       const duplicate = await transaction.$queryRaw<Array<{ user_id: string }>>`SELECT user_id FROM scim_external_identities WHERE workspace_id = ${tenant.workspaceId}::uuid AND external_id = ${externalId} LIMIT 1`;
       if (duplicate[0]) throw new ConflictException('SCIM externalId already exists');
+      const displayName =
+        input.displayName?.trim() ||
+        input.name?.formatted?.trim() ||
+        email.split('@')[0] ||
+        email;
+      const requestedDisplayName =
+        input.displayName?.trim() || input.name?.formatted?.trim();
       const user = await transaction.user.upsert({
         where: { email },
-        create: { email, displayName: input.displayName?.trim() || input.name?.formatted?.trim() || email.split('@')[0] || email, passwordHash: null, status: input.active === false ? UserStatus.SUSPENDED : UserStatus.ACTIVE, emailVerifiedAt: new Date() },
-        update: { displayName: input.displayName?.trim() || input.name?.formatted?.trim() || undefined },
+        create: {
+          email,
+          displayName,
+          passwordHash: null,
+          status: input.active === false ? UserStatus.SUSPENDED : UserStatus.ACTIVE,
+          emailVerifiedAt: new Date(),
+        },
+        update: {
+          ...(requestedDisplayName ? { displayName: requestedDisplayName } : {}),
+        },
       });
       const role = policy?.default_role ?? WorkspaceRole.MEMBER;
       const membership = await transaction.workspaceMembership.upsert({
