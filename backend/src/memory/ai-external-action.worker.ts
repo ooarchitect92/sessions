@@ -6,6 +6,8 @@ import {
   ArtifactStatus,
   Prisma,
 } from '@prisma/client';
+import { BILLING_METRICS } from '../billing/billing-plans';
+import { BillingService } from '../billing/billing.service';
 import { WorkerPrismaService } from '../database/worker-prisma.service';
 import { EmailDeliveryProvider } from '../notifications/email-delivery.provider';
 import { OutboxService } from '../outbox/outbox.service';
@@ -20,6 +22,7 @@ export class AiExternalActionWorker {
     private readonly prisma: WorkerPrismaService,
     private readonly email: EmailDeliveryProvider,
     private readonly crm: CrmWriteProvider,
+    private readonly billing: BillingService,
     private readonly outbox: OutboxService,
   ) {}
 
@@ -130,6 +133,21 @@ export class AiExternalActionWorker {
           },
         );
       });
+      try {
+        await this.billing.recordUsage({
+          organizationId: action.organizationId,
+          workspaceId: action.workspaceId,
+          metric: BILLING_METRICS.AI_EXTERNAL_ACTIONS,
+          quantity: 1n,
+          idempotencyKey: `ai-external-action:${action.id}:usage`,
+          sourceType: 'ai_external_action',
+          sourceId: action.id,
+        });
+      } catch (usageError: unknown) {
+        this.logger.warn(
+          `AI external action succeeded but usage accounting failed for ${action.id}: ${usageError instanceof Error ? usageError.message : 'unknown'}`,
+        );
+      }
     } catch (error: unknown) {
       const failureCode = this.message(error);
       await this.prisma.$transaction(async (transaction) => {
