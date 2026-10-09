@@ -162,6 +162,20 @@ export interface WebhookDeliveryRecord {
   dead_lettered_at: string | null;
   created_at: string;
 }
+export interface CustomDomainRecord {
+  id: string;
+  hostname: string;
+  status: 'PENDING' | 'VERIFIED' | 'ACTIVE' | 'FAILED' | string;
+  tlsStatus: 'PENDING' | 'ISSUING' | 'ACTIVE' | 'FAILED' | string;
+  verifiedAt: string | null;
+  lastCheckedAt: string | null;
+  lastError: string | null;
+  createdAt: string;
+  dns: {
+    cname: { name: string; value: string };
+    txt: { name: string; value: string };
+  };
+}
 export interface WorkspaceInvitation {
   id: string;
   email: string;
@@ -1390,6 +1404,26 @@ export const api = {
     return request<BookingPageRecord[]>("/bookings");
   },
 
+  listCustomDomains(): Promise<CustomDomainRecord[]> {
+    return request<CustomDomainRecord[]>('/custom-domains');
+  },
+
+  createCustomDomain(hostname: string): Promise<CustomDomainRecord> {
+    return request<CustomDomainRecord>('/custom-domains', {
+      method: 'POST',
+      body: JSON.stringify({ hostname }),
+    });
+  },
+
+  verifyCustomDomain(domainId: string): Promise<CustomDomainRecord> {
+    return request<CustomDomainRecord>(`/custom-domains/${domainId}/verify`, {
+      method: 'POST',
+    });
+  },
+
+  deleteCustomDomain(domainId: string): Promise<{ id: string; deleted: true }> {
+    return request(`/custom-domains/${domainId}`, { method: 'DELETE' });
+  },
   listApiKeys(): Promise<ApiKeyRecord[]> {
     return request<ApiKeyRecord[]>('/integrations/api-keys');
   },
