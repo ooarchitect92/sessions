@@ -238,6 +238,8 @@ export class BookingReminderWorker {
           delivery.bookingReservation.session?.title ??
           delivery.bookingReservation.bookingPage.title;
         const result = await this.provider.send({
+          organizationId: delivery.organizationId,
+          workspaceId: delivery.workspaceId,
           to: delivery.recipientEmail,
           subject: `Reminder: ${title} starts in ${definition.label}`,
           text: [
