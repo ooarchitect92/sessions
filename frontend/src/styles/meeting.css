@@ -1351,3 +1351,35 @@
 .meeting-connection-banner.state-disconnected span {
   color: #dfb0a8;
 }
+
+
+.participant-state-stack {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+}
+
+.participant-hand-raised {
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: rgba(232, 185, 86, 0.16);
+  color: #efcc7c;
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.participant-self-actions {
+  display: grid;
+}
+
+.participant-self-actions button {
+  min-height: 29px;
+  border: 1px solid rgba(232, 185, 86, 0.2);
+  border-radius: 8px;
+  background: rgba(232, 185, 86, 0.1);
+  color: #e9c978;
+  font-size: 8px;
+  font-weight: 800;
+}
