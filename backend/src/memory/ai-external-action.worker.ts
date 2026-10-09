@@ -56,6 +56,7 @@ export class AiExternalActionWorker {
     sessionId: string;
     kind: AiExternalActionKind;
     sourceSummaryVersion: number;
+    version: number;
     recipientEmail: string | null;
     subject: string | null;
     bodyText: string;
@@ -75,6 +76,7 @@ export class AiExternalActionWorker {
     });
     if (claimed.count === 0) return;
 
+    let quotaReservationId: string | null = null;
     try {
       const summary = await this.prisma.memorySummary.findUnique({
         where: { sessionId: action.sessionId },
@@ -95,6 +97,16 @@ export class AiExternalActionWorker {
         });
         return;
       }
+
+      const quotaReservation = await this.billing.reserveQuota({
+        organizationId: action.organizationId,
+        workspaceId: action.workspaceId,
+        metric: BILLING_METRICS.AI_EXTERNAL_ACTIONS,
+        quantity: 1n,
+        reservationKey: `ai-external-action:${action.id}:version:${action.version}`,
+        ttlSeconds: 15 * 60,
+      });
+      quotaReservationId = quotaReservation.id;
 
       const idempotencyKey = `ai-external-action:${action.id}`;
       const result =
@@ -134,21 +146,20 @@ export class AiExternalActionWorker {
         );
       });
       try {
-        await this.billing.recordUsage({
-          organizationId: action.organizationId,
-          workspaceId: action.workspaceId,
-          metric: BILLING_METRICS.AI_EXTERNAL_ACTIONS,
-          quantity: 1n,
-          idempotencyKey: `ai-external-action:${action.id}:usage`,
-          sourceType: 'ai_external_action',
-          sourceId: action.id,
-        });
+        await this.billing.commitReservation(
+          quotaReservationId,
+          'ai_external_action',
+          action.id,
+        );
       } catch (usageError: unknown) {
         this.logger.warn(
           `AI external action succeeded but usage accounting failed for ${action.id}: ${usageError instanceof Error ? usageError.message : 'unknown'}`,
         );
       }
     } catch (error: unknown) {
+      if (quotaReservationId) {
+        await this.billing.releaseReservation(quotaReservationId);
+      }
       const failureCode = this.message(error);
       await this.prisma.$transaction(async (transaction) => {
         await transaction.aiExternalAction.update({
