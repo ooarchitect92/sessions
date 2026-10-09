@@ -5,6 +5,7 @@ import { FormEvent, useState, type CSSProperties } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api, type MediaToken } from '../api/client';
 import { AgendaContentStage } from '../components/AgendaContentStage';
+import { AgendaRuntimeBar } from '../components/AgendaRuntimeBar';
 import { DevicePreflight, type DevicePreferences } from '../components/DevicePreflight';
 import { MeetingConnectionStatus } from '../components/MeetingConnectionStatus';
 import { SessionCollaborationPanel } from '../components/SessionCollaborationPanel';
@@ -42,6 +43,7 @@ export function SessionPage() {
   const [agendaUploadFile, setAgendaUploadFile] = useState<File | null>(null);
   const [agendaUploadProgress, setAgendaUploadProgress] = useState('');
   const [agendaDuration, setAgendaDuration] = useState(10);
+  const [draggedAgendaItemId, setDraggedAgendaItemId] = useState<string | null>(null);
   const [stageMode, setStageMode] = useState<'media' | 'content'>('media');
   const [agendaType, setAgendaType] = useState<
     | 'TEXT'
@@ -121,6 +123,14 @@ export function SessionPage() {
   const activate = useMutation({
     mutationFn: (agendaItemId: string) => api.activateAgendaItem(sessionId, agendaItemId),
     onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+    },
+  });
+
+  const reorderAgenda = useMutation({
+    mutationFn: (itemIds: string[]) => api.reorderAgendaItems(sessionId, itemIds),
+    onSuccess: async () => {
+      setDraggedAgendaItemId(null);
       await queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
     },
   });
@@ -297,6 +307,14 @@ export function SessionPage() {
   const hasSharedStage = hasEmbedContent || hasWhiteboard;
   const canStart = ['DRAFT', 'SCHEDULED'].includes(current.status);
   const canEnd = current.status === 'LIVE';
+  const canControlAgenda = ['OWNER', 'ADMIN', 'HOST'].includes(
+    workspace.data?.currentRole ?? '',
+  );
+  const canReorderAgenda =
+    canControlAgenda && ['DRAFT', 'SCHEDULED'].includes(current.status);
+  const activeAgendaIndex = current.agendaItems.findIndex(
+    (item) => item.id === current.currentAgendaItemId,
+  );
   const consentGranted =
     !current.recordingEnabled ||
     recordingConsent.data?.currentDecision === 'GRANTED';
@@ -450,6 +468,27 @@ export function SessionPage() {
         </section>
       ) : null}
 
+      {activeAgendaItem ? (
+        <AgendaRuntimeBar
+          title={activeAgendaItem.title}
+          durationSeconds={activeAgendaItem.durationSeconds}
+          activatedAt={current.currentAgendaActivatedAt}
+          position={activeAgendaIndex}
+          itemCount={current.agendaItems.length}
+          canControl={canControlAgenda}
+          pending={activate.isPending}
+          onPrevious={() => {
+            const previous = current.agendaItems[activeAgendaIndex - 1];
+            if (previous) activate.mutate(previous.id);
+          }}
+          onRestart={() => activate.mutate(activeAgendaItem.id)}
+          onNext={() => {
+            const next = current.agendaItems[activeAgendaIndex + 1];
+            if (next) activate.mutate(next.id);
+          }}
+        />
+      ) : null}
+
       <div className="meeting-layout">
         <aside className="agenda-rail">
           <div className="rail-heading">
@@ -466,6 +505,16 @@ export function SessionPage() {
               </button>
             </div>
             <span>{current.agendaItems.length} items</span>
+            {canReorderAgenda && current.agendaItems.length > 1 ? (
+              <small className="agenda-reorder-hint">
+                Drag agenda items to reorder them before the session starts.
+              </small>
+            ) : null}
+            {reorderAgenda.error ? (
+              <div className="error-banner compact-error">
+                {reorderAgenda.error.message}
+              </div>
+            ) : null}
           </div>
           {agendaEditorOpen ? (
             <div className="agenda-editor-stack">
@@ -817,7 +866,50 @@ export function SessionPage() {
               {current.agendaItems.map((item) => {
                 const active = current.currentAgendaItemId === item.id;
                 return (
-                  <li key={item.id} className={active ? 'agenda-item active' : 'agenda-item'}>
+                  <li
+                    key={item.id}
+                    className={[
+                      active ? 'agenda-item active' : 'agenda-item',
+                      draggedAgendaItemId === item.id ? 'dragging' : '',
+                      canReorderAgenda ? 'draggable' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    draggable={canReorderAgenda}
+                    onDragStart={(event) => {
+                      if (!canReorderAgenda) return;
+                      setDraggedAgendaItemId(item.id);
+                      event.dataTransfer.effectAllowed = 'move';
+                      event.dataTransfer.setData('text/plain', item.id);
+                    }}
+                    onDragEnd={() => setDraggedAgendaItemId(null)}
+                    onDragOver={(event) => {
+                      if (!canReorderAgenda || !draggedAgendaItemId) return;
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = 'move';
+                    }}
+                    onDrop={(event) => {
+                      if (!canReorderAgenda) return;
+                      event.preventDefault();
+                      const sourceId =
+                        draggedAgendaItemId ||
+                        event.dataTransfer.getData('text/plain');
+                      if (!sourceId || sourceId === item.id) return;
+
+                      const nextIds = current.agendaItems.map(
+                        (agendaItem) => agendaItem.id,
+                      );
+                      const fromIndex = nextIds.indexOf(sourceId);
+                      const toIndex = nextIds.indexOf(item.id);
+                      if (fromIndex < 0 || toIndex < 0) return;
+
+                      const [moved] = nextIds.splice(fromIndex, 1);
+                      if (!moved) return;
+                      nextIds.splice(toIndex, 0, moved);
+                      setDraggedAgendaItemId(null);
+                      reorderAgenda.mutate(nextIds);
+                    }}
+                  >
                     <button
                       onClick={() => {
                         if (
