@@ -57,7 +57,10 @@ export class GovernanceLifecycleWorker {
         organizationId: policy.organization_id,
         workspaceId: policy.workspace_id,
         status: { notIn: [ArtifactStatus.DELETING, ArtifactStatus.DELETED] },
-        updatedAt: { lte: cutoff },
+        OR: [
+          { completedAt: { lte: cutoff } },
+          { completedAt: null, createdAt: { lte: cutoff } },
+        ],
       },
       select: {
         id: true,
@@ -65,7 +68,7 @@ export class GovernanceLifecycleWorker {
         organizationId: true,
         workspaceId: true,
       },
-      orderBy: { updatedAt: 'asc' },
+      orderBy: { createdAt: 'asc' },
       take: 50,
     });
 
@@ -74,7 +77,10 @@ export class GovernanceLifecycleWorker {
         where: {
           id: transcript.id,
           status: { notIn: [ArtifactStatus.DELETING, ArtifactStatus.DELETED] },
-          updatedAt: { lte: cutoff },
+          OR: [
+            { completedAt: { lte: cutoff } },
+            { completedAt: null, createdAt: { lte: cutoff } },
+          ],
         },
         data: {
           status: ArtifactStatus.DELETING,
