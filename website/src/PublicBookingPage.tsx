@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import {
   DynamicPublicFormFields,
   dynamicAnswersComplete,
@@ -6,6 +6,14 @@ import {
 } from './DynamicPublicFormFields';
 import { publicApi } from './public-api';
 
+interface WorkspaceBranding {
+  workspaceName: string;
+  logoUrl: string | null;
+  primaryColor: string | null;
+  accentColor: string | null;
+  fontFamily: string | null;
+  waitingRoomImageUrl: string | null;
+}
 interface PublicBookingPage {
   id: string;
   slug: string;
@@ -16,6 +24,7 @@ interface PublicBookingPage {
   minimumNoticeMinutes: number;
   availabilityRules: Array<Record<string, unknown>>;
   intakeFields: DynamicFieldDefinition[];
+  workspaceBranding: WorkspaceBranding | null;
 }
 
 interface Slot {
@@ -218,12 +227,21 @@ export function PublicBookingPage({
   if (error && !page) return <PublicBookingState title="Booking page unavailable" message={error} />;
   if (!page) return <PublicBookingState title="Booking page unavailable" />;
 
+  const brand = page.workspaceBranding;
+  const brandStyle = {
+    '--workspace-primary': brand?.primaryColor ?? '#183f38',
+    '--workspace-accent': brand?.accentColor ?? '#dcefe8',
+    ...(brand?.fontFamily ? { fontFamily: brand.fontFamily } : {}),
+  } as CSSProperties;
+
   return (
-    <main className="public-flow-page booking-flow-page">
+    <main className="public-flow-page booking-flow-page workspace-themed-public" style={brandStyle}>
       <header className="public-flow-nav">
         <a className="public-wordmark" href="/">
-          <span>S</span>
-          Sessions
+          <span>
+            {brand?.logoUrl ? <img src={brand.logoUrl} alt="" /> : (brand?.workspaceName || 'Sessions').charAt(0).toUpperCase()}
+          </span>
+          {brand?.workspaceName || 'Sessions'}
         </a>
         <span className="public-live-label">Secure scheduling</span>
       </header>
