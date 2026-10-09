@@ -278,8 +278,15 @@ export class IntegrationsService {
   private isPrivateIpLiteral(host: string): boolean {
     const version = isIP(host);
     if (version === 4) {
-      const p = host.split('.').map(Number);
-      return p[0] === 10 || p[0] === 127 || (p[0] === 169 && p[1] === 254) || (p[0] === 172 && p[1] >= 16 && p[1] <= 31) || (p[0] === 192 && p[1] === 168) || p[0] === 0;
+      const [first = -1, second = -1] = host.split('.').map(Number);
+      return (
+        first === 10 ||
+        first === 127 ||
+        (first === 169 && second === 254) ||
+        (first === 172 && second >= 16 && second <= 31) ||
+        (first === 192 && second === 168) ||
+        first === 0
+      );
     }
     if (version === 6) {
       const n = host.toLowerCase();
