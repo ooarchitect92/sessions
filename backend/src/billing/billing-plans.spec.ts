@@ -13,7 +13,7 @@ describe('billing plan catalog', () => {
     expect(
       PLAN_CATALOG[PlanCode.PRO].quotaLimits[
         BILLING_METRICS.WEBHOOK_DELIVERIES
-      ],
+      ] as number,
     ).toBeGreaterThan(
       PLAN_CATALOG[PlanCode.FREE].quotaLimits[
         BILLING_METRICS.WEBHOOK_DELIVERIES
