@@ -13,6 +13,7 @@ import { TenantDatabaseService } from '../database/tenant-database.service';
 import { UpdateEventNotificationTemplateDto } from './dto/update-event-notification-template.dto';
 import { UpsertWorkspaceEmailTemplateDto } from './dto/upsert-workspace-email-template.dto';
 import { assertEventReminderTemplate } from './event-reminder-template';
+import { assertWorkspaceEmailTemplate } from './workspace-email-template';
 
 @Injectable()
 export class NotificationsService {
@@ -47,9 +48,7 @@ export class NotificationsService {
     const subject = input.subject.trim();
     const bodyText = input.bodyText.trim();
     const signature = input.signature?.trim() ?? '';
-    if (!subject || !bodyText) {
-      throw new ConflictException('Email template subject and body are required');
-    }
+    assertWorkspaceEmailTemplate(input.kind, subject, bodyText, signature);
 
     return this.database.run(principal, async (transaction) => {
       const rows = await transaction.$queryRaw<Array<{
