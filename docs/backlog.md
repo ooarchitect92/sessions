@@ -85,7 +85,9 @@
 - [x] governed workspace audit CSV export and retention-policy administration with legal-hold-aware recording defaults
 - [x] generic OIDC authorization-code login with state, nonce, PKCE, RS256/JWKS validation, allowed-domain policy, JIT workspace membership and SSO-only local-login enforcement
 - [x] OIDC claim/group-to-workspace-role mapping with safe defaults, OWNER exclusion, session provider tracking and provider-aware IdP logout redirects
-- [ ] SAML assertion login, real-provider OIDC qualification and lifecycle-worker enforcement for transcript/audit retention
+- [x] transcript/audit retention lifecycle enforcement with legal-hold and delete-on-expiry protection
+- [x] self-service privacy JSON export and irreversible account-erasure workflow with ownership safety checks
+- [ ] SAML assertion login and real-provider OIDC qualification
 - [ ] localization, accessibility certification, regional cells and disaster-recovery qualification
 
 A checkbox is marked complete only when a meaningful user path, persistence, authorization, validation and failure behavior exist. Provider qualification, scale evidence and operational recovery remain separate release gates even when the internal domain workflow is implemented.
