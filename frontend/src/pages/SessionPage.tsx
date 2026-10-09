@@ -1,5 +1,5 @@
 import '@livekit/components-styles';
-import { LiveKitRoom, VideoConference } from '@livekit/components-react';
+import { LiveKitRoom } from '@livekit/components-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FormEvent, useState, type CSSProperties } from 'react';
 import { Link, useParams } from 'react-router-dom';
@@ -9,6 +9,7 @@ import { AgendaRuntimeBar } from '../components/AgendaRuntimeBar';
 import { DevicePreflight, type DevicePreferences } from '../components/DevicePreflight';
 import { MeetingConnectionStatus } from '../components/MeetingConnectionStatus';
 import { SessionCollaborationPanel } from '../components/SessionCollaborationPanel';
+import { SpotlightVideoConference } from '../components/SpotlightVideoConference';
 import { WhiteboardStage } from '../components/WhiteboardStage';
 import { useSessionRealtime } from '../hooks/use-session-realtime';
 
@@ -1022,7 +1023,7 @@ export function SessionPage() {
                   join.mutate(media.breakoutRoomId ?? undefined)
                 }
               />
-              <VideoConference />
+              <SpotlightVideoConference />
             </LiveKitRoom>
           ) : (
             <div
