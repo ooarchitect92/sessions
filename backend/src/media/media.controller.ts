@@ -54,6 +54,21 @@ export class MediaController {
     );
   }
 
+  @Patch(':id/media-participants/me/hand-raise')
+  setHandRaised(
+    @CurrentPrincipal() principal: Principal,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) sessionId: string,
+    @Query() query: MediaRoomQueryDto,
+    @Body() body: UpdateHandRaiseDto,
+  ) {
+    return this.media.setHandRaised(
+      principal,
+      sessionId,
+      body.raised,
+      query.breakoutRoomId,
+    );
+  }
+
   @Patch(':id/media-participants/:participantIdentity/media-permissions')
   setParticipantPublishing(
     @CurrentPrincipal() principal: Principal,
