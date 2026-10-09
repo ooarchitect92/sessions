@@ -1048,3 +1048,160 @@
   color: #7d8884;
   font-size: 9px;
 }
+
+
+.billing-usage-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.billing-usage-grid article {
+  padding: 15px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: #faf9f6;
+}
+
+.billing-usage-grid article > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.billing-usage-grid span {
+  color: #687671;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+.billing-usage-grid strong {
+  font-size: 11px;
+}
+
+.billing-meter {
+  height: 7px;
+  margin-top: 11px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e6e8e3;
+}
+
+.billing-meter > span {
+  display: block;
+  height: 100%;
+  min-width: 0;
+  border-radius: inherit;
+  background: #2f6b5c;
+}
+
+.billing-period-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.billing-period-row > span {
+  padding: 12px;
+  border-radius: 11px;
+  background: #f1f4f0;
+}
+
+.billing-period-row strong,
+.billing-period-row small {
+  display: block;
+}
+
+.billing-period-row strong {
+  color: #4f625c;
+  font-size: 9px;
+}
+
+.billing-period-row small {
+  margin-top: 4px;
+  color: #7b8782;
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.billing-plan-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.billing-plan-card {
+  padding: 17px;
+  border: 1px solid #dde1db;
+  border-radius: 14px;
+  background: #fafbf8;
+}
+
+.billing-plan-card.current {
+  border-color: #8db8aa;
+  box-shadow: 0 0 0 2px rgba(47, 107, 92, .08);
+}
+
+.billing-plan-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.billing-plan-heading strong {
+  font-size: 13px;
+}
+
+.billing-plan-heading span {
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: #dceee7;
+  color: #276c5d;
+  font-size: 8px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.billing-plan-price {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin: 15px 0 12px;
+}
+
+.billing-plan-price strong {
+  font: 800 24px "Manrope", sans-serif;
+}
+
+.billing-plan-price small {
+  color: #89938f;
+  font-size: 9px;
+}
+
+.billing-plan-card ul {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding-left: 17px;
+  color: #65726e;
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+@media (max-width: 900px) {
+  .billing-plan-grid,
+  .billing-period-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  .billing-usage-grid {
+    grid-template-columns: 1fr;
+  }
+}
