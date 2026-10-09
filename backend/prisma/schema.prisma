@@ -259,6 +259,7 @@ model Organization {
   calendarOAuthStates CalendarOAuthState[]
   aiExternalActions    AiExternalAction[]
   privacyRequests      PrivacyRequest[]
+  agendaTemplates      AgendaTemplate[]
 
   @@map("organizations")
 }
@@ -313,6 +314,7 @@ model Workspace {
   calendarOAuthStates CalendarOAuthState[]
   aiExternalActions    AiExternalAction[]
   privacyRequests      PrivacyRequest[]
+  agendaTemplates      AgendaTemplate[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -361,6 +363,7 @@ model User {
   calendarOAuthStates      CalendarOAuthState[]
   approvedAiExternalActions AiExternalAction[] @relation("AiExternalActionApprover")
   privacyRequests          PrivacyRequest[]
+  createdAgendaTemplates   AgendaTemplate[]          @relation("AgendaTemplateCreator")
 
   @@index([status])
   @@map("users")
@@ -469,6 +472,26 @@ model Session {
   @@index([organizationId, workspaceId, startsAt])
   @@index([workspaceId, status, startsAt])
   @@map("sessions")
+}
+
+model AgendaTemplate {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  workspaceId    String       @map("workspace_id") @db.Uuid
+  createdById    String       @map("created_by_id") @db.Uuid
+  name           String       @db.VarChar(160)
+  description    String?      @db.VarChar(1000)
+  items          Json         @default("[]")
+  version        Int          @default(1)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy      User         @relation("AgendaTemplateCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@unique([workspaceId, name])
+  @@index([organizationId, workspaceId, createdAt])
+  @@map("agenda_templates")
 }
 
 model AgendaItem {
