@@ -5,7 +5,7 @@ import { useSearchParams } from 'react-router-dom';
 import { api, type ApiKeyRecord, type WebhookSubscriptionRecord, type WorkspaceEmailTemplateKind, type WorkspaceMember } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 
-const TABS = ['workspace', 'members', 'workspaces', 'domains', 'emails', 'integrations', 'security'] as const;
+const TABS = ['workspace', 'members', 'workspaces', 'billing', 'domains', 'emails', 'integrations', 'security'] as const;
 type SettingsTab = (typeof TABS)[number];
 
 const MEMBER_ROLES: WorkspaceRole[] = ['ADMIN', 'HOST', 'MEMBER', 'ANALYST', 'GUEST'];
@@ -63,9 +63,11 @@ export function SettingsPage() {
                     ? '◎'
                     : item === 'workspaces'
                       ? '▦'
-                      : item === 'domains'
-                        ? '◎'
-                        : item === 'emails'
+                      : item === 'billing'
+                        ? '◫'
+                        : item === 'domains'
+                          ? '◎'
+                          : item === 'emails'
                           ? '✉'
                           : item === 'integrations'
                             ? '⛓'
@@ -77,9 +79,11 @@ export function SettingsPage() {
                   ? 'Members and invites'
                   : item === 'workspaces'
                     ? 'Your workspaces'
-                    : item === 'domains'
-                      ? 'Domains'
-                      : item === 'emails'
+                    : item === 'billing'
+                      ? 'Plan and usage'
+                      : item === 'domains'
+                        ? 'Domains'
+                        : item === 'emails'
                         ? 'Emails'
                         : item === 'integrations'
                           ? 'Integrations'
@@ -91,6 +95,7 @@ export function SettingsPage() {
           {tab === 'workspace' ? <WorkspaceProfile /> : null}
           {tab === 'members' ? <MembersAndInvitations /> : null}
           {tab === 'workspaces' ? <WorkspaceDirectory /> : null}
+          {tab === 'billing' ? <BillingSettings /> : null}
           {tab === 'domains' ? <DomainSettings /> : null}
           {tab === 'emails' ? <EmailTemplateSettings /> : null}
           {tab === 'integrations' ? <IntegrationsSettings /> : null}
@@ -655,6 +660,102 @@ function WorkspaceDirectory() {
   );
 }
 
+function limitLabel(value: number): string {
+  return value < 0 ? 'Unlimited' : String(value);
+}
+
+function usagePercent(used: number, limit: number): number {
+  if (limit < 0) return 0;
+  if (limit === 0) return 100;
+  return Math.min(100, Math.round((used / limit) * 100));
+}
+
+function BillingSettings() {
+  const auth = useAuth();
+  const canManage = auth.me?.principal.roles.some((role) => ['OWNER', 'ADMIN'].includes(role)) ?? false;
+  const current = useQuery({
+    queryKey: ['billing-current'],
+    queryFn: () => api.getBillingCurrent(),
+  });
+  const plans = useQuery({
+    queryKey: ['billing-plans'],
+    queryFn: () => api.listBillingPlans(),
+    enabled: canManage,
+  });
+
+  if (current.isLoading) return <SettingsLoading />;
+  if (current.error || !current.data) return <SettingsError message={current.error?.message ?? 'Billing information unavailable'} />;
+
+  const data = current.data;
+  const metrics = [
+    { label: 'Seats', used: data.usage.seats, limit: data.plan.limits.seats },
+    { label: 'Sessions / period', used: data.usage.sessions, limit: data.plan.limits.sessionsPerMonth },
+    { label: 'Events / period', used: data.usage.events, limit: data.plan.limits.eventsPerMonth },
+    { label: 'Booking pages', used: data.usage.bookingPages, limit: data.plan.limits.bookingPages },
+  ];
+
+  return (
+    <div className="settings-stack">
+      <section className="panel settings-panel">
+        <div className="settings-panel-heading">
+          <div>
+            <span className="eyebrow">Entitlements</span>
+            <h2>{data.plan.name} plan</h2>
+            <p>Usage is enforced server-side before new sessions, events, booking pages, or workspace invitations are created.</p>
+          </div>
+          <span className="settings-role-chip">{data.subscription.status.toLowerCase()}</span>
+        </div>
+        <div className="billing-usage-grid">
+          {metrics.map((metric) => (
+            <article key={metric.label}>
+              <div><span>{metric.label}</span><strong>{metric.used} / {limitLabel(metric.limit)}</strong></div>
+              <div className="billing-meter" aria-label={`${metric.label} usage`}>
+                <span style={{ width: `${usagePercent(metric.used, metric.limit)}%` }} />
+              </div>
+            </article>
+          ))}
+        </div>
+        <div className="billing-period-row">
+          <span><strong>Current period</strong><small>{formatDate(data.subscription.currentPeriodStart)} → {formatDate(data.subscription.currentPeriodEnd)}</small></span>
+          <span><strong>Event capacity</strong><small>Up to {limitLabel(data.plan.limits.eventCapacity)} registrations per event</small></span>
+          <span><strong>Provider</strong><small>{data.subscription.provider ?? 'Internal entitlement state'}</small></span>
+        </div>
+      </section>
+
+      {canManage ? (
+        <section className="panel settings-panel">
+          <div className="settings-panel-heading">
+            <div>
+              <span className="eyebrow">Plan catalog</span>
+              <h2>Available tiers</h2>
+              <p>Catalog values are platform configuration. Payment-provider checkout and verified subscription webhooks remain a separate release gate.</p>
+            </div>
+          </div>
+          {plans.isLoading ? <SettingsLoading /> : null}
+          {plans.error ? <SettingsError message={plans.error.message} /> : null}
+          <div className="billing-plan-grid">
+            {plans.data?.map((plan) => (
+              <article className={plan.code === data.plan.code ? 'billing-plan-card current' : 'billing-plan-card'} key={plan.code}>
+                <div className="billing-plan-heading"><strong>{plan.name}</strong>{plan.code === data.plan.code ? <span>Current</span> : null}</div>
+                <div className="billing-plan-price">
+                  <strong>{plan.monthly_price_cents === 0 ? 'Free' : new Intl.NumberFormat(undefined, { style: 'currency', currency: plan.currency, maximumFractionDigits: 0 }).format(plan.monthly_price_cents / 100)}</strong>
+                  {plan.monthly_price_cents > 0 ? <small>/ month</small> : null}
+                </div>
+                <ul>
+                  <li>{limitLabel(plan.limits.seats)} seats</li>
+                  <li>{limitLabel(plan.limits.sessionsPerMonth)} sessions / period</li>
+                  <li>{limitLabel(plan.limits.eventsPerMonth)} events / period</li>
+                  <li>{limitLabel(plan.limits.bookingPages)} booking pages</li>
+                  <li>{limitLabel(plan.limits.eventCapacity)} event capacity</li>
+                </ul>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+    </div>
+  );
+}
 const EMAIL_TEMPLATE_DEFAULTS: Record<WorkspaceEmailTemplateKind, { label: string; subject: string; bodyText: string }> = {
   EVENT_REMINDER_24H: { label: 'Event reminder · 24 hours', subject: 'Reminder: {{event_title}} starts tomorrow', bodyText: 'Hi {{attendee_name}},\n\n{{event_title}} starts in 24 hours.\n\nTime: {{event_time}} ({{event_timezone}})' },
   EVENT_REMINDER_1H: { label: 'Event reminder · 1 hour', subject: 'Reminder: {{event_title}} starts in 1 hour', bodyText: 'Hi {{attendee_name}},\n\n{{event_title}} starts in 1 hour.\n\nTime: {{event_time}} ({{event_timezone}})' },
