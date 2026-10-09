@@ -9,6 +9,8 @@
 - [x] session create, schedule, update, start, end and cancel
 - [x] interactive agenda create, reorder and activate API
 - [x] agenda editor and realtime activation
+- [x] persisted active agenda timing with synchronized countdown/overtime plus host previous/restart/next navigation
+- [x] drag-to-reorder agenda items with server-side full-list validation before sessions go live
 - [x] reusable workspace agenda templates with save-from-session, CRUD, append/replace apply, audit and outbox events
 - [x] LiveKit token issuance and browser meeting stage
 - [x] audit events, idempotency records and transactional outbox
