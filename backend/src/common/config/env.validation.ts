@@ -71,6 +71,31 @@ const environmentSchema = z
       .min(1024)
       .max(500 * 1024 * 1024)
       .default(25 * 1024 * 1024),
+    STT_MEDIA_NORMALIZATION: z.enum(['disabled', 'ffmpeg']).default('disabled'),
+    STT_FFMPEG_BINARY: z.string().min(1).max(255).default('ffmpeg'),
+    STT_MEDIA_NORMALIZATION_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .min(1000)
+      .max(10 * 60 * 1000)
+      .default(60_000),
+    STT_MEDIA_NORMALIZATION_MAX_BYTES: z.coerce
+      .number()
+      .int()
+      .min(1024)
+      .max(500 * 1024 * 1024)
+      .default(50 * 1024 * 1024),
+    STT_DIARIZATION_PROVIDER: z
+      .enum(['disabled', 'mock', 'http'])
+      .default('disabled'),
+    STT_DIARIZATION_HTTP_ENDPOINT: z.string().url().optional(),
+    STT_DIARIZATION_HTTP_API_KEY: z.string().min(1).optional(),
+    STT_DIARIZATION_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .min(1000)
+      .max(10 * 60 * 1000)
+      .default(60_000),
     AI_PROVIDER: z.enum(['disabled', 'mock', 'openai']).default('disabled'),
     AI_OPENAI_API_KEY: z.string().min(1).optional(),
     AI_OPENAI_ENDPOINT: z
@@ -114,6 +139,20 @@ const environmentSchema = z
         'STT_OPENAI_API_KEY',
         'STT_OPENAI_API_KEY is required when STT_PROVIDER=openai',
       );
+    }
+    if (value.STT_DIARIZATION_PROVIDER === 'http') {
+      if (!value.STT_DIARIZATION_HTTP_ENDPOINT) {
+        issue(
+          'STT_DIARIZATION_HTTP_ENDPOINT',
+          'STT_DIARIZATION_HTTP_ENDPOINT is required when STT_DIARIZATION_PROVIDER=http',
+        );
+      }
+      if (!value.STT_DIARIZATION_HTTP_API_KEY) {
+        issue(
+          'STT_DIARIZATION_HTTP_API_KEY',
+          'STT_DIARIZATION_HTTP_API_KEY is required when STT_DIARIZATION_PROVIDER=http',
+        );
+      }
     }
     if (value.AI_PROVIDER === 'openai' && !value.AI_OPENAI_API_KEY) {
       issue(
@@ -238,6 +277,12 @@ const environmentSchema = z
     }
     if (value.STT_PROVIDER === 'mock') {
       issue('STT_PROVIDER', 'STT_PROVIDER=mock is forbidden in production');
+    }
+    if (value.STT_DIARIZATION_PROVIDER === 'mock') {
+      issue(
+        'STT_DIARIZATION_PROVIDER',
+        'STT_DIARIZATION_PROVIDER=mock is forbidden in production',
+      );
     }
     if (value.AI_PROVIDER === 'mock') {
       issue('AI_PROVIDER', 'AI_PROVIDER=mock is forbidden in production');
