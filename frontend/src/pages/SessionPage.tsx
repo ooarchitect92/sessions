@@ -6,6 +6,7 @@ import { Link, useParams } from 'react-router-dom';
 import { api, type MediaToken } from '../api/client';
 import { AgendaContentStage } from '../components/AgendaContentStage';
 import { DevicePreflight, type DevicePreferences } from '../components/DevicePreflight';
+import { MeetingConnectionStatus } from '../components/MeetingConnectionStatus';
 import { SessionCollaborationPanel } from '../components/SessionCollaborationPanel';
 import { WhiteboardStage } from '../components/WhiteboardStage';
 import { useSessionRealtime } from '../hooks/use-session-realtime';
@@ -21,6 +22,7 @@ export function SessionPage() {
   const { sessionId = '' } = useParams();
   const queryClient = useQueryClient();
   const [media, setMedia] = useState<MediaToken | null>(null);
+  const [mediaError, setMediaError] = useState<string | null>(null);
   const [preflightOpen, setPreflightOpen] = useState(false);
   const [devicePreferences, setDevicePreferences] = useState<DevicePreferences>({
     cameraDeviceId: null,
@@ -110,6 +112,7 @@ export function SessionPage() {
       api.createMediaToken(sessionId, breakoutRoomId),
     onSuccess: (token) => {
       setStageMode('media');
+      setMediaError(null);
       setMedia(token);
       setPreflightOpen(false);
     },
@@ -873,7 +876,7 @@ export function SessionPage() {
             )
           ) : media ? (
             <LiveKitRoom
-              key={media.roomName}
+              key={`${media.roomName}:${media.expiresAt}`}
               token={media.token}
               serverUrl={media.url}
               connect
@@ -900,8 +903,33 @@ export function SessionPage() {
                   : false
               }
               data-lk-theme="default"
-              onDisconnected={() => setMedia(null)}
+              onConnected={() => setMediaError(null)}
+              onDisconnected={(reason) =>
+                setMediaError(
+                  reason === undefined
+                    ? 'The media room disconnected.'
+                    : `The media room disconnected: ${String(reason)}.`,
+                )
+              }
+              onError={(error) => setMediaError(error.message)}
+              onMediaDeviceFailure={(failure, kind) =>
+                setMediaError(
+                  `${kind ?? 'Media'} device failure: ${failure ?? 'unknown'}.`,
+                )
+              }
+              options={{
+                adaptiveStream: true,
+                dynacast: true,
+                disconnectOnPageLeave: true,
+              }}
             >
+              <MeetingConnectionStatus
+                error={mediaError}
+                retrying={join.isPending}
+                onRetry={() =>
+                  join.mutate(media.breakoutRoomId ?? undefined)
+                }
+              />
               <VideoConference />
             </LiveKitRoom>
           ) : (
