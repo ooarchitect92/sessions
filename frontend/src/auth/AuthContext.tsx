@@ -80,6 +80,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
   );
 
   const signOut = useCallback(async () => {
+    let providerLogoutUrl: string | null = null;
+    try {
+      providerLogoutUrl = (await api.getEnterpriseSsoLogoutUrl()).url;
+    } catch {
+      // Local logout still proceeds when enterprise logout discovery is unavailable.
+    }
     try {
       await api.logout();
     } catch {
@@ -88,6 +94,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
     clearAuthentication();
     setMe(null);
     setStatus('anonymous');
+    if (providerLogoutUrl) {
+      window.location.assign(providerLogoutUrl);
+    }
   }, []);
 
   const value = useMemo<AuthContextValue>(
