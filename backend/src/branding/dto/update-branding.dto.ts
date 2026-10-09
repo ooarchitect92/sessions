@@ -1,6 +1,6 @@
 import {
   IsBoolean,
-  IsHexColor,
+  Matches,
   IsOptional,
   IsString,
   IsUrl,
@@ -22,11 +22,11 @@ export class UpdateBrandingDto {
   faviconUrl?: string;
 
   @IsOptional()
-  @IsHexColor()
+  @Matches(/^#[0-9A-Fa-f]{6}$/)
   primaryColor?: string;
 
   @IsOptional()
-  @IsHexColor()
+  @Matches(/^#[0-9A-Fa-f]{6}$/)
   accentColor?: string;
 
   @IsOptional()
