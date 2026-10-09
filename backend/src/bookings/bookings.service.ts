@@ -265,7 +265,10 @@ export class BookingsService {
     bookingSlug: string,
   ) {
     const page = await this.findPublicPage(organizationSlug, workspaceSlug, bookingSlug);
-    return this.publicShape(page);
+    return {
+      ...this.publicShape(page),
+      workspaceBranding: await this.workspaceBranding(page.workspaceId),
+    };
   }
 
   async listPublicSlots(
@@ -663,6 +666,34 @@ export class BookingsService {
     return page;
   }
 
+  private async workspaceBranding(workspaceId: string) {
+    const workspace = await this.publicDatabase.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { name: true, settings: true },
+    });
+    if (!workspace) return null;
+    const settings =
+      workspace.settings && typeof workspace.settings === 'object' && !Array.isArray(workspace.settings)
+        ? (workspace.settings as Record<string, unknown>)
+        : {};
+    const branding =
+      settings.branding && typeof settings.branding === 'object' && !Array.isArray(settings.branding)
+        ? (settings.branding as Record<string, unknown>)
+        : {};
+    return {
+      workspaceName: workspace.name,
+      logoUrl: typeof branding.logoUrl === 'string' ? branding.logoUrl : null,
+      primaryColor:
+        typeof branding.primaryColor === 'string' ? branding.primaryColor : null,
+      accentColor:
+        typeof branding.accentColor === 'string' ? branding.accentColor : null,
+      fontFamily: typeof branding.fontFamily === 'string' ? branding.fontFamily : null,
+      waitingRoomImageUrl:
+        typeof branding.waitingRoomImageUrl === 'string'
+          ? branding.waitingRoomImageUrl
+          : null,
+    };
+  }
   private publicShape(page: BookingPage) {
     return {
       id: page.id,
