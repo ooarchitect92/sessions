@@ -5,6 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import {
   Prisma,
   ProviderConnectionKind,
@@ -75,7 +76,7 @@ export class ProviderConnectionsService {
         );
       }
 
-      const id = crypto.randomUUID();
+      const id = randomUUID();
       const credentialVersion = 1;
       const created = await transaction.providerConnection.create({
         data: {
@@ -274,7 +275,7 @@ export class ProviderConnectionsService {
     if (
       !connection ||
       connection.organizationId !== organizationId ||
-      connection.status !== ProviderConnectionStatus.ACTIVE
+      connection.status === ProviderConnectionStatus.DISABLED
     ) {
       return null;
     }
@@ -286,7 +287,7 @@ export class ProviderConnectionsService {
       await this.worker.providerConnection.updateMany({
         where: {
           id: connection.id,
-          status: ProviderConnectionStatus.ACTIVE,
+          status: { not: ProviderConnectionStatus.DISABLED },
         },
         data: { lastUsedAt: new Date() },
       });
