@@ -118,6 +118,11 @@ const environmentSchema = z
     CRM_WRITE_HTTP_ENDPOINT: z.string().url().optional(),
     CRM_WRITE_HTTP_API_KEY: z.string().min(1).optional(),
     WEB_APP_URL: z.string().url().default('http://localhost:3000'),
+    CUSTOM_DOMAIN_CNAME_TARGET: z
+      .string()
+      .min(4)
+      .max(253)
+      .default('domains.sessions.local'),
     GOOGLE_CALENDAR_CLIENT_ID: z.string().min(1).optional(),
     GOOGLE_CALENDAR_CLIENT_SECRET: z.string().min(1).optional(),
     MICROSOFT_CALENDAR_CLIENT_ID: z.string().min(1).optional(),
