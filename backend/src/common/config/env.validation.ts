@@ -73,6 +73,12 @@ const environmentSchema = z
       .min(1024)
       .max(500 * 1024 * 1024)
       .default(25 * 1024 * 1024),
+    LIVE_CAPTION_MAX_CHUNK_BYTES: z.coerce
+      .number()
+      .int()
+      .min(64 * 1024)
+      .max(10 * 1024 * 1024)
+      .default(2 * 1024 * 1024),
     AI_PROVIDER: z.enum(['disabled', 'mock', 'openai']).default('disabled'),
     AI_OPENAI_API_KEY: z.string().min(1).optional(),
     AI_OPENAI_ENDPOINT: z
