@@ -11,6 +11,7 @@ import { CalendarModule } from "./calendar/calendar.module";
 import { BreakoutsModule } from "./breakouts/breakouts.module";
 import { CollaborationModule } from "./collaboration/collaboration.module";
 import { ContentModule } from "./content/content.module";
+import { ApiKeyScopeGuard } from "./common/auth/api-key-scope.guard";
 import { PrincipalGuard } from "./common/auth/principal.guard";
 import { validateEnvironment } from "./common/config/env.validation";
 import { ApiEnvelopeInterceptor } from "./common/http/api-envelope.interceptor";
@@ -70,6 +71,7 @@ import { WorkspacesModule } from "./workspaces/workspaces.module";
   ],
   providers: [
     { provide: APP_GUARD, useClass: PrincipalGuard },
+    { provide: APP_GUARD, useClass: ApiKeyScopeGuard },
     { provide: APP_FILTER, useClass: ApiExceptionFilter },
     { provide: APP_INTERCEPTOR, useClass: ApiEnvelopeInterceptor },
   ],
