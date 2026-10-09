@@ -8,6 +8,7 @@ import {
   EventReminderKind,
   NotificationStatus,
   WorkspaceEmailTemplateKind,
+  type Prisma,
 } from '@prisma/client';
 import {
   ADMIN_ROLES,
@@ -230,7 +231,7 @@ export class NotificationsService {
   }
 
   private async ensureWorkspaceTemplates(
-    transaction: Parameters<Parameters<TenantDatabaseService['run']>[1]>[0],
+    transaction: Prisma.TransactionClient,
     principal: Principal,
   ): Promise<void> {
     await transaction.workspaceEmailTemplate.createMany({
