@@ -92,6 +92,31 @@ export function SessionCollaborationPanel({
     },
   });
 
+  const setPublishing = useMutation({
+    mutationFn: ({
+      participantIdentity,
+      canPublish,
+    }: {
+      participantIdentity: string;
+      canPublish: boolean;
+    }) =>
+      api.setMediaParticipantPublishing(
+        sessionId,
+        participantIdentity,
+        canPublish,
+        activeBreakoutRoomId ?? null,
+      ),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: [
+          'media-participants',
+          sessionId,
+          activeBreakoutRoomId ?? 'main',
+        ],
+      });
+    },
+  });
+
   const removeParticipant = useMutation({
     mutationFn: (participantIdentity: string) =>
       api.removeMediaParticipant(
@@ -294,7 +319,23 @@ export function SessionCollaborationPanel({
                   </div>
 
                   {isHost && !isSelf ? (
-                    <button
+                    <div className="participant-moderation-actions">
+                      <button
+                        type="button"
+                        className="participant-publishing-action"
+                        disabled={setPublishing.isPending}
+                        onClick={() =>
+                          setPublishing.mutate({
+                            participantIdentity: participant.identity,
+                            canPublish: !participant.canPublish,
+                          })
+                        }
+                      >
+                        {participant.canPublish
+                          ? 'Disable publishing'
+                          : 'Allow publishing'}
+                      </button>
+                      <button
                       type="button"
                       className="participant-remove"
                       disabled={removeParticipant.isPending}
@@ -310,6 +351,7 @@ export function SessionCollaborationPanel({
                     >
                       Remove from room
                     </button>
+                    </div>
                   ) : null}
                 </article>
               );
@@ -327,6 +369,11 @@ export function SessionCollaborationPanel({
           {setTrackMuted.error ? (
             <div className="error-banner compact-error">
               {setTrackMuted.error.message}
+            </div>
+          ) : null}
+          {setPublishing.error ? (
+            <div className="error-banner compact-error">
+              {setPublishing.error.message}
             </div>
           ) : null}
           {removeParticipant.error ? (
