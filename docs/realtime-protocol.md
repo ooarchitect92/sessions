@@ -24,6 +24,7 @@ Host authority is never granted permanently because a user once joined as a host
 - `session.join { sessionId }`
 - `agenda.activate { sessionId, agendaItemId }`
 - `whiteboard.cursor { sessionId, x, y, visible }` — ephemeral, authenticated cursor presence for collaborators already joined to the session room. Coordinates are bounded to the whiteboard canvas and visible updates are rate-limited server-side.
+- `caption.audio { sessionId, sequence, mimeType, language, audio }` — opt-in per-participant near-real-time transcription chunks. The sender must already be joined, the session must be LIVE with transcription enabled, binary payloads are bounded, and at most one chunk per participant/session is processed concurrently.
 
 Agenda activation is also available through HTTP and uses the same domain service. Chat, poll, and Q&A mutations currently use HTTP commands so validation, audit, idempotency policy, and error envelopes remain consistent; their committed results are then broadcast over Socket.IO.
 
@@ -64,6 +65,13 @@ Webinar attendee questions enter moderation; ordinary meeting questions may be a
 - `whiteboard.operation.appended` — emitted after a durable operation commit.
 - `whiteboard.cursor.updated { sessionId, userId, displayName, x, y, visible, occurredAt }` — ephemeral collaborator cursor state. Cursor state is intentionally not persisted and is cleared when the sender leaves the canvas or disconnects.
 
+### Live captions
+
+- `caption.final { sessionId, sequence, speakerUserId, speakerName, text, language, provider, occurredAt }` — provider-backed final text for a short participant audio chunk. It is broadcast to the authenticated session room.
+- `caption.error { sessionId, sequence, code, message }` — sender-only failure feedback. Provider error details are logged server-side rather than exposed to other participants.
+
+Live captions are ephemeral meeting UX; the durable post-session transcript still comes from the governed recording/STT worker so reconnects or skipped live chunks do not silently become the authoritative transcript.
+
 ### Memory
 
 - `memory.updated`
@@ -92,7 +100,7 @@ Socket presence is advisory. A tab crash, mobile suspension, or network partitio
 - `chat.message.edited`, `chat.message.deleted`, `chat.reaction.changed`
 - `whiteboard.snapshot.ready`
 - `breakout.created`, `breakout.assignment.changed`, `breakout.broadcast`
-- `recording.started`, `recording.stopped`, `caption.partial`, `caption.final`
+- `recording.started`, `recording.stopped`, `caption.partial`
 - `timer.started`, `timer.paused`, `timer.expired`
 - `participant.media.changed`, `participant.hand.changed`, `participant.role.changed`
 
