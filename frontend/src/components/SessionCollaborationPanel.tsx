@@ -7,10 +7,12 @@ type PanelTab = 'people' | 'chat' | 'polls' | 'questions' | 'breakouts';
 
 export function SessionCollaborationPanel({
   sessionId,
+  activeBreakoutRoomId,
   onJoinBreakout,
   onReturnMain,
 }: {
   sessionId: string;
+  activeBreakoutRoomId?: string | null;
   onJoinBreakout: (roomId: string) => void;
   onReturnMain: () => void;
 }) {
@@ -34,6 +36,17 @@ export function SessionCollaborationPanel({
     enabled: tab === 'chat',
     staleTime: 60_000,
   });
+  const mediaParticipants = useQuery({
+    queryKey: [
+      'media-participants',
+      sessionId,
+      activeBreakoutRoomId ?? 'main',
+    ],
+    queryFn: () =>
+      api.listMediaParticipants(sessionId, activeBreakoutRoomId ?? null),
+    enabled: tab === 'people',
+    refetchInterval: tab === 'people' ? 3000 : false,
+  });
 
   const chat = useQuery({
     queryKey: ['chat', sessionId],
@@ -49,6 +62,52 @@ export function SessionCollaborationPanel({
     queryKey: ['questions', sessionId],
     queryFn: () => api.listQuestions(sessionId),
     enabled: tab === 'questions',
+  });
+
+  const setTrackMuted = useMutation({
+    mutationFn: ({
+      participantIdentity,
+      trackSid,
+      muted,
+    }: {
+      participantIdentity: string;
+      trackSid: string;
+      muted: boolean;
+    }) =>
+      api.setMediaTrackMuted(
+        sessionId,
+        participantIdentity,
+        trackSid,
+        muted,
+        activeBreakoutRoomId ?? null,
+      ),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: [
+          'media-participants',
+          sessionId,
+          activeBreakoutRoomId ?? 'main',
+        ],
+      });
+    },
+  });
+
+  const removeParticipant = useMutation({
+    mutationFn: (participantIdentity: string) =>
+      api.removeMediaParticipant(
+        sessionId,
+        participantIdentity,
+        activeBreakoutRoomId ?? null,
+      ),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: [
+          'media-participants',
+          sessionId,
+          activeBreakoutRoomId ?? 'main',
+        ],
+      });
+    },
   });
 
   const sendChat = useMutation({
@@ -115,6 +174,11 @@ export function SessionCollaborationPanel({
     onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['questions', sessionId] }),
   });
 
+  const isHost =
+    auth.data?.principal.roles.some((role) =>
+      ['OWNER', 'ADMIN', 'HOST'].includes(role),
+    ) ?? false;
+
   const submitChat = (event: FormEvent) => {
     event.preventDefault();
     if (chatBody.trim()) sendChat.mutate();
@@ -140,10 +204,144 @@ export function SessionCollaborationPanel({
 
       {tab === 'people' ? (
         <div className="collaboration-scroll">
-          <div className="people-list">
-            <div className="person-row"><div className="avatar">LO</div><div><strong>Local Owner</strong><small>Host · you</small></div><span>•••</span></div>
+          <div className="people-panel-heading">
+            <div>
+              <strong>Live participants</strong>
+              <span>
+                {activeBreakoutRoomId ? 'Breakout room' : 'Main room'} ·{' '}
+                {mediaParticipants.data?.participants.length ?? 0} connected
+              </span>
+            </div>
+            <button
+              type="button"
+              className="participant-refresh"
+              onClick={() => void mediaParticipants.refetch()}
+              disabled={mediaParticipants.isFetching}
+            >
+              {mediaParticipants.isFetching ? 'Refreshing…' : 'Refresh'}
+            </button>
           </div>
-          <div className="side-panel-note"><strong>Presence is realtime</strong><p>Authenticated socket joins and leaves are broadcast to the session room. Durable attendance intervals are the next analytics increment.</p></div>
+
+          <div className="people-list">
+            {mediaParticipants.isLoading ? (
+              <p className="side-muted">Loading live participants…</p>
+            ) : null}
+            {mediaParticipants.data?.participants.map((participant) => {
+              const isSelf = participant.identity === auth.data?.principal.userId;
+              const roleLabel =
+                participant.presenterRole ??
+                participant.roles[0] ??
+                (participant.canPublish ? 'participant' : 'attendee');
+              return (
+                <article className="participant-card" key={participant.identity}>
+                  <div className="participant-card-heading">
+                    <div className="avatar">
+                      {participant.name.trim().charAt(0).toUpperCase() || '?'}
+                    </div>
+                    <div>
+                      <strong>{participant.name}</strong>
+                      <small>
+                        {roleLabel.toLowerCase().replaceAll('_', ' ')}
+                        {isSelf ? ' · you' : ''}
+                        {' · '}
+                        {participant.state}
+                      </small>
+                    </div>
+                    <span
+                      className={
+                        participant.isPublisher
+                          ? 'participant-publish-state live'
+                          : 'participant-publish-state'
+                      }
+                    >
+                      {participant.isPublisher ? 'publishing' : 'listening'}
+                    </span>
+                  </div>
+
+                  <div className="participant-track-list">
+                    {participant.tracks.map((track) => (
+                      <div className="participant-track-row" key={track.sid}>
+                        <div>
+                          <strong>
+                            {track.source === 'unknown'
+                              ? track.kind
+                              : track.source.replaceAll('-', ' ')}
+                          </strong>
+                          <small>{track.muted ? 'Muted' : 'Live'}</small>
+                        </div>
+                        {isHost && !isSelf && track.kind !== 'data' ? (
+                          <button
+                            type="button"
+                            disabled={setTrackMuted.isPending}
+                            onClick={() =>
+                              setTrackMuted.mutate({
+                                participantIdentity: participant.identity,
+                                trackSid: track.sid,
+                                muted: !track.muted,
+                              })
+                            }
+                          >
+                            {track.muted ? 'Unmute' : 'Mute'}
+                          </button>
+                        ) : null}
+                      </div>
+                    ))}
+                    {participant.tracks.length === 0 ? (
+                      <span className="participant-no-tracks">
+                        No published camera, microphone or screen tracks.
+                      </span>
+                    ) : null}
+                  </div>
+
+                  {isHost && !isSelf ? (
+                    <button
+                      type="button"
+                      className="participant-remove"
+                      disabled={removeParticipant.isPending}
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            `Remove ${participant.name} from this media room?`,
+                          )
+                        ) {
+                          removeParticipant.mutate(participant.identity);
+                        }
+                      }}
+                    >
+                      Remove from room
+                    </button>
+                  ) : null}
+                </article>
+              );
+            })}
+            {mediaParticipants.data?.participants.length === 0 ? (
+              <p className="side-muted">No one is connected to this media room yet.</p>
+            ) : null}
+          </div>
+
+          {mediaParticipants.error ? (
+            <div className="error-banner compact-error">
+              {mediaParticipants.error.message}
+            </div>
+          ) : null}
+          {setTrackMuted.error ? (
+            <div className="error-banner compact-error">
+              {setTrackMuted.error.message}
+            </div>
+          ) : null}
+          {removeParticipant.error ? (
+            <div className="error-banner compact-error">
+              {removeParticipant.error.message}
+            </div>
+          ) : null}
+          <div className="side-panel-note">
+            <strong>Host moderation</strong>
+            <p>
+              The People panel reads the active LiveKit room and refreshes every
+              three seconds. Hosts can mute published tracks or eject another
+              participant; moderation actions are server-authorized and audited.
+            </p>
+          </div>
         </div>
       ) : null}
 
