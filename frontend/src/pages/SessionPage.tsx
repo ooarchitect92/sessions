@@ -1,7 +1,7 @@
 import '@livekit/components-styles';
 import { LiveKitRoom, VideoConference } from '@livekit/components-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { FormEvent, useState } from 'react';
+import { FormEvent, useState, type CSSProperties } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api, type MediaToken } from '../api/client';
 import { AgendaContentStage } from '../components/AgendaContentStage';
@@ -43,6 +43,11 @@ export function SessionPage() {
     | 'SCREEN_SHARE'
   >('TEXT');
   useSessionRealtime(sessionId);
+
+  const workspace = useQuery({
+    queryKey: ['workspace'],
+    queryFn: () => api.getCurrentWorkspace(),
+  });
 
   const session = useQuery({
     queryKey: ['session', sessionId],
@@ -215,14 +220,56 @@ export function SessionPage() {
     !current.recordingEnabled ||
     recordingConsent.data?.currentDecision === 'GRANTED';
 
+  const workspaceSettings =
+    workspace.data?.settings &&
+    typeof workspace.data.settings === 'object' &&
+    !Array.isArray(workspace.data.settings)
+      ? workspace.data.settings
+      : {};
+  const branding =
+    workspaceSettings.branding &&
+    typeof workspaceSettings.branding === 'object' &&
+    !Array.isArray(workspaceSettings.branding)
+      ? (workspaceSettings.branding as Record<string, unknown>)
+      : {};
+  const safeColor = (value: unknown, fallback: string) =>
+    typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value) ? value : fallback;
+  const primaryColor = safeColor(branding.primaryColor, '#2f6b5c');
+  const accentColor = safeColor(branding.accentColor, '#dcefe8');
+  const logoUrl =
+    typeof branding.logoUrl === 'string' && branding.logoUrl.startsWith('https://')
+      ? branding.logoUrl
+      : null;
+  const waitingRoomImageUrl =
+    typeof branding.waitingRoomImageUrl === 'string' &&
+    branding.waitingRoomImageUrl.startsWith('https://')
+      ? branding.waitingRoomImageUrl
+      : null;
+  const brandFont =
+    typeof branding.fontFamily === 'string' && branding.fontFamily.trim()
+      ? branding.fontFamily.trim()
+      : undefined;
+  const workspaceName = workspace.data?.name ?? 'Sessions';
+  const themeStyle = {
+    '--meeting-brand-primary': primaryColor,
+    '--meeting-brand-accent': accentColor,
+    ...(brandFont ? { fontFamily: brandFont } : {}),
+  } as CSSProperties;
+
   return (
-    <div className="session-workspace">
+    <div className="session-workspace workspace-branded-meeting" style={themeStyle}>
       <header className="session-header">
         <div className="session-header-title">
           <Link to="/" className="back-link" aria-label="Back to overview">
             ←
           </Link>
           <div>
+            <div className="session-brand-row">
+              <span className="session-brand-mark">
+                {logoUrl ? <img src={logoUrl} alt="" /> : workspaceName.charAt(0).toUpperCase()}
+              </span>
+              <span>{workspaceName}</span>
+            </div>
             <div className="session-kicker">
               <span className={`status-badge status-${current.status.toLowerCase()}`}>
                 {current.status.toLowerCase()}
@@ -591,17 +638,28 @@ export function SessionPage() {
               <VideoConference />
             </LiveKitRoom>
           ) : (
-            <div className="stage-placeholder">
-              <div className="stage-orbit">
-                <span>S</span>
-              </div>
-              <span className="eyebrow">Secure media stage</span>
-              <h2>Ready when your participants are.</h2>
-              <p>
-                Joining requests a short-lived, room-scoped token from the backend. LiveKit
-                handles camera, microphone, screen sharing, adaptive subscriptions, and
-                reconnect behavior.
-              </p>
+            <div
+              className={waitingRoomImageUrl ? 'stage-placeholder branded-waiting-room has-image' : 'stage-placeholder branded-waiting-room'}
+              style={
+                waitingRoomImageUrl
+                  ? ({ '--waiting-room-image': `url("${waitingRoomImageUrl.replaceAll('"', '%22')}")` } as CSSProperties)
+                  : undefined
+              }
+            >
+              <div className="waiting-room-scrim" aria-hidden="true" />
+              <div className="waiting-room-content">
+                <div className="stage-orbit">
+                  <span>
+                    {logoUrl ? <img src={logoUrl} alt="" /> : workspaceName.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+                <span className="eyebrow">{workspaceName}</span>
+                <h2>Ready when your participants are.</h2>
+                <p>
+                  Joining requests a short-lived, room-scoped token from the backend. LiveKit
+                  handles camera, microphone, screen sharing, adaptive subscriptions, and
+                  reconnect behavior.
+                </p>
               {hasSharedStage ? (
                 <button
                   type="button"
@@ -625,6 +683,7 @@ export function SessionPage() {
               {join.error ? (
                 <div className="error-banner compact-error">{join.error.message}</div>
               ) : null}
+              </div>
             </div>
           )}
         </section>
