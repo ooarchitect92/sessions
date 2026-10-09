@@ -201,6 +201,18 @@ enum AiExternalActionStatus {
   CANCELLED
 }
 
+enum PrivacyRequestType {
+  EXPORT
+  ERASURE
+}
+
+enum PrivacyRequestStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
 model Organization {
   id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name                String                @db.VarChar(160)
@@ -246,6 +258,7 @@ model Organization {
   calendarConnections CalendarConnection[]
   calendarOAuthStates CalendarOAuthState[]
   aiExternalActions    AiExternalAction[]
+  privacyRequests      PrivacyRequest[]
 
   @@map("organizations")
 }
@@ -299,6 +312,7 @@ model Workspace {
   calendarConnections CalendarConnection[]
   calendarOAuthStates CalendarOAuthState[]
   aiExternalActions    AiExternalAction[]
+  privacyRequests      PrivacyRequest[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -346,11 +360,30 @@ model User {
   calendarConnections      CalendarConnection[]
   calendarOAuthStates      CalendarOAuthState[]
   approvedAiExternalActions AiExternalAction[] @relation("AiExternalActionApprover")
+  privacyRequests          PrivacyRequest[]
 
   @@index([status])
   @@map("users")
 }
 
+model PrivacyRequest {
+  id             String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String               @map("organization_id") @db.Uuid
+  workspaceId    String               @map("workspace_id") @db.Uuid
+  userId         String               @map("user_id") @db.Uuid
+  type           PrivacyRequestType
+  status         PrivacyRequestStatus @default(COMPLETED)
+  metadata       Json                 @default("{}")
+  requestedAt    DateTime             @default(now()) @map("requested_at") @db.Timestamptz(6)
+  completedAt    DateTime?            @map("completed_at") @db.Timestamptz(6)
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, requestedAt])
+  @@index([organizationId, workspaceId, requestedAt])
+  @@map("privacy_requests")
+}
 model WorkspaceMembership {
   id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   organizationId String        @map("organization_id") @db.Uuid
