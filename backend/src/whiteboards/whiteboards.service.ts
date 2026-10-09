@@ -26,7 +26,7 @@ const RECENT_OPERATION_ID_LIMIT = 250;
 
 type WhiteboardObject = Record<string, unknown> & {
   id: string;
-  type: 'stroke' | 'shape' | 'note' | 'text';
+  type: 'stroke' | 'shape' | 'note' | 'text' | 'image';
 };
 
 interface WhiteboardSnapshot {
@@ -301,12 +301,31 @@ export class WhiteboardsService {
       SHAPE_ADD: 'shape',
       NOTE_ADD: 'note',
       TEXT_ADD: 'text',
+      IMAGE_ADD: 'image',
     };
     const type = this.requiredString(object.type, 'object.type');
     if (expectedType[kind] !== type) {
       throw new BadRequestException(
         `${kind} requires an object of type ${expectedType[kind]}`,
       );
+    }
+
+    if (type === 'image') {
+      const uploadId = this.requiredString(object.uploadId, 'object.uploadId');
+      if (
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+          uploadId,
+        )
+      ) {
+        throw new BadRequestException('object.uploadId must be a UUID v4');
+      }
+      const width = this.numberInRange(object.width, 'object.width', 20, 1000);
+      const height = this.numberInRange(object.height, 'object.height', 20, 650);
+      const x = this.numberInRange(object.x, 'object.x', 0, 1000);
+      const y = this.numberInRange(object.y, 'object.y', 0, 650);
+      return this.objectFromJson(
+        this.toJson({ ...object, id, type, uploadId, width, height, x, y }),
+      ) as WhiteboardObject;
     }
 
     return this.objectFromJson(this.toJson({ ...object, id, type })) as WhiteboardObject;
@@ -317,6 +336,25 @@ export class WhiteboardsService {
       throw new BadRequestException(`${field} must be a non-empty string`);
     }
     return value.trim();
+  }
+
+  private numberInRange(
+    value: unknown,
+    field: string,
+    minimum: number,
+    maximum: number,
+  ): number {
+    if (
+      typeof value !== 'number' ||
+      !Number.isFinite(value) ||
+      value < minimum ||
+      value > maximum
+    ) {
+      throw new BadRequestException(
+        `${field} must be a number between ${minimum} and ${maximum}`,
+      );
+    }
+    return value;
   }
 
   private async assertSessionExists(
@@ -364,7 +402,8 @@ export class WhiteboardsService {
           const candidate = raw as Record<string, unknown>;
           if (
             typeof candidate.id === 'string' &&
-            typeof candidate.type === 'string'
+            typeof candidate.type === 'string' &&
+            ['stroke', 'shape', 'note', 'text', 'image'].includes(candidate.type)
           ) {
             objects[key] = candidate as WhiteboardObject;
           }
