@@ -26,9 +26,11 @@ type IdentityConnectionRow = {
   token_endpoint: string | null;
   userinfo_endpoint: string | null;
   jwks_uri: string | null;
+  end_session_endpoint: string | null;
   scopes: string[];
   email_domains: string[];
   role_attribute: string | null;
+  role_mappings: Record<string, WorkspaceRole>;
   default_role: WorkspaceRole;
   created_at: Date;
   updated_at: Date;
@@ -45,9 +47,11 @@ export interface UpsertEnterpriseIdentityInput {
   tokenEndpoint?: string | null;
   userinfoEndpoint?: string | null;
   jwksUri?: string | null;
+  endSessionEndpoint?: string | null;
   scopes?: string[];
   emailDomains?: string[];
   roleAttribute?: string | null;
+  roleMappings?: Record<string, WorkspaceRole>;
   defaultRole?: WorkspaceRole;
 }
 
@@ -84,23 +88,24 @@ export class EnterpriseIdentityService {
           : current?.encrypted_client_secret ?? null;
       const scopes = input.scopes?.length ? [...new Set(input.scopes.map((item) => item.trim()).filter(Boolean))] : current?.scopes ?? ['openid','profile','email'];
       const emailDomains = input.emailDomains ? this.normalizeDomains(input.emailDomains) : current?.email_domains ?? [];
+      const roleMappings = input.roleMappings ? this.normalizeRoleMappings(input.roleMappings) : current?.role_mappings ?? {};
       const rows = await transaction.$queryRaw<IdentityConnectionRow[]>`
         INSERT INTO enterprise_identity_connections (
           organization_id, workspace_id, protocol, enabled, enforce_sso, issuer_url, client_id, encrypted_client_secret,
-          authorization_endpoint, token_endpoint, userinfo_endpoint, jwks_uri, scopes, email_domains, role_attribute, default_role
+          authorization_endpoint, token_endpoint, userinfo_endpoint, jwks_uri, end_session_endpoint, scopes, email_domains, role_attribute, role_mappings, default_role
         ) VALUES (
           ${principal.organizationId}::uuid, ${principal.workspaceId}::uuid, ${input.protocol},
           ${input.enabled ?? false}, ${input.enforceSso ?? false}, ${this.nullable(input.issuerUrl)}, ${this.nullable(input.clientId)}, ${encryptedSecret},
           ${this.nullable(input.authorizationEndpoint)}, ${this.nullable(input.tokenEndpoint)}, ${this.nullable(input.userinfoEndpoint)},
-          ${this.nullable(input.jwksUri)}, ${JSON.stringify(scopes)}::jsonb, ${JSON.stringify(emailDomains)}::jsonb,
-          ${this.nullable(input.roleAttribute)}, ${input.defaultRole ?? current?.default_role ?? WorkspaceRole.MEMBER}
+          ${this.nullable(input.jwksUri)}, ${this.nullable(input.endSessionEndpoint)}, ${JSON.stringify(scopes)}::jsonb, ${JSON.stringify(emailDomains)}::jsonb,
+          ${this.nullable(input.roleAttribute)}, ${JSON.stringify(roleMappings)}::jsonb, ${input.defaultRole ?? current?.default_role ?? WorkspaceRole.MEMBER}
         )
         ON CONFLICT (workspace_id) DO UPDATE SET
           protocol = EXCLUDED.protocol, enabled = EXCLUDED.enabled, enforce_sso = EXCLUDED.enforce_sso,
           issuer_url = EXCLUDED.issuer_url, client_id = EXCLUDED.client_id, encrypted_client_secret = EXCLUDED.encrypted_client_secret,
           authorization_endpoint = EXCLUDED.authorization_endpoint, token_endpoint = EXCLUDED.token_endpoint,
-          userinfo_endpoint = EXCLUDED.userinfo_endpoint, jwks_uri = EXCLUDED.jwks_uri, scopes = EXCLUDED.scopes,
-          email_domains = EXCLUDED.email_domains, role_attribute = EXCLUDED.role_attribute, default_role = EXCLUDED.default_role,
+          userinfo_endpoint = EXCLUDED.userinfo_endpoint, jwks_uri = EXCLUDED.jwks_uri, end_session_endpoint = EXCLUDED.end_session_endpoint, scopes = EXCLUDED.scopes,
+          email_domains = EXCLUDED.email_domains, role_attribute = EXCLUDED.role_attribute, role_mappings = EXCLUDED.role_mappings, default_role = EXCLUDED.default_role,
           updated_at = NOW()
         RETURNING *
       `;
@@ -263,7 +268,7 @@ export class EnterpriseIdentityService {
   }
 
   private connectionShape(row: IdentityConnectionRow) {
-    return { id: row.id, protocol: row.protocol, enabled: row.enabled, enforceSso: row.enforce_sso, issuerUrl: row.issuer_url, clientId: row.client_id, hasClientSecret: Boolean(row.encrypted_client_secret), authorizationEndpoint: row.authorization_endpoint, tokenEndpoint: row.token_endpoint, userinfoEndpoint: row.userinfo_endpoint, jwksUri: row.jwks_uri, scopes: row.scopes, emailDomains: row.email_domains, roleAttribute: row.role_attribute, defaultRole: row.default_role, createdAt: row.created_at, updatedAt: row.updated_at };
+    return { id: row.id, protocol: row.protocol, enabled: row.enabled, enforceSso: row.enforce_sso, issuerUrl: row.issuer_url, clientId: row.client_id, hasClientSecret: Boolean(row.encrypted_client_secret), authorizationEndpoint: row.authorization_endpoint, tokenEndpoint: row.token_endpoint, userinfoEndpoint: row.userinfo_endpoint, jwksUri: row.jwks_uri, endSessionEndpoint: row.end_session_endpoint, scopes: row.scopes, emailDomains: row.email_domains, roleAttribute: row.role_attribute, roleMappings: row.role_mappings, defaultRole: row.default_role, createdAt: row.created_at, updatedAt: row.updated_at };
   }
 
   private validateConnection(input: UpsertEnterpriseIdentityInput) {
@@ -272,15 +277,38 @@ export class EnterpriseIdentityService {
         if (!value?.trim()) throw new BadRequestException(`${label} is required when OIDC is enabled`);
       }
     }
-    for (const value of [input.issuerUrl, input.authorizationEndpoint, input.tokenEndpoint, input.userinfoEndpoint, input.jwksUri]) {
+    for (const value of [input.issuerUrl, input.authorizationEndpoint, input.tokenEndpoint, input.userinfoEndpoint, input.jwksUri, input.endSessionEndpoint]) {
       if (!value) continue;
       let url: URL;
       try { url = new URL(value); } catch { throw new BadRequestException('Enterprise identity URLs must be valid HTTPS URLs'); }
       if (url.protocol !== 'https:') throw new BadRequestException('Enterprise identity URLs must use HTTPS');
     }
     if (input.defaultRole === WorkspaceRole.OWNER) throw new BadRequestException('SCIM/SSO default role cannot be OWNER');
+    if (input.roleMappings && Object.keys(input.roleMappings).length && !input.roleAttribute?.trim()) {
+      throw new BadRequestException('roleAttribute is required when OIDC role mappings are configured');
+    }
+    if (input.roleAttribute && !/^[A-Za-z0-9_.:-]{1,120}$/.test(input.roleAttribute.trim())) {
+      throw new BadRequestException('roleAttribute contains unsupported characters');
+    }
   }
 
+  private normalizeRoleMappings(mappings: Record<string, WorkspaceRole>) {
+    const normalized: Record<string, WorkspaceRole> = {};
+    for (const [rawClaimValue, role] of Object.entries(mappings)) {
+      const claimValue = rawClaimValue.trim();
+      if (!claimValue || claimValue.length > 160) {
+        throw new BadRequestException('OIDC role mapping values must be 1-160 characters');
+      }
+      if (role === WorkspaceRole.OWNER) {
+        throw new BadRequestException('OIDC role mappings cannot assign OWNER');
+      }
+      normalized[claimValue] = role;
+    }
+    if (Object.keys(normalized).length > 100) {
+      throw new BadRequestException('OIDC role mappings are limited to 100 entries');
+    }
+    return normalized;
+  }
   private normalizeDomains(domains: string[]) {
     return [...new Set(domains.map((item) => item.trim().toLowerCase()).filter((item) => /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(item)))];
   }
