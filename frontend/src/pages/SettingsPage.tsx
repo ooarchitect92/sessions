@@ -891,7 +891,11 @@ function EnterpriseSettings() {
   const [tokenEndpoint, setTokenEndpoint] = useState('');
   const [userinfoEndpoint, setUserinfoEndpoint] = useState('');
   const [jwksUri, setJwksUri] = useState('');
+  const [endSessionEndpoint, setEndSessionEndpoint] = useState('');
   const [domains, setDomains] = useState('');
+  const [roleAttribute, setRoleAttribute] = useState('');
+  const [roleMappingsText, setRoleMappingsText] = useState('');
+  const [defaultRole, setDefaultRole] = useState<Exclude<WorkspaceRole, 'OWNER'>>('MEMBER');
   const [scimName, setScimName] = useState('Provisioning token');
   const [issuedToken, setIssuedToken] = useState('');
 
@@ -905,15 +909,40 @@ function EnterpriseSettings() {
     setTokenEndpoint(identity.data.tokenEndpoint ?? '');
     setUserinfoEndpoint(identity.data.userinfoEndpoint ?? '');
     setJwksUri(identity.data.jwksUri ?? '');
+    setEndSessionEndpoint(identity.data.endSessionEndpoint ?? '');
     setDomains(identity.data.emailDomains.join(', '));
+    setRoleAttribute(identity.data.roleAttribute ?? '');
+    setRoleMappingsText(Object.entries(identity.data.roleMappings ?? {}).map(([claim, role]) => `${claim}=${role}`).join('\n'));
+    setDefaultRole(identity.data.defaultRole ?? 'MEMBER');
   }, [identity.data]);
 
   const save = useMutation({
-    mutationFn: () => api.saveEnterpriseIdentity({
-      protocol: 'OIDC', enabled, enforceSso, issuerUrl, clientId, ...(clientSecret ? { clientSecret } : {}),
-      authorizationEndpoint, tokenEndpoint, userinfoEndpoint, jwksUri, scopes: ['openid','profile','email'],
-      emailDomains: domains.split(',').map((item) => item.trim()).filter(Boolean), defaultRole: 'MEMBER',
-    }),
+    mutationFn: () => {
+      const roleMappings = Object.fromEntries(
+        roleMappingsText
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .map((line) => {
+            const separator = line.lastIndexOf('=');
+            if (separator <= 0) throw new Error('Each role mapping must use claim-value=ROLE');
+            const claimValue = line.slice(0, separator).trim();
+            const role = line.slice(separator + 1).trim().toUpperCase();
+            if (!['ADMIN', 'HOST', 'MEMBER', 'ANALYST', 'GUEST'].includes(role)) {
+              throw new Error(`Unsupported mapped role: ${role}`);
+            }
+            return [claimValue, role] as const;
+          }),
+      ) as Record<string, Exclude<WorkspaceRole, 'OWNER'>>;
+      return api.saveEnterpriseIdentity({
+        protocol: 'OIDC', enabled, enforceSso, issuerUrl, clientId, ...(clientSecret ? { clientSecret } : {}),
+        authorizationEndpoint, tokenEndpoint, userinfoEndpoint, jwksUri, endSessionEndpoint, scopes: ['openid','profile','email'],
+        emailDomains: domains.split(',').map((item) => item.trim()).filter(Boolean),
+        roleAttribute: roleAttribute.trim() || undefined,
+        roleMappings,
+        defaultRole,
+      });
+    },
     onSuccess: async () => { setClientSecret(''); await queryClient.invalidateQueries({ queryKey: ['enterprise-identity'] }); },
   });
   const createToken = useMutation({
@@ -941,7 +970,11 @@ function EnterpriseSettings() {
             <label>Token endpoint<input type="url" value={tokenEndpoint} onChange={(event) => setTokenEndpoint(event.target.value)} /></label>
             <label>UserInfo endpoint<input type="url" value={userinfoEndpoint} onChange={(event) => setUserinfoEndpoint(event.target.value)} /></label>
             <label>JWKS URI<input type="url" value={jwksUri} onChange={(event) => setJwksUri(event.target.value)} /></label>
+            <label>End-session endpoint<input type="url" value={endSessionEndpoint} onChange={(event) => setEndSessionEndpoint(event.target.value)} placeholder="https://idp.example.com/logout" /></label>
             <label className="settings-grid-span">Allowed email domains<input value={domains} onChange={(event) => setDomains(event.target.value)} placeholder="example.com, subsidiary.example.com" /></label>
+            <label>Role claim path<input value={roleAttribute} onChange={(event) => setRoleAttribute(event.target.value)} placeholder="groups or realm_access.role" /></label>
+            <label>Default enterprise role<select value={defaultRole} onChange={(event) => setDefaultRole(event.target.value as Exclude<WorkspaceRole, 'OWNER'>)}><option value="MEMBER">Member</option><option value="HOST">Host</option><option value="ANALYST">Analyst</option><option value="GUEST">Guest</option><option value="ADMIN">Admin</option></select></label>
+            <label className="settings-grid-span">Claim-to-role mappings<textarea rows={5} value={roleMappingsText} onChange={(event) => setRoleMappingsText(event.target.value)} placeholder={"sessions-admins=ADMIN\nsales-hosts=HOST\nanalysts=ANALYST"} /><small>One mapping per line. The left side is an IdP claim value; the right side is ADMIN, HOST, MEMBER, ANALYST, or GUEST. OWNER can never be assigned by SSO.</small></label>
           </div>
           {save.error ? <div className="error-banner">{save.error.message}</div> : null}
           {save.isSuccess ? <div className="success-banner">Enterprise identity policy saved.</div> : null}
