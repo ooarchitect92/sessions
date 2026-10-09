@@ -5,12 +5,32 @@ import { useSearchParams } from 'react-router-dom';
 import { api, type ApiKeyRecord, type WebhookSubscriptionRecord, type WorkspaceEmailTemplateKind, type WorkspaceMember } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 
-const TABS = ['workspace', 'members', 'workspaces', 'billing', 'domains', 'emails', 'integrations', 'enterprise', 'security'] as const;
+const TABS = ['workspace', 'members', 'workspaces', 'billing', 'domains', 'emails', 'integrations', 'enterprise', 'compliance', 'security'] as const;
 type SettingsTab = (typeof TABS)[number];
 
 const MEMBER_ROLES: WorkspaceRole[] = ['ADMIN', 'HOST', 'MEMBER', 'ANALYST', 'GUEST'];
 const ALL_ROLES: WorkspaceRole[] = ['OWNER', ...MEMBER_ROLES];
 
+function csvEscape(value: unknown): string {
+  const text = String(value ?? '');
+  return /[\",\n]/.test(text) ? `\"${text.replaceAll('\"', '\"\"')}\"` : text;
+}
+
+function downloadCsv(input: { filename: string; columns: string[]; rows: Array<Record<string, unknown>> }) {
+  const content = [
+    input.columns.map(csvEscape).join(','),
+    ...input.rows.map((row) => input.columns.map((column) => csvEscape(row[column])).join(',')),
+  ].join('\n');
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = input.filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
 function toSlug(value: string): string {
   return value
     .toLowerCase()
@@ -73,7 +93,9 @@ export function SettingsPage() {
                             ? '⛓'
                             : item === 'enterprise'
                               ? '◆'
-                              : '⌾'}
+                              : item === 'compliance'
+                                ? '▣'
+                                : '⌾'}
               </span>
               {item === 'workspace'
                 ? 'Workspace profile'
@@ -91,7 +113,9 @@ export function SettingsPage() {
                           ? 'Integrations'
                           : item === 'enterprise'
                             ? 'Enterprise'
-                            : 'Security'}
+                            : item === 'compliance'
+                              ? 'Compliance'
+                              : 'Security'}
             </button>
           ))}
         </nav>
@@ -104,6 +128,7 @@ export function SettingsPage() {
           {tab === 'emails' ? <EmailTemplateSettings /> : null}
           {tab === 'integrations' ? <IntegrationsSettings /> : null}
           {tab === 'enterprise' ? <EnterpriseSettings /> : null}
+          {tab === 'compliance' ? <ComplianceSettings /> : null}
           {tab === 'security' ? <SecuritySettings /> : null}
         </section>
       </div>
@@ -928,6 +953,76 @@ function EnterpriseSettings() {
         <div className="invite-row"><label>Token name<input value={scimName} onChange={(event) => setScimName(event.target.value)} /></label><span /><button className="button primary" type="button" disabled={createToken.isPending} onClick={() => createToken.mutate()}>Create token</button></div>
         {issuedToken ? <div className="development-token-box"><strong>Copy this token now</strong><code>{issuedToken}</code></div> : null}
         <div className="settings-list">{tokens.data?.map((token) => <article key={token.id} className="settings-list-row"><div><strong>{token.name}</strong><small>{token.key_prefix ?? token.keyPrefix} · last used {formatDate(token.last_used_at ?? null)}</small></div><button className="button secondary" type="button" disabled={Boolean(token.revoked_at) || revoke.isPending} onClick={() => revoke.mutate(token.id)}>{token.revoked_at ? 'Revoked' : 'Revoke'}</button></article>)}</div>
+      </section>
+    </div>
+  );
+}
+function ComplianceSettings() {
+  const auth = useAuth();
+  const queryClient = useQueryClient();
+  const canManage = auth.me?.principal.roles.some((role) => ['OWNER', 'ADMIN'].includes(role)) ?? false;
+  const policy = useQuery({ queryKey: ['retention-policy'], queryFn: () => api.getRetentionPolicy(), enabled: canManage });
+  const [recordingDays, setRecordingDays] = useState(30);
+  const [transcriptDays, setTranscriptDays] = useState(90);
+  const [auditDays, setAuditDays] = useState(365);
+  const [deleteOnExpiry, setDeleteOnExpiry] = useState(true);
+  const [legalHold, setLegalHold] = useState(false);
+
+  useEffect(() => {
+    if (!policy.data) return;
+    setRecordingDays(policy.data.recordingDays);
+    setTranscriptDays(policy.data.transcriptDays);
+    setAuditDays(policy.data.auditDays);
+    setDeleteOnExpiry(policy.data.deleteOnExpiry);
+    setLegalHold(policy.data.legalHold);
+  }, [policy.data]);
+
+  const save = useMutation({
+    mutationFn: () => api.saveRetentionPolicy({ recordingDays, transcriptDays, auditDays, deleteOnExpiry, legalHold }),
+    onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['retention-policy'] }),
+  });
+  const auditExport = useMutation({
+    mutationFn: () => api.exportAuditLog(),
+    onSuccess: (result) => downloadCsv(result),
+  });
+
+  if (!canManage) return <SettingsError message="Owner or admin access is required to manage compliance settings." />;
+  if (policy.isLoading) return <SettingsLoading />;
+  if (policy.error) return <SettingsError message={policy.error.message} />;
+
+  return (
+    <div className="settings-stack">
+      <section className="panel settings-panel">
+        <div className="settings-panel-heading">
+          <div>
+            <span className="eyebrow">Data governance</span>
+            <h2>Retention policy</h2>
+            <p>Set workspace retention intent for recordings, transcripts, and audit evidence. New recordings consume the active workspace policy.</p>
+          </div>
+          {legalHold ? <span className="settings-role-chip">legal hold</span> : null}
+        </div>
+        <form className="settings-form" onSubmit={(event) => { event.preventDefault(); save.mutate(); }}>
+          <div className="settings-form-grid">
+            <label>Recording retention (days)<input type="number" min={1} max={3650} value={recordingDays} onChange={(event) => setRecordingDays(Number(event.target.value))} /></label>
+            <label>Transcript retention (days)<input type="number" min={1} max={3650} value={transcriptDays} onChange={(event) => setTranscriptDays(Number(event.target.value))} /></label>
+            <label>Audit retention (days)<input type="number" min={30} max={3650} value={auditDays} onChange={(event) => setAuditDays(Number(event.target.value))} /></label>
+          </div>
+          <label className="settings-toggle-row"><input type="checkbox" checked={deleteOnExpiry} onChange={(event) => setDeleteOnExpiry(event.target.checked)} /><span><strong>Delete on expiry</strong><small>Marks expired governed artifacts for deletion when lifecycle workers enforce the policy.</small></span></label>
+          <label className="settings-toggle-row"><input type="checkbox" checked={legalHold} onChange={(event) => setLegalHold(event.target.checked)} /><span><strong>Legal hold</strong><small>New recordings receive no automatic retention deadline while legal hold is enabled.</small></span></label>
+          {save.error ? <div className="error-banner">{save.error.message}</div> : null}
+          {save.isSuccess ? <div className="success-banner">Retention policy saved.</div> : null}
+          <div className="settings-actions"><button className="button primary" disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Save retention policy'}</button></div>
+        </form>
+      </section>
+
+      <section className="panel settings-panel">
+        <div className="settings-panel-heading">
+          <div><span className="eyebrow">Audit evidence</span><h2>Governed audit export</h2><p>Export the last 30 days of workspace audit activity as CSV. The export itself is recorded as an audit event.</p></div>
+          <button className="button secondary" type="button" disabled={auditExport.isPending} onClick={() => auditExport.mutate()}>{auditExport.isPending ? 'Preparing…' : 'Export audit CSV'}</button>
+        </div>
+        {auditExport.error ? <div className="error-banner">{auditExport.error.message}</div> : null}
+        {auditExport.data?.truncated ? <div className="warning-banner">The export reached the 10,000-row safety limit. Use a narrower date window through the API for a complete export.</div> : null}
+        <div className="settings-policy-note">Exports are workspace-scoped and restricted to owner/admin roles.</div>
       </section>
     </div>
   );
