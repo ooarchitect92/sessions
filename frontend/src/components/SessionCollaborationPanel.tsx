@@ -64,6 +64,24 @@ export function SessionCollaborationPanel({
     enabled: tab === 'questions',
   });
 
+  const setHandRaised = useMutation({
+    mutationFn: (raised: boolean) =>
+      api.setMyHandRaised(
+        sessionId,
+        raised,
+        activeBreakoutRoomId ?? null,
+      ),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: [
+          'media-participants',
+          sessionId,
+          activeBreakoutRoomId ?? 'main',
+        ],
+      });
+    },
+  });
+
   const setTrackMuted = useMutation({
     mutationFn: ({
       participantIdentity,
@@ -272,15 +290,20 @@ export function SessionCollaborationPanel({
                         {participant.state}
                       </small>
                     </div>
-                    <span
-                      className={
-                        participant.isPublisher
-                          ? 'participant-publish-state live'
-                          : 'participant-publish-state'
-                      }
-                    >
-                      {participant.isPublisher ? 'publishing' : 'listening'}
-                    </span>
+                    <div className="participant-state-stack">
+                      {participant.handRaised ? (
+                        <span className="participant-hand-raised">✋ Raised</span>
+                      ) : null}
+                      <span
+                        className={
+                          participant.isPublisher
+                            ? 'participant-publish-state live'
+                            : 'participant-publish-state'
+                        }
+                      >
+                        {participant.isPublisher ? 'publishing' : 'listening'}
+                      </span>
+                    </div>
                   </div>
 
                   <div className="participant-track-list">
@@ -317,6 +340,18 @@ export function SessionCollaborationPanel({
                       </span>
                     ) : null}
                   </div>
+
+                  {isSelf ? (
+                    <div className="participant-self-actions">
+                      <button
+                        type="button"
+                        disabled={setHandRaised.isPending}
+                        onClick={() => setHandRaised.mutate(!participant.handRaised)}
+                      >
+                        {participant.handRaised ? 'Lower hand' : 'Raise hand'}
+                      </button>
+                    </div>
+                  ) : null}
 
                   {isHost && !isSelf ? (
                     <div className="participant-moderation-actions">
@@ -364,6 +399,11 @@ export function SessionCollaborationPanel({
           {mediaParticipants.error ? (
             <div className="error-banner compact-error">
               {mediaParticipants.error.message}
+            </div>
+          ) : null}
+          {setHandRaised.error ? (
+            <div className="error-banner compact-error">
+              {setHandRaised.error.message}
             </div>
           ) : null}
           {setTrackMuted.error ? (
