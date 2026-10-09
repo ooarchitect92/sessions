@@ -62,7 +62,7 @@ export class PrivacyService {
       }),
       this.prisma.bookingPage.findMany({
         where: { createdById: principal.userId },
-        select: { id: true, workspaceId: true, name: true, slug: true, active: true, createdAt: true },
+        select: { id: true, workspaceId: true, title: true, slug: true, active: true, createdAt: true },
         orderBy: { createdAt: 'asc' },
       }),
       this.prisma.chatMessage.findMany({
@@ -87,7 +87,7 @@ export class PrivacyService {
       }),
       this.prisma.engagementEvent.findMany({
         where: { userId: principal.userId },
-        select: { sessionId: true, type: true, occurredAt: true, metadata: true },
+        select: { sessionId: true, kind: true, occurredAt: true, metadata: true },
         orderBy: { occurredAt: 'asc' },
       }),
       this.prisma.calendarConnection.findMany({
