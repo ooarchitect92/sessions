@@ -14,6 +14,7 @@ import {
 } from '@prisma/client';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { AuditService } from '../audit/audit.service';
+import { BillingService } from '../billing/billing.service';
 import { CalendarService } from '../calendar/calendar.service';
 import { HOST_ROLES, hasAnyRole, type Principal } from '../common/auth/principal';
 import {
@@ -53,6 +54,7 @@ export class BookingsService {
     private readonly audit: AuditService,
     private readonly outbox: OutboxService,
     private readonly calendar: CalendarService,
+    private readonly billing: BillingService,
   ) {}
 
   async create(
@@ -85,6 +87,8 @@ export class BookingsService {
         return existing.response as Prisma.JsonObject;
       }
 
+      await this.billing.assertCanCreateBookingPage(transaction, principal);
+
       const duplicate = await transaction.bookingPage.findUnique({
         where: { workspaceId_slug: { workspaceId: principal.workspaceId, slug: input.slug } },
         select: { id: true },
@@ -108,6 +112,7 @@ export class BookingsService {
           intakeFields: input.intakeFields as unknown as Prisma.InputJsonValue,
         },
       });
+      await this.billing.recordUsage(transaction, principal, 'booking_page.created', 'booking_page', page.id);
       const response = this.toJson(page);
       await this.audit.record(transaction, principal, {
         action: 'booking_page.created',
