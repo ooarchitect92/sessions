@@ -290,6 +290,7 @@ model Organization {
   providerConnections  ProviderConnection[]
   workspaceBrandings   WorkspaceBranding[]
   customDomains        CustomDomain[]
+  workspaceAnalyticsDaily WorkspaceAnalyticsDaily[]
 
   @@map("organizations")
 }
@@ -349,6 +350,7 @@ model Workspace {
   providerConnections  ProviderConnection[]
   branding             WorkspaceBranding?
   customDomains        CustomDomain[]
+  analyticsDaily       WorkspaceAnalyticsDaily[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -1374,6 +1376,29 @@ model WebhookDelivery {
   @@index([organizationId, workspaceId, status, nextAttemptAt])
   @@index([subscriptionId, createdAt])
   @@map("webhook_deliveries")
+}
+
+model WorkspaceAnalyticsDaily {
+  id                         String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId             String       @map("organization_id") @db.Uuid
+  workspaceId                String       @map("workspace_id") @db.Uuid
+  date                       DateTime     @db.Date
+  sessionsScheduled          Int          @default(0) @map("sessions_scheduled")
+  uniqueAttendees            Int          @default(0) @map("unique_attendees")
+  attendanceSeconds          BigInt       @default(0) @map("attendance_seconds")
+  engagementEvents           Int          @default(0) @map("engagement_events")
+  eventsScheduled            Int          @default(0) @map("events_scheduled")
+  registrationsCreated       Int          @default(0) @map("registrations_created")
+  bookingReservationsCreated Int          @default(0) @map("booking_reservations_created")
+  computedAt                 DateTime     @default(now()) @map("computed_at") @db.Timestamptz(6)
+  createdAt                  DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                  DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization               Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace                  Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, date])
+  @@index([organizationId, workspaceId, date])
+  @@map("workspace_analytics_daily")
 }
 
 model WorkspaceBranding {
