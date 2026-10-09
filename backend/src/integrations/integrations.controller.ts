@@ -43,6 +43,22 @@ export class IntegrationsController {
     return this.integrations.createWebhookSubscription(principal, input);
   }
 
+  @Get('webhooks/:subscriptionId/deliveries')
+  listWebhookDeliveries(
+    @CurrentPrincipal() principal: Principal,
+    @Param('subscriptionId', new ParseUUIDPipe({ version: '4' })) subscriptionId: string,
+  ) {
+    return this.integrations.listWebhookDeliveries(principal, subscriptionId);
+  }
+
+  @Post('webhooks/deliveries/:deliveryId/replay')
+  replayWebhookDelivery(
+    @CurrentPrincipal() principal: Principal,
+    @Param('deliveryId', new ParseUUIDPipe({ version: '4' })) deliveryId: string,
+  ) {
+    return this.integrations.replayWebhookDelivery(principal, deliveryId);
+  }
+
   @Delete('webhooks/:subscriptionId')
   deleteWebhook(
     @CurrentPrincipal() principal: Principal,
