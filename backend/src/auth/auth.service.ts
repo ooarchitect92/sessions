@@ -122,6 +122,26 @@ export class AuthService {
     );
   }
 
+  async createExternalIdentitySession(
+    userId: string,
+    workspaceId: string,
+    metadata: AuthRequestMetadata,
+  ): Promise<TokenBundle> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.status !== UserStatus.ACTIVE) {
+      throw new ForbiddenException('The enterprise identity is unavailable');
+    }
+    const membership = await this.prisma.workspaceMembership.findUnique({
+      where: { workspaceId_userId: { workspaceId, userId } },
+      include: { workspace: { include: { organization: true } } },
+    });
+    if (!membership) {
+      throw new ForbiddenException('Workspace access is unavailable');
+    }
+    return this.prisma.$transaction((transaction) =>
+      this.issueTokens(transaction, user, membership, metadata),
+    );
+  }
   async signUp(input: SignUpDto, metadata: AuthRequestMetadata) {
     this.assertLocalAuthenticationEnabled();
     this.assertTimeZone(input.timezone);
