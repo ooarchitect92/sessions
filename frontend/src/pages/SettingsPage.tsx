@@ -2,10 +2,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { WorkspaceRole } from '@sessions/contracts';
 import { FormEvent, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { api, type ApiKeyRecord, type WebhookSubscriptionRecord, type WorkspaceMember } from '../api/client';
+import { api, type ApiKeyRecord, type WebhookSubscriptionRecord, type WorkspaceEmailTemplateKind, type WorkspaceMember } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 
-const TABS = ['workspace', 'members', 'workspaces', 'domains', 'integrations', 'security'] as const;
+const TABS = ['workspace', 'members', 'workspaces', 'domains', 'emails', 'integrations', 'security'] as const;
 type SettingsTab = (typeof TABS)[number];
 
 const MEMBER_ROLES: WorkspaceRole[] = ['ADMIN', 'HOST', 'MEMBER', 'ANALYST', 'GUEST'];
@@ -65,9 +65,11 @@ export function SettingsPage() {
                       ? '▦'
                       : item === 'domains'
                         ? '◎'
-                        : item === 'integrations'
-                          ? '⛓'
-                          : '⌾'}
+                        : item === 'emails'
+                          ? '✉'
+                          : item === 'integrations'
+                            ? '⛓'
+                            : '⌾'}
               </span>
               {item === 'workspace'
                 ? 'Workspace profile'
@@ -77,9 +79,11 @@ export function SettingsPage() {
                     ? 'Your workspaces'
                     : item === 'domains'
                       ? 'Domains'
-                      : item === 'integrations'
-                        ? 'Integrations'
-                        : 'Security'}
+                      : item === 'emails'
+                        ? 'Emails'
+                        : item === 'integrations'
+                          ? 'Integrations'
+                          : 'Security'}
             </button>
           ))}
         </nav>
@@ -88,6 +92,7 @@ export function SettingsPage() {
           {tab === 'members' ? <MembersAndInvitations /> : null}
           {tab === 'workspaces' ? <WorkspaceDirectory /> : null}
           {tab === 'domains' ? <DomainSettings /> : null}
+          {tab === 'emails' ? <EmailTemplateSettings /> : null}
           {tab === 'integrations' ? <IntegrationsSettings /> : null}
           {tab === 'security' ? <SecuritySettings /> : null}
         </section>
@@ -650,6 +655,96 @@ function WorkspaceDirectory() {
   );
 }
 
+const EMAIL_TEMPLATE_DEFAULTS: Record<WorkspaceEmailTemplateKind, { label: string; subject: string; bodyText: string }> = {
+  EVENT_REMINDER_24H: { label: 'Event reminder · 24 hours', subject: 'Reminder: {{event_title}} starts tomorrow', bodyText: 'Hi {{attendee_name}},\n\n{{event_title}} starts in 24 hours.\n\nTime: {{event_time}} ({{event_timezone}})' },
+  EVENT_REMINDER_1H: { label: 'Event reminder · 1 hour', subject: 'Reminder: {{event_title}} starts in 1 hour', bodyText: 'Hi {{attendee_name}},\n\n{{event_title}} starts in 1 hour.\n\nTime: {{event_time}} ({{event_timezone}})' },
+  BOOKING_REMINDER_24H: { label: 'Booking reminder · 24 hours', subject: 'Reminder: {{booking_title}} starts tomorrow', bodyText: 'Hi {{attendee_name}},\n\n{{booking_title}} starts in 24 hours.\n\nTime: {{booking_time}} ({{booking_timezone}})' },
+  BOOKING_REMINDER_1H: { label: 'Booking reminder · 1 hour', subject: 'Reminder: {{booking_title}} starts in 1 hour', bodyText: 'Hi {{attendee_name}},\n\n{{booking_title}} starts in 1 hour.\n\nTime: {{booking_time}} ({{booking_timezone}})' },
+};
+
+function EmailTemplateSettings() {
+  const auth = useAuth();
+  const queryClient = useQueryClient();
+  const canManage = auth.me?.principal.roles.some((role) => ['OWNER', 'ADMIN', 'HOST'].includes(role)) ?? false;
+  const templates = useQuery({
+    queryKey: ['workspace-email-templates'],
+    queryFn: () => api.listWorkspaceEmailTemplates(),
+    enabled: canManage,
+  });
+  const [kind, setKind] = useState<WorkspaceEmailTemplateKind>('EVENT_REMINDER_24H');
+  const selected = templates.data?.find((item) => item.kind === kind);
+  const defaults = EMAIL_TEMPLATE_DEFAULTS[kind];
+  const [subject, setSubject] = useState(defaults.subject);
+  const [bodyText, setBodyText] = useState(defaults.bodyText);
+  const [signature, setSignature] = useState('');
+  const [enabled, setEnabled] = useState(true);
+
+  useEffect(() => {
+    const next = templates.data?.find((item) => item.kind === kind);
+    const fallback = EMAIL_TEMPLATE_DEFAULTS[kind];
+    setSubject(next?.subject ?? fallback.subject);
+    setBodyText(next?.body_text ?? fallback.bodyText);
+    setSignature(next?.signature ?? '');
+    setEnabled(next?.enabled ?? true);
+  }, [kind, templates.data]);
+
+  const save = useMutation({
+    mutationFn: () => api.saveWorkspaceEmailTemplate({ kind, enabled, subject, bodyText, signature }),
+    onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['workspace-email-templates'] }),
+  });
+
+  const variableHint = kind.startsWith('EVENT_')
+    ? '{{event_title}}, {{attendee_name}}, {{event_time}}, {{event_timezone}}'
+    : '{{booking_title}}, {{attendee_name}}, {{booking_time}}, {{booking_timezone}}';
+
+  return (
+    <div className="settings-stack">
+      <section className="panel settings-panel">
+        <div className="settings-panel-heading">
+          <div>
+            <span className="eyebrow">Branded notifications</span>
+            <h2>Workspace email templates</h2>
+            <p>Configure reusable reminder copy and a workspace signature. New events inherit the workspace event templates.</p>
+          </div>
+        </div>
+        {!canManage ? <SettingsError message="Host, admin, or owner access is required to manage email templates." /> : null}
+        {canManage ? (
+          <form className="settings-form" onSubmit={(event) => { event.preventDefault(); save.mutate(); }}>
+            <div className="settings-form-grid">
+              <label>
+                Template
+                <select value={kind} onChange={(event) => setKind(event.target.value as WorkspaceEmailTemplateKind)}>
+                  {(Object.keys(EMAIL_TEMPLATE_DEFAULTS) as WorkspaceEmailTemplateKind[]).map((item) => <option key={item} value={item}>{EMAIL_TEMPLATE_DEFAULTS[item].label}</option>)}
+                </select>
+              </label>
+              <label className="settings-toggle-row email-template-toggle">
+                <input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} />
+                <span><strong>Enabled by default</strong><small>Controls whether newly-created reminders are active.</small></span>
+              </label>
+              <label className="settings-grid-span">
+                Subject
+                <input required maxLength={240} value={subject} onChange={(event) => setSubject(event.target.value)} />
+              </label>
+              <label className="settings-grid-span">
+                Body
+                <textarea required rows={9} maxLength={10000} value={bodyText} onChange={(event) => setBodyText(event.target.value)} />
+              </label>
+              <label className="settings-grid-span">
+                Global signature
+                <textarea rows={4} maxLength={2000} value={signature} onChange={(event) => setSignature(event.target.value)} placeholder="Regards,\nYour team" />
+              </label>
+            </div>
+            <div className="email-variable-hint"><strong>Available variables</strong><code>{variableHint}</code></div>
+            {selected ? <small className="settings-muted">Saved version {selected.version} · updated {formatDate(selected.updated_at)}</small> : null}
+            {save.error ? <div className="error-banner">{save.error.message}</div> : null}
+            {save.isSuccess ? <div className="success-banner">Workspace email template saved.</div> : null}
+            <div className="settings-actions"><button className="button primary" disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Save template'}</button></div>
+          </form>
+        ) : null}
+      </section>
+    </div>
+  );
+}
 function DomainSettings() {
   const auth = useAuth();
   const queryClient = useQueryClient();
