@@ -201,6 +201,11 @@ enum AiExternalActionStatus {
   CANCELLED
 }
 
+enum ApiKeyStatus {
+  ACTIVE
+  REVOKED
+}
+
 model Organization {
   id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name                String                @db.VarChar(160)
@@ -246,6 +251,8 @@ model Organization {
   calendarConnections CalendarConnection[]
   calendarOAuthStates CalendarOAuthState[]
   aiExternalActions    AiExternalAction[]
+  apiKeys              ApiKey[]
+  webhookSubscriptions WebhookSubscription[]
 
   @@map("organizations")
 }
@@ -299,6 +306,8 @@ model Workspace {
   calendarConnections CalendarConnection[]
   calendarOAuthStates CalendarOAuthState[]
   aiExternalActions    AiExternalAction[]
+  apiKeys              ApiKey[]
+  webhookSubscriptions WebhookSubscription[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -346,6 +355,8 @@ model User {
   calendarConnections      CalendarConnection[]
   calendarOAuthStates      CalendarOAuthState[]
   approvedAiExternalActions AiExternalAction[] @relation("AiExternalActionApprover")
+  createdApiKeys          ApiKey[]                @relation("ApiKeyCreator")
+  createdWebhookSubscriptions WebhookSubscription[] @relation("WebhookSubscriptionCreator")
 
   @@index([status])
   @@map("users")
@@ -1245,6 +1256,52 @@ model QuestionVote {
   @@unique([questionId, voterKey])
   @@index([organizationId, workspaceId, questionId])
   @@map("question_votes")
+}
+
+
+model ApiKey {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  workspaceId    String       @map("workspace_id") @db.Uuid
+  createdById    String       @map("created_by_id") @db.Uuid
+  name           String       @db.VarChar(160)
+  prefix         String       @db.VarChar(24)
+  secretHash     String       @map("secret_hash") @db.VarChar(64)
+  scopes         Json         @default("[]")
+  status         ApiKeyStatus @default(ACTIVE)
+  lastUsedAt     DateTime?    @map("last_used_at") @db.Timestamptz(6)
+  expiresAt      DateTime?    @map("expires_at") @db.Timestamptz(6)
+  revokedAt      DateTime?    @map("revoked_at") @db.Timestamptz(6)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy      User         @relation("ApiKeyCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@unique([workspaceId, prefix])
+  @@index([organizationId, workspaceId, status, createdAt])
+  @@index([secretHash])
+  @@map("api_keys")
+}
+
+model WebhookSubscription {
+  id               String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String       @map("organization_id") @db.Uuid
+  workspaceId      String       @map("workspace_id") @db.Uuid
+  createdById      String       @map("created_by_id") @db.Uuid
+  name             String       @db.VarChar(160)
+  endpointUrl      String       @map("endpoint_url") @db.Text
+  eventTypes       Json         @default("[]") @map("event_types")
+  secretCiphertext String       @map("secret_ciphertext") @db.Text
+  enabled          Boolean      @default(true)
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace        Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy        User         @relation("WebhookSubscriptionCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, workspaceId, enabled, createdAt])
+  @@map("webhook_subscriptions")
 }
 
 model IdempotencyKey {
