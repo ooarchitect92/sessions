@@ -15,6 +15,7 @@ import type { Principal } from '../common/auth/principal';
 import { CreateMediaTokenDto } from './dto/create-media-token.dto';
 import { MediaRoomQueryDto } from './dto/media-room-query.dto';
 import { MuteMediaTrackDto } from './dto/mute-media-track.dto';
+import { UpdateMediaPublishingDto } from './dto/update-media-publishing.dto';
 import { MediaService } from './media.service';
 
 @ApiTags('media')
@@ -48,6 +49,24 @@ export class MediaController {
       participantIdentity,
       trackSid,
       body.muted,
+      query.breakoutRoomId,
+    );
+  }
+
+  @Patch(':id/media-participants/:participantIdentity/media-permissions')
+  setParticipantPublishing(
+    @CurrentPrincipal() principal: Principal,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) sessionId: string,
+    @Param('participantIdentity', new ParseUUIDPipe({ version: '4' }))
+    participantIdentity: string,
+    @Query() query: MediaRoomQueryDto,
+    @Body() body: UpdateMediaPublishingDto,
+  ) {
+    return this.media.setParticipantPublishing(
+      principal,
+      sessionId,
+      participantIdentity,
+      body.canPublish,
       query.breakoutRoomId,
     );
   }
