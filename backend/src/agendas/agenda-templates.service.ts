@@ -355,10 +355,10 @@ export class AgendaTemplatesService {
       if (!Number.isInteger(item.durationSeconds) || item.durationSeconds < 0 || item.durationSeconds > 86400) {
         throw new BadRequestException('Agenda template item duration is invalid');
       }
-      if (!['TEXT','PRESENTATION','WEBSITE','VIDEO','POLL','WHITEBOARD','BREAKOUT','QA','SCREEN_SHARE'].includes(item.type)) {
+      if (!['TEXT','PRESENTATION','WEBSITE','VIDEO','POLL','WHITEBOARD','BREAKOUT','QA','SCREEN_SHARE','COBROWSE'].includes(item.type)) {
         throw new BadRequestException('Agenda template item type is invalid');
       }
-      if (['WEBSITE', 'VIDEO', 'PRESENTATION'].includes(item.type)) {
+      if (['WEBSITE', 'VIDEO', 'PRESENTATION', 'COBROWSE'].includes(item.type)) {
         const url = item.content.url;
         if (url !== undefined) {
           if (typeof url !== 'string' || !url.trim()) {
