@@ -11,6 +11,7 @@ import { BillingModule } from "./billing/billing.module";
 import { CalendarModule } from "./calendar/calendar.module";
 import { BreakoutsModule } from "./breakouts/breakouts.module";
 import { CollaborationModule } from "./collaboration/collaboration.module";
+import { CobrowseModule } from "./cobrowse/cobrowse.module";
 import { ContentModule } from "./content/content.module";
 import { CustomDomainsModule } from "./custom-domains/custom-domains.module";
 import { PrincipalGuard } from "./common/auth/principal.guard";
@@ -73,6 +74,7 @@ import { WorkspacesModule } from "./workspaces/workspaces.module";
     BillingModule,
     BreakoutsModule,
     CollaborationModule,
+    CobrowseModule,
     ContentModule,
     MediaModule,
     RealtimeModule,
