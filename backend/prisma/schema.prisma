@@ -239,6 +239,27 @@ enum CustomDomainTlsStatus {
   ERROR
 }
 
+enum PlanCode {
+  FREE
+  PRO
+  BUSINESS
+  ENTERPRISE
+}
+
+enum WorkspaceSubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+}
+
+enum QuotaReservationStatus {
+  ACTIVE
+  COMMITTED
+  RELEASED
+  EXPIRED
+}
+
 model Organization {
   id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name                String                @db.VarChar(160)
@@ -291,6 +312,9 @@ model Organization {
   workspaceBrandings   WorkspaceBranding[]
   customDomains        CustomDomain[]
   workspaceAnalyticsDaily WorkspaceAnalyticsDaily[]
+  workspaceSubscriptions WorkspaceSubscription[]
+  usageLedgerEntries    UsageLedgerEntry[]
+  quotaReservations     QuotaReservation[]
 
   @@map("organizations")
 }
@@ -351,6 +375,9 @@ model Workspace {
   branding             WorkspaceBranding?
   customDomains        CustomDomain[]
   analyticsDaily       WorkspaceAnalyticsDaily[]
+  subscription         WorkspaceSubscription?
+  usageLedgerEntries   UsageLedgerEntry[]
+  quotaReservations    QuotaReservation[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -1376,6 +1403,72 @@ model WebhookDelivery {
   @@index([organizationId, workspaceId, status, nextAttemptAt])
   @@index([subscriptionId, createdAt])
   @@map("webhook_deliveries")
+}
+
+model WorkspaceSubscription {
+  id                     String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId         String                      @map("organization_id") @db.Uuid
+  workspaceId            String                      @unique @map("workspace_id") @db.Uuid
+  planCode               PlanCode                    @default(FREE) @map("plan_code")
+  status                 WorkspaceSubscriptionStatus @default(ACTIVE)
+  seatLimit              Int                         @default(5) @map("seat_limit")
+  seatsUsed              Int                         @default(0) @map("seats_used")
+  entitlements           Json                        @default("{}")
+  quotaLimits            Json                        @default("{}") @map("quota_limits")
+  provider               String?                     @db.VarChar(80)
+  providerCustomerId     String?                     @map("provider_customer_id") @db.VarChar(255)
+  providerSubscriptionId String?                     @map("provider_subscription_id") @db.VarChar(255)
+  currentPeriodStart     DateTime                    @map("current_period_start") @db.Timestamptz(6)
+  currentPeriodEnd       DateTime                    @map("current_period_end") @db.Timestamptz(6)
+  lastReconciledAt       DateTime?                   @map("last_reconciled_at") @db.Timestamptz(6)
+  createdAt              DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime                    @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization           Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace              Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerSubscriptionId])
+  @@index([organizationId, workspaceId, status])
+  @@map("workspace_subscriptions")
+}
+
+model UsageLedgerEntry {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  workspaceId    String       @map("workspace_id") @db.Uuid
+  metric         String       @db.VarChar(80)
+  quantity       BigInt
+  idempotencyKey String       @map("idempotency_key") @db.VarChar(200)
+  sourceType     String       @map("source_type") @db.VarChar(100)
+  sourceId       String?      @map("source_id") @db.VarChar(200)
+  occurredAt     DateTime     @default(now()) @map("occurred_at") @db.Timestamptz(6)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, idempotencyKey])
+  @@index([organizationId, workspaceId, metric, occurredAt])
+  @@map("usage_ledger_entries")
+}
+
+model QuotaReservation {
+  id             String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String                 @map("organization_id") @db.Uuid
+  workspaceId    String                 @map("workspace_id") @db.Uuid
+  metric         String                 @db.VarChar(80)
+  quantity       BigInt
+  reservationKey String                 @map("reservation_key") @db.VarChar(200)
+  status         QuotaReservationStatus @default(ACTIVE)
+  expiresAt      DateTime               @map("expires_at") @db.Timestamptz(6)
+  committedAt    DateTime?              @map("committed_at") @db.Timestamptz(6)
+  releasedAt     DateTime?              @map("released_at") @db.Timestamptz(6)
+  createdAt      DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, reservationKey])
+  @@index([organizationId, workspaceId, metric, status, expiresAt])
+  @@map("quota_reservations")
 }
 
 model WorkspaceAnalyticsDaily {
