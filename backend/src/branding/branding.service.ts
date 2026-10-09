@@ -416,6 +416,9 @@ export class BrandingService {
   }
 
   private normalizeHostname(value: string): string {
+    if (typeof value !== 'string') {
+      throw new BadRequestException('A hostname is required');
+    }
     const raw = value.trim().toLowerCase().replace(/\.$/, '');
     if (
       !raw ||
