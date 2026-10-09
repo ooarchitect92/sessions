@@ -477,6 +477,42 @@ export interface SessionAnalyticsRecord {
   engagement: Record<string, number>;
 }
 
+export interface BillingCurrentRecord {
+  subscription: {
+    id: string;
+    planCode: string;
+    status: string;
+    seatQuantity: number;
+    currentPeriodStart: string;
+    currentPeriodEnd: string;
+    cancelAtPeriodEnd: boolean;
+    provider: string | null;
+  };
+  plan: {
+    code: string;
+    name: string;
+    monthlyPriceCents: number;
+    currency: string;
+    limits: {
+      seats: number;
+      sessionsPerMonth: number;
+      eventsPerMonth: number;
+      bookingPages: number;
+      eventCapacity: number;
+    };
+    features: Record<string, boolean>;
+  };
+  usage: { seats: number; sessions: number; events: number; bookingPages: number };
+}
+
+export interface BillingPlanRecord {
+  code: string;
+  name: string;
+  monthly_price_cents: number;
+  currency: string;
+  limits: BillingCurrentRecord['plan']['limits'];
+  features: Record<string, boolean>;
+}
 export interface WorkspaceAnalyticsRecord {
   range: { from: string; to: string };
   overview: {
@@ -1423,6 +1459,13 @@ export const api = {
     );
   },
 
+  getBillingCurrent(): Promise<BillingCurrentRecord> {
+    return request<BillingCurrentRecord>('/billing/current');
+  },
+
+  listBillingPlans(): Promise<BillingPlanRecord[]> {
+    return request<BillingPlanRecord[]>('/billing/plans');
+  },
   getWorkspaceAnalytics(from?: string, to?: string): Promise<WorkspaceAnalyticsRecord> {
     const query = new URLSearchParams();
     if (from) query.set('from', from);
