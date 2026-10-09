@@ -1,4 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  type OnApplicationBootstrap,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Interval } from '@nestjs/schedule';
 import { EventStatus, SessionStatus } from '@prisma/client';
@@ -6,7 +10,9 @@ import { WorkerPrismaService } from '../database/worker-prisma.service';
 import { mergeAttendanceRanges } from './attendance-math';
 
 @Injectable()
-export class WorkspaceAnalyticsRollupWorker {
+export class WorkspaceAnalyticsRollupWorker
+  implements OnApplicationBootstrap
+{
   private readonly logger = new Logger(WorkspaceAnalyticsRollupWorker.name);
   private running = false;
 
@@ -14,6 +20,10 @@ export class WorkspaceAnalyticsRollupWorker {
     private readonly prisma: WorkerPrismaService,
     private readonly config: ConfigService,
   ) {}
+
+  onApplicationBootstrap(): void {
+    void this.runCycle();
+  }
 
   @Interval(5 * 60 * 1000)
   async runCycle(): Promise<void> {
