@@ -1548,6 +1548,9 @@ export const api = {
     const suffix = query.size ? `?${query.toString()}` : '';
     return request<AuditExportRecord>(`/governance/audit/export${suffix}`);
   },
+  getEnterpriseSsoLogoutUrl(): Promise<{ url: string | null }> {
+    return request<{ url: string | null }>('/enterprise/sso/logout-url');
+  },
   getEnterpriseIdentity(): Promise<EnterpriseIdentityConnectionRecord | null> {
     return request<EnterpriseIdentityConnectionRecord | null>('/enterprise/identity');
   },
