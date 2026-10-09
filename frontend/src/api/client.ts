@@ -542,10 +542,12 @@ export interface EnterpriseIdentityConnectionRecord {
   tokenEndpoint: string | null;
   userinfoEndpoint: string | null;
   jwksUri: string | null;
+  endSessionEndpoint: string | null;
   scopes: string[];
   emailDomains: string[];
   roleAttribute: string | null;
-  defaultRole: WorkspaceRole;
+  roleMappings: Record<string, Exclude<WorkspaceRole, 'OWNER'>>;
+  defaultRole: Exclude<WorkspaceRole, 'OWNER'>;
   createdAt: string;
   updatedAt: string;
 }
@@ -1561,9 +1563,11 @@ export const api = {
     tokenEndpoint?: string;
     userinfoEndpoint?: string;
     jwksUri?: string;
+    endSessionEndpoint?: string;
     scopes?: string[];
     emailDomains?: string[];
     roleAttribute?: string;
+    roleMappings?: Record<string, Exclude<WorkspaceRole, 'OWNER'>>;
     defaultRole?: Exclude<WorkspaceRole, 'OWNER'>;
   }): Promise<EnterpriseIdentityConnectionRecord> {
     return request<EnterpriseIdentityConnectionRecord>('/enterprise/identity', {
