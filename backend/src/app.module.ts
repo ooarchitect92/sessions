@@ -7,6 +7,7 @@ import { AnalyticsModule } from "./analytics/analytics.module";
 import { AiModule } from "./ai/ai.module";
 import { AuthModule } from "./auth/auth.module";
 import { BookingsModule } from "./bookings/bookings.module";
+import { BrandingModule } from "./branding/branding.module";
 import { CalendarModule } from "./calendar/calendar.module";
 import { BreakoutsModule } from "./breakouts/breakouts.module";
 import { CollaborationModule } from "./collaboration/collaboration.module";
@@ -62,6 +63,7 @@ import { WorkspacesModule } from "./workspaces/workspaces.module";
     AgendasModule,
     EventsModule,
     BookingsModule,
+    BrandingModule,
     BreakoutsModule,
     CollaborationModule,
     ContentModule,
