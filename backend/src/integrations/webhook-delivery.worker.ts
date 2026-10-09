@@ -162,7 +162,18 @@ export class WebhookDeliveryWorker {
       );
       const signature = signWebhookPayload(secret, timestamp, body);
 
+      let quotaReservationId: string | null = null;
       try {
+        const quotaReservation = await this.billing.reserveQuota({
+          organizationId: delivery.organizationId,
+          workspaceId: delivery.workspaceId,
+          metric: BILLING_METRICS.WEBHOOK_DELIVERIES,
+          quantity: 1n,
+          reservationKey: `webhook-delivery:${delivery.id}:attempt:${delivery.attempts + 1}`,
+          ttlSeconds: 15 * 60,
+        });
+        quotaReservationId = quotaReservation.id;
+
         const response = await this.http.post(
           delivery.subscription.endpointUrl,
           body,
@@ -194,21 +205,20 @@ export class WebhookDeliveryWorker {
           },
         });
         try {
-          await this.billing.recordUsage({
-            organizationId: delivery.organizationId,
-            workspaceId: delivery.workspaceId,
-            metric: BILLING_METRICS.WEBHOOK_DELIVERIES,
-            quantity: 1n,
-            idempotencyKey: `webhook-delivery:${delivery.id}`,
-            sourceType: 'webhook_delivery',
-            sourceId: delivery.id,
-          });
+          await this.billing.commitReservation(
+            quotaReservationId,
+            'webhook_delivery',
+            delivery.id,
+          );
         } catch (usageError: unknown) {
           this.logger.warn(
             `Webhook delivered but usage accounting failed for ${delivery.id}: ${usageError instanceof Error ? usageError.message : 'unknown'}`,
           );
         }
       } catch (error: unknown) {
+        if (quotaReservationId) {
+          await this.billing.releaseReservation(quotaReservationId);
+        }
         await this.handleFailure(delivery.id, error);
       }
     }
