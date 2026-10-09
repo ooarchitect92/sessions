@@ -166,6 +166,8 @@ export class AiExternalActionWorker {
   private async sendEmail(
     action: {
       id: string;
+      organizationId: string;
+      workspaceId: string;
       recipientEmail: string | null;
       subject: string | null;
       bodyText: string;
@@ -176,6 +178,8 @@ export class AiExternalActionWorker {
       throw new Error('followup_email_missing_recipient_or_subject');
     }
     const result = await this.email.send({
+      organizationId: action.organizationId,
+      workspaceId: action.workspaceId,
       to: action.recipientEmail,
       subject: action.subject,
       text: action.bodyText,
@@ -186,6 +190,8 @@ export class AiExternalActionWorker {
 
   private async writeCrmNote(
     action: {
+      organizationId: string;
+      workspaceId: string;
       targetProvider: string | null;
       targetRecordId: string | null;
       bodyText: string;
@@ -196,6 +202,8 @@ export class AiExternalActionWorker {
       throw new Error('crm_note_missing_target');
     }
     return this.crm.writeNote({
+      organizationId: action.organizationId,
+      workspaceId: action.workspaceId,
       targetProvider: action.targetProvider,
       targetRecordId: action.targetRecordId,
       note: action.bodyText,
