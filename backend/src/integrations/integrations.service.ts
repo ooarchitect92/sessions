@@ -8,6 +8,7 @@ import { TenantDatabaseService } from '../database/tenant-database.service';
 import { OutboxService } from '../outbox/outbox.service';
 import type { CreateApiKeyDto } from './dto/create-api-key.dto';
 import type { CreateWebhookSubscriptionDto } from './dto/create-webhook-subscription.dto';
+import { API_KEY_SCOPE_CATALOG, isApiKeyScope } from './api-key-scopes';
 
 const MAX_API_KEY_SCOPES = 50;
 const MAX_WEBHOOK_EVENT_TYPES = 100;
@@ -42,9 +43,18 @@ export class IntegrationsService {
     );
   }
 
+  listApiKeyScopes(principal: Principal) {
+    this.assertAdmin(principal);
+    return { scopes: API_KEY_SCOPE_CATALOG };
+  }
+
   async createApiKey(principal: Principal, input: CreateApiKeyDto) {
     this.assertAdmin(principal);
     const scopes = this.normalizeValues(input.scopes ?? [], MAX_API_KEY_SCOPES, 'scope');
+    const unsupportedScope = scopes.find((scope) => !isApiKeyScope(scope));
+    if (unsupportedScope) {
+      throw new BadRequestException(`Unsupported API key scope: ${unsupportedScope}`);
+    }
     const expiresAt = input.expiresAt ? new Date(input.expiresAt) : null;
     if (expiresAt && expiresAt.getTime() <= Date.now()) {
       throw new BadRequestException('API key expiry must be in the future');
