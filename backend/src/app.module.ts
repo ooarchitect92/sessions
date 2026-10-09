@@ -19,6 +19,7 @@ import { ApiEnvelopeInterceptor } from "./common/http/api-envelope.interceptor";
 import { ApiExceptionFilter } from "./common/http/api-exception.filter";
 import { PrismaModule } from "./database/prisma.module";
 import { EventsModule } from "./events/events.module";
+import { GovernanceModule } from "./governance/governance.module";
 import { EnterpriseIdentityModule } from "./enterprise/enterprise-identity.module";
 import { HealthModule } from "./health/health.module";
 import { InfrastructureModule } from "./infrastructure/infrastructure.module";
@@ -64,6 +65,7 @@ import { WorkspacesModule } from "./workspaces/workspaces.module";
     RoomsModule,
     AgendasModule,
     EventsModule,
+    GovernanceModule,
     EnterpriseIdentityModule,
     BookingsModule,
     BillingModule,
