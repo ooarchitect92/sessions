@@ -21,6 +21,8 @@ const environmentSchema = z
     AUTH_REQUIRE_EMAIL_VERIFICATION: optionalBoolean.default(false),
     ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().min(300).max(3600).default(900),
     REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).max(365).default(30),
+    API_KEY_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(1).max(10000).default(120),
+    CUSTOM_DOMAIN_CNAME_TARGET: z.string().min(4).max(253).default('domains.sessions.local'),
     AUTH_IP_HASH_PEPPER: z.string().min(32),
     AUTH_ENCRYPTION_KEY: z.string().regex(/^[a-fA-F0-9]{64}$/),
     MFA_ISSUER: z.string().min(1).max(100).default('Sessions'),
@@ -71,6 +73,12 @@ const environmentSchema = z
       .min(1024)
       .max(500 * 1024 * 1024)
       .default(25 * 1024 * 1024),
+    LIVE_CAPTION_MAX_CHUNK_BYTES: z.coerce
+      .number()
+      .int()
+      .min(64 * 1024)
+      .max(10 * 1024 * 1024)
+      .default(2 * 1024 * 1024),
     AI_PROVIDER: z.enum(['disabled', 'mock', 'openai']).default('disabled'),
     AI_OPENAI_API_KEY: z.string().min(1).optional(),
     AI_OPENAI_ENDPOINT: z
@@ -184,6 +192,13 @@ const environmentSchema = z
     }
 
     if (value.NODE_ENV !== 'production') return;
+
+    if (value.CUSTOM_DOMAIN_CNAME_TARGET.endsWith('.local')) {
+      issue(
+        'CUSTOM_DOMAIN_CNAME_TARGET',
+        'Production custom-domain CNAME target must be a publicly routable hostname',
+      );
+    }
 
     if (value.AUTH_MODE === 'development') {
       issue('AUTH_MODE', 'AUTH_MODE=development is forbidden in production');

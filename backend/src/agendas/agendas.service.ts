@@ -166,7 +166,11 @@ export class AgendasService {
       if (input.mode === 'REPLACE') {
         await transaction.session.update({
           where: { id: sessionId },
-          data: { currentAgendaItemId: null, version: { increment: 1 } },
+          data: {
+            currentAgendaItemId: null,
+            currentAgendaActivatedAt: null,
+            version: { increment: 1 },
+          },
         });
         await transaction.agendaItem.deleteMany({ where: { sessionId } });
       }
@@ -285,24 +289,29 @@ export class AgendasService {
       });
       if (!item) throw new NotFoundException('Agenda item not found');
 
+      const activatedAt = new Date();
       await transaction.session.update({
         where: { id: sessionId },
-        data: { currentAgendaItemId: agendaItemId, version: { increment: 1 } },
+        data: {
+          currentAgendaItemId: agendaItemId,
+          currentAgendaActivatedAt: activatedAt,
+          version: { increment: 1 },
+        },
       });
-      const activatedAt = new Date().toISOString();
+      const activatedAtIso = activatedAt.toISOString();
       await this.audit.record(transaction, principal, {
         action: 'agenda_item.activated',
         resourceType: 'agenda_item',
         resourceId: agendaItemId,
-        metadata: { sessionId, activatedAt },
+        metadata: { sessionId, activatedAt: activatedAtIso },
       });
       await this.outbox.enqueue(transaction, principal, {
         aggregateType: 'session',
         aggregateId: sessionId,
         eventType: 'agenda.item.activated',
-        payload: { sessionId, agendaItemId, activatedAt },
+        payload: { sessionId, agendaItemId, activatedAt: activatedAtIso },
       });
-      return { sessionId, agendaItem: item, activatedAt };
+      return { sessionId, agendaItem: item, activatedAt: activatedAtIso };
     });
     this.realtimeEvents.publishAgendaActivated(result);
     return result;
@@ -312,7 +321,7 @@ export class AgendasService {
     type: string;
     content: Record<string, unknown>;
   }): void {
-    if (!['WEBSITE', 'VIDEO', 'PRESENTATION'].includes(input.type)) return;
+    if (!['WEBSITE', 'VIDEO', 'PRESENTATION', 'COBROWSE'].includes(input.type)) return;
     const url = input.content.url;
     if (url === undefined) return;
     if (typeof url !== 'string' || !url.trim()) {

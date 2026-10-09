@@ -53,6 +53,7 @@ enum AgendaItemType {
   BREAKOUT
   QA
   SCREEN_SHARE
+  COBROWSE
 }
 
 enum EventStatus {
@@ -201,6 +202,18 @@ enum AiExternalActionStatus {
   CANCELLED
 }
 
+enum PrivacyRequestType {
+  EXPORT
+  ERASURE
+}
+
+enum PrivacyRequestStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
 model Organization {
   id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name                String                @db.VarChar(160)
@@ -246,6 +259,8 @@ model Organization {
   calendarConnections CalendarConnection[]
   calendarOAuthStates CalendarOAuthState[]
   aiExternalActions    AiExternalAction[]
+  privacyRequests      PrivacyRequest[]
+  agendaTemplates      AgendaTemplate[]
 
   @@map("organizations")
 }
@@ -299,6 +314,8 @@ model Workspace {
   calendarConnections CalendarConnection[]
   calendarOAuthStates CalendarOAuthState[]
   aiExternalActions    AiExternalAction[]
+  privacyRequests      PrivacyRequest[]
+  agendaTemplates      AgendaTemplate[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -346,11 +363,31 @@ model User {
   calendarConnections      CalendarConnection[]
   calendarOAuthStates      CalendarOAuthState[]
   approvedAiExternalActions AiExternalAction[] @relation("AiExternalActionApprover")
+  privacyRequests          PrivacyRequest[]
+  createdAgendaTemplates   AgendaTemplate[]          @relation("AgendaTemplateCreator")
 
   @@index([status])
   @@map("users")
 }
 
+model PrivacyRequest {
+  id             String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String               @map("organization_id") @db.Uuid
+  workspaceId    String               @map("workspace_id") @db.Uuid
+  userId         String               @map("user_id") @db.Uuid
+  type           PrivacyRequestType
+  status         PrivacyRequestStatus @default(COMPLETED)
+  metadata       Json                 @default("{}")
+  requestedAt    DateTime             @default(now()) @map("requested_at") @db.Timestamptz(6)
+  completedAt    DateTime?            @map("completed_at") @db.Timestamptz(6)
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, requestedAt])
+  @@index([organizationId, workspaceId, requestedAt])
+  @@map("privacy_requests")
+}
 model WorkspaceMembership {
   id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   organizationId String        @map("organization_id") @db.Uuid
@@ -404,6 +441,7 @@ model Session {
   recordingEnabled     Boolean              @default(false) @map("recording_enabled")
   transcriptionEnabled Boolean              @default(false) @map("transcription_enabled")
   currentAgendaItemId  String?              @map("current_agenda_item_id") @db.Uuid
+  currentAgendaActivatedAt DateTime?         @map("current_agenda_activated_at") @db.Timestamptz(6)
   livekitRoomName      String               @unique @map("livekit_room_name") @db.VarChar(200)
   version              Int                  @default(1)
   createdAt            DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -436,6 +474,26 @@ model Session {
   @@index([organizationId, workspaceId, startsAt])
   @@index([workspaceId, status, startsAt])
   @@map("sessions")
+}
+
+model AgendaTemplate {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  workspaceId    String       @map("workspace_id") @db.Uuid
+  createdById    String       @map("created_by_id") @db.Uuid
+  name           String       @db.VarChar(160)
+  description    String?      @db.VarChar(1000)
+  items          Json         @default("[]")
+  version        Int          @default(1)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy      User         @relation("AgendaTemplateCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@unique([workspaceId, name])
+  @@index([organizationId, workspaceId, createdAt])
+  @@map("agenda_templates")
 }
 
 model AgendaItem {
@@ -1052,6 +1110,23 @@ model WhiteboardOperation {
   @@map("whiteboard_operations")
 }
 
+model CobrowseState {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String   @map("organization_id") @db.Uuid
+  workspaceId      String   @map("workspace_id") @db.Uuid
+  sessionId        String   @unique @map("session_id") @db.Uuid
+  url              String?  @db.Text
+  active           Boolean  @default(false)
+  controllerUserId String?  @map("controller_user_id") @db.Uuid
+  startedById      String?  @map("started_by_id") @db.Uuid
+  version          Int      @default(1)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([organizationId, workspaceId, sessionId])
+  @@map("cobrowse_states")
+}
+
 model BreakoutRoom {
   id              String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   organizationId  String             @map("organization_id") @db.Uuid
@@ -1306,6 +1381,7 @@ model AuthSession {
   refreshTokenHash String        @map("refresh_token_hash") @db.VarChar(64)
   userAgent        String?       @map("user_agent") @db.VarChar(500)
   ipHash           String?       @map("ip_hash") @db.VarChar(64)
+  identityProvider String?       @map("identity_provider") @db.VarChar(32)
   expiresAt        DateTime      @map("expires_at") @db.Timestamptz(6)
   lastUsedAt       DateTime      @default(now()) @map("last_used_at") @db.Timestamptz(6)
   revokedAt        DateTime?     @map("revoked_at") @db.Timestamptz(6)

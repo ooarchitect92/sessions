@@ -8,6 +8,7 @@ import {
 import { Prisma, SessionStatus, type Session } from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
 import { AuditService } from '../audit/audit.service';
+import { BillingService } from '../billing/billing.service';
 import {
   HOST_ROLES,
   hasAnyRole,
@@ -32,6 +33,7 @@ export class SessionsService {
     private readonly audit: AuditService,
     private readonly outbox: OutboxService,
     private readonly memory: MemoryService,
+    private readonly billing: BillingService,
   ) {}
 
   async create(
@@ -67,6 +69,8 @@ export class SessionsService {
         return existing.response as Prisma.JsonObject;
       }
 
+      await this.billing.assertCanCreateSession(transaction, principal);
+
       if (input.roomId) {
         const room = await transaction.room.findUnique({ where: { id: input.roomId } });
         if (!room) throw new BadRequestException('The selected room does not exist');
@@ -93,6 +97,7 @@ export class SessionsService {
         },
       });
 
+      await this.billing.recordUsage(transaction, principal, 'session.created', 'session', session.id, 1, { kind: session.kind });
       const serialized = this.toJson(session);
       await this.audit.record(transaction, principal, {
         action: 'session.created',

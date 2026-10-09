@@ -24,6 +24,7 @@ function service(): EventsService {
     undefined as never,
     undefined as never,
     undefined as never,
+    undefined as never,
   );
 }
 

@@ -5,6 +5,7 @@ export const WHITEBOARD_OPERATION_KINDS = [
   'SHAPE_ADD',
   'NOTE_ADD',
   'TEXT_ADD',
+  'IMAGE_ADD',
   'OBJECT_REMOVE',
   'CLEAR',
 ] as const;

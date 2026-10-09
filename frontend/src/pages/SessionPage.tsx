@@ -1,11 +1,17 @@
 import '@livekit/components-styles';
-import { LiveKitRoom, VideoConference } from '@livekit/components-react';
+import { LiveKitRoom } from '@livekit/components-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { FormEvent, useState } from 'react';
+import { FormEvent, useState, type CSSProperties } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api, type MediaToken } from '../api/client';
 import { AgendaContentStage } from '../components/AgendaContentStage';
+import { AgendaRuntimeBar } from '../components/AgendaRuntimeBar';
+import { CoBrowseStage } from '../components/CoBrowseStage';
+import { DevicePreflight, type DevicePreferences } from '../components/DevicePreflight';
+import { MeetingConnectionStatus } from '../components/MeetingConnectionStatus';
+import { LiveCaptionsPanel } from '../components/LiveCaptionsPanel';
 import { SessionCollaborationPanel } from '../components/SessionCollaborationPanel';
+import { SpotlightVideoConference } from '../components/SpotlightVideoConference';
 import { WhiteboardStage } from '../components/WhiteboardStage';
 import { useSessionRealtime } from '../hooks/use-session-realtime';
 
@@ -20,8 +26,18 @@ export function SessionPage() {
   const { sessionId = '' } = useParams();
   const queryClient = useQueryClient();
   const [media, setMedia] = useState<MediaToken | null>(null);
+  const [mediaError, setMediaError] = useState<string | null>(null);
+  const [preflightOpen, setPreflightOpen] = useState(false);
+  const [devicePreferences, setDevicePreferences] = useState<DevicePreferences>({
+    cameraDeviceId: null,
+    microphoneDeviceId: null,
+    cameraEnabled: true,
+    microphoneEnabled: true,
+  });
   const [agendaEditorOpen, setAgendaEditorOpen] = useState(false);
   const [agendaAiPrompt, setAgendaAiPrompt] = useState('');
+  const [templateName, setTemplateName] = useState('');
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [agendaDraft, setAgendaDraft] = useState<Awaited<
     ReturnType<typeof api.generateAgendaDraft>
   > | null>(null);
@@ -30,6 +46,7 @@ export function SessionPage() {
   const [agendaUploadFile, setAgendaUploadFile] = useState<File | null>(null);
   const [agendaUploadProgress, setAgendaUploadProgress] = useState('');
   const [agendaDuration, setAgendaDuration] = useState(10);
+  const [draggedAgendaItemId, setDraggedAgendaItemId] = useState<string | null>(null);
   const [stageMode, setStageMode] = useState<'media' | 'content'>('media');
   const [agendaType, setAgendaType] = useState<
     | 'TEXT'
@@ -41,13 +58,24 @@ export function SessionPage() {
     | 'BREAKOUT'
     | 'QA'
     | 'SCREEN_SHARE'
+    | 'COBROWSE'
   >('TEXT');
   useSessionRealtime(sessionId);
+
+  const workspace = useQuery({
+    queryKey: ['workspace'],
+    queryFn: () => api.getCurrentWorkspace(),
+  });
 
   const session = useQuery({
     queryKey: ['session', sessionId],
     queryFn: () => api.getSession(sessionId),
     enabled: Boolean(sessionId),
+  });
+
+  const agendaTemplates = useQuery({
+    queryKey: ['agenda-templates'],
+    queryFn: () => api.listAgendaTemplates(),
   });
 
   const recordingConsent = useQuery({
@@ -90,7 +118,9 @@ export function SessionPage() {
       api.createMediaToken(sessionId, breakoutRoomId),
     onSuccess: (token) => {
       setStageMode('media');
+      setMediaError(null);
       setMedia(token);
+      setPreflightOpen(false);
     },
   });
 
@@ -98,6 +128,76 @@ export function SessionPage() {
     mutationFn: (agendaItemId: string) => api.activateAgendaItem(sessionId, agendaItemId),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+    },
+  });
+
+  const reorderAgenda = useMutation({
+    mutationFn: (itemIds: string[]) => api.reorderAgendaItems(sessionId, itemIds),
+    onSuccess: async () => {
+      setDraggedAgendaItemId(null);
+      await queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+    },
+  });
+
+  const saveAgendaTemplate = useMutation({
+    mutationFn: () => {
+      if (!templateName.trim()) throw new Error('Enter a template name');
+      return api.createAgendaTemplateFromSession(sessionId, {
+        name: templateName.trim(),
+      });
+    },
+    onSuccess: async (template) => {
+      setTemplateName('');
+      setSelectedTemplateId(template.id);
+      await queryClient.invalidateQueries({ queryKey: ['agenda-templates'] });
+    },
+  });
+
+  const applyAgendaTemplate = useMutation({
+    mutationFn: (mode: 'APPEND' | 'REPLACE') => {
+      if (!selectedTemplateId) throw new Error('Choose an agenda template');
+      return api.applyAgendaTemplate(selectedTemplateId, sessionId, mode);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+    },
+  });
+
+  const deleteAgendaTemplate = useMutation({
+    mutationFn: (templateId: string) => api.deleteAgendaTemplate(templateId),
+    onSuccess: async (_, templateId) => {
+      if (selectedTemplateId === templateId) setSelectedTemplateId('');
+      await queryClient.invalidateQueries({ queryKey: ['agenda-templates'] });
+    },
+  });
+
+  const importAgendaTemplate = useMutation({
+    mutationFn: async (file: File) => {
+      const parsed = JSON.parse(await file.text()) as {
+        name?: unknown;
+        description?: unknown;
+        items?: unknown;
+      };
+      if (
+        typeof parsed.name !== 'string' ||
+        !parsed.name.trim() ||
+        !Array.isArray(parsed.items)
+      ) {
+        throw new Error('Template JSON must contain a name and items array');
+      }
+      return api.createAgendaTemplate({
+        name: parsed.name.trim(),
+        ...(typeof parsed.description === 'string'
+          ? { description: parsed.description }
+          : {}),
+        items: parsed.items as Awaited<
+          ReturnType<typeof api.listAgendaTemplates>
+        >[number]['items'],
+      });
+    },
+    onSuccess: async (template) => {
+      setSelectedTemplateId(template.id);
+      await queryClient.invalidateQueries({ queryKey: ['agenda-templates'] });
     },
   });
 
@@ -208,21 +308,82 @@ export function SessionPage() {
       (typeof activeAgendaItem?.content.uploadId === 'string' &&
         activeAgendaItem.content.uploadId.trim().length > 0));
   const hasWhiteboard = activeAgendaItem?.type === 'WHITEBOARD';
-  const hasSharedStage = hasEmbedContent || hasWhiteboard;
+  const hasCobrowse = activeAgendaItem?.type === 'COBROWSE';
+  const hasSharedStage = hasEmbedContent || hasWhiteboard || hasCobrowse;
   const canStart = ['DRAFT', 'SCHEDULED'].includes(current.status);
   const canEnd = current.status === 'LIVE';
+  const canControlAgenda = ['OWNER', 'ADMIN', 'HOST'].includes(
+    workspace.data?.currentRole ?? '',
+  );
+  const canReorderAgenda =
+    canControlAgenda && ['DRAFT', 'SCHEDULED'].includes(current.status);
+  const activeAgendaIndex = current.agendaItems.findIndex(
+    (item) => item.id === current.currentAgendaItemId,
+  );
   const consentGranted =
     !current.recordingEnabled ||
     recordingConsent.data?.currentDecision === 'GRANTED';
 
+  const workspaceSettings =
+    workspace.data?.settings &&
+    typeof workspace.data.settings === 'object' &&
+    !Array.isArray(workspace.data.settings)
+      ? workspace.data.settings
+      : {};
+  const branding =
+    workspaceSettings.branding &&
+    typeof workspaceSettings.branding === 'object' &&
+    !Array.isArray(workspaceSettings.branding)
+      ? (workspaceSettings.branding as Record<string, unknown>)
+      : {};
+  const safeColor = (value: unknown, fallback: string) =>
+    typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value) ? value : fallback;
+  const primaryColor = safeColor(branding.primaryColor, '#2f6b5c');
+  const accentColor = safeColor(branding.accentColor, '#dcefe8');
+  const logoUrl =
+    typeof branding.logoUrl === 'string' && branding.logoUrl.startsWith('https://')
+      ? branding.logoUrl
+      : null;
+  const waitingRoomImageUrl =
+    typeof branding.waitingRoomImageUrl === 'string' &&
+    branding.waitingRoomImageUrl.startsWith('https://')
+      ? branding.waitingRoomImageUrl
+      : null;
+  const brandFont =
+    typeof branding.fontFamily === 'string' && branding.fontFamily.trim()
+      ? branding.fontFamily.trim()
+      : undefined;
+  const workspaceName = workspace.data?.name ?? 'Sessions';
+  const themeStyle = {
+    '--meeting-brand-primary': primaryColor,
+    '--meeting-brand-accent': accentColor,
+    ...(brandFont ? { fontFamily: brandFont } : {}),
+  } as CSSProperties;
+
   return (
-    <div className="session-workspace">
+    <div className="session-workspace workspace-branded-meeting" style={themeStyle}>
+      <DevicePreflight
+        open={preflightOpen}
+        initial={devicePreferences}
+        joining={join.isPending}
+        onCancel={() => setPreflightOpen(false)}
+        onJoin={(preferences) => {
+          setDevicePreferences(preferences);
+          join.mutate(undefined);
+        }}
+      />
       <header className="session-header">
         <div className="session-header-title">
           <Link to="/" className="back-link" aria-label="Back to overview">
             ←
           </Link>
           <div>
+            <div className="session-brand-row">
+              <span className="session-brand-mark">
+                {logoUrl ? <img src={logoUrl} alt="" /> : workspaceName.charAt(0).toUpperCase()}
+              </span>
+              <span>{workspaceName}</span>
+            </div>
             <div className="session-kicker">
               <span className={`status-badge status-${current.status.toLowerCase()}`}>
                 {current.status.toLowerCase()}
@@ -253,7 +414,7 @@ export function SessionPage() {
           ) : null}
           <button
             className="button primary"
-            onClick={() => join.mutate(undefined)}
+            onClick={() => setPreflightOpen(true)}
             disabled={join.isPending || !consentGranted}
           >
             {!consentGranted
@@ -312,6 +473,27 @@ export function SessionPage() {
         </section>
       ) : null}
 
+      {activeAgendaItem ? (
+        <AgendaRuntimeBar
+          title={activeAgendaItem.title}
+          durationSeconds={activeAgendaItem.durationSeconds}
+          activatedAt={current.currentAgendaActivatedAt}
+          position={activeAgendaIndex}
+          itemCount={current.agendaItems.length}
+          canControl={canControlAgenda}
+          pending={activate.isPending}
+          onPrevious={() => {
+            const previous = current.agendaItems[activeAgendaIndex - 1];
+            if (previous) activate.mutate(previous.id);
+          }}
+          onRestart={() => activate.mutate(activeAgendaItem.id)}
+          onNext={() => {
+            const next = current.agendaItems[activeAgendaIndex + 1];
+            if (next) activate.mutate(next.id);
+          }}
+        />
+      ) : null}
+
       <div className="meeting-layout">
         <aside className="agenda-rail">
           <div className="rail-heading">
@@ -328,9 +510,178 @@ export function SessionPage() {
               </button>
             </div>
             <span>{current.agendaItems.length} items</span>
+            {canReorderAgenda && current.agendaItems.length > 1 ? (
+              <small className="agenda-reorder-hint">
+                Drag agenda items to reorder them before the session starts.
+              </small>
+            ) : null}
+            {reorderAgenda.error ? (
+              <div className="error-banner compact-error">
+                {reorderAgenda.error.message}
+              </div>
+            ) : null}
           </div>
           {agendaEditorOpen ? (
             <div className="agenda-editor-stack">
+              <section className="agenda-ai-draft">
+                <div className="agenda-ai-heading">
+                  <div>
+                    <span className="eyebrow">Reusable templates</span>
+                    <strong>Save and reuse this run of show</strong>
+                  </div>
+                  <span className="review-pill">{agendaTemplates.data?.length ?? 0} saved</span>
+                </div>
+                <div className="agenda-form-grid">
+                  <label>
+                    Template
+                    <select
+                      value={selectedTemplateId}
+                      onChange={(event) => setSelectedTemplateId(event.target.value)}
+                    >
+                      <option value="">Choose template…</option>
+                      {agendaTemplates.data?.map((template) => (
+                        <option key={template.id} value={template.id}>
+                          {template.name} · {template.items.length} items
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Save current agenda as
+                    <input
+                      value={templateName}
+                      onChange={(event) => setTemplateName(event.target.value)}
+                      maxLength={160}
+                      placeholder="Sales demo"
+                    />
+                  </label>
+                </div>
+                <div className="agenda-draft-actions">
+                  <button
+                    type="button"
+                    className="button secondary"
+                    onClick={() => saveAgendaTemplate.mutate()}
+                    disabled={
+                      saveAgendaTemplate.isPending ||
+                      !templateName.trim() ||
+                      current.agendaItems.length === 0
+                    }
+                  >
+                    {saveAgendaTemplate.isPending ? 'Saving…' : 'Save template'}
+                  </button>
+                  <button
+                    type="button"
+                    className="button secondary"
+                    onClick={() => applyAgendaTemplate.mutate('APPEND')}
+                    disabled={!selectedTemplateId || applyAgendaTemplate.isPending}
+                  >
+                    Append template
+                  </button>
+                  <button
+                    type="button"
+                    className="button primary"
+                    onClick={() => {
+                      if (
+                        current.agendaItems.length === 0 ||
+                        window.confirm('Replace the current agenda with the selected template?')
+                      ) {
+                        applyAgendaTemplate.mutate('REPLACE');
+                      }
+                    }}
+                    disabled={!selectedTemplateId || applyAgendaTemplate.isPending}
+                  >
+                    Replace agenda
+                  </button>
+                </div>
+                {selectedTemplateId ? (
+                  <div className="agenda-draft-actions">
+                    <button
+                      type="button"
+                      className="button secondary"
+                      onClick={() => {
+                        const selected = agendaTemplates.data?.find(
+                          (template) => template.id === selectedTemplateId,
+                        );
+                        if (!selected) return;
+                        const blob = new Blob(
+                          [
+                            JSON.stringify(
+                              {
+                                name: selected.name,
+                                description: selected.description,
+                                items: selected.items,
+                              },
+                              null,
+                              2,
+                            ),
+                          ],
+                          { type: 'application/json;charset=utf-8' },
+                        );
+                        const url = URL.createObjectURL(blob);
+                        const anchor = document.createElement('a');
+                        anchor.href = url;
+                        anchor.download = `${selected.name
+                          .toLowerCase()
+                          .replace(/[^a-z0-9]+/g, '-')}-agenda-template.json`;
+                        document.body.appendChild(anchor);
+                        anchor.click();
+                        anchor.remove();
+                        URL.revokeObjectURL(url);
+                      }}
+                    >
+                      Export selected
+                    </button>
+                    <button
+                      type="button"
+                      className="button danger"
+                      disabled={deleteAgendaTemplate.isPending}
+                      onClick={() => {
+                      const selected = agendaTemplates.data?.find(
+                        (template) => template.id === selectedTemplateId,
+                      );
+                      if (
+                        selected &&
+                        window.confirm(`Delete agenda template "${selected.name}"?`)
+                      ) {
+                        deleteAgendaTemplate.mutate(selectedTemplateId);
+                        }
+                      }}
+                    >
+                      Delete selected template
+                    </button>
+                  </div>
+                ) : null}
+                <label>
+                  Import template JSON
+                  <input
+                    type="file"
+                    accept="application/json,.json"
+                    disabled={importAgendaTemplate.isPending}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) importAgendaTemplate.mutate(file);
+                      event.currentTarget.value = '';
+                    }}
+                  />
+                  <small>Imported templates are validated again by the backend before they are saved.</small>
+                </label>
+                {agendaTemplates.error ? (
+                  <div className="error-banner">{agendaTemplates.error.message}</div>
+                ) : null}
+                {saveAgendaTemplate.error ? (
+                  <div className="error-banner">{saveAgendaTemplate.error.message}</div>
+                ) : null}
+                {applyAgendaTemplate.error ? (
+                  <div className="error-banner">{applyAgendaTemplate.error.message}</div>
+                ) : null}
+                {deleteAgendaTemplate.error ? (
+                  <div className="error-banner">{deleteAgendaTemplate.error.message}</div>
+                ) : null}
+                {importAgendaTemplate.error ? (
+                  <div className="error-banner">{importAgendaTemplate.error.message}</div>
+                ) : null}
+              </section>
+
               <section className="agenda-ai-draft">
                 <div className="agenda-ai-heading">
                   <div>
@@ -487,6 +838,7 @@ export function SessionPage() {
                     <option value="BREAKOUT">Breakout</option>
                     <option value="QA">Q&amp;A</option>
                     <option value="SCREEN_SHARE">Screen share</option>
+                    <option value="COBROWSE">Co-browse / product demo</option>
                   </select>
                 </label>
               </div>
@@ -498,7 +850,8 @@ export function SessionPage() {
                 disabled={
                   createAgendaItem.isPending ||
                   !agendaTitle.trim() ||
-                  (agendaType === 'WEBSITE' && !agendaContentUrl.trim()) ||
+                  (['WEBSITE', 'COBROWSE'].includes(agendaType) &&
+                    !agendaContentUrl.trim()) ||
                   (['VIDEO', 'PRESENTATION'].includes(agendaType) &&
                     !agendaContentUrl.trim() &&
                     !agendaUploadFile)
@@ -520,13 +873,60 @@ export function SessionPage() {
               {current.agendaItems.map((item) => {
                 const active = current.currentAgendaItemId === item.id;
                 return (
-                  <li key={item.id} className={active ? 'agenda-item active' : 'agenda-item'}>
+                  <li
+                    key={item.id}
+                    className={[
+                      active ? 'agenda-item active' : 'agenda-item',
+                      draggedAgendaItemId === item.id ? 'dragging' : '',
+                      canReorderAgenda ? 'draggable' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    draggable={canReorderAgenda}
+                    onDragStart={(event) => {
+                      if (!canReorderAgenda) return;
+                      setDraggedAgendaItemId(item.id);
+                      event.dataTransfer.effectAllowed = 'move';
+                      event.dataTransfer.setData('text/plain', item.id);
+                    }}
+                    onDragEnd={() => setDraggedAgendaItemId(null)}
+                    onDragOver={(event) => {
+                      if (!canReorderAgenda || !draggedAgendaItemId) return;
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = 'move';
+                    }}
+                    onDrop={(event) => {
+                      if (!canReorderAgenda) return;
+                      event.preventDefault();
+                      const sourceId =
+                        draggedAgendaItemId ||
+                        event.dataTransfer.getData('text/plain');
+                      if (!sourceId || sourceId === item.id) return;
+
+                      const nextIds = current.agendaItems.map(
+                        (agendaItem) => agendaItem.id,
+                      );
+                      const fromIndex = nextIds.indexOf(sourceId);
+                      const toIndex = nextIds.indexOf(item.id);
+                      if (fromIndex < 0 || toIndex < 0) return;
+
+                      const [moved] = nextIds.splice(fromIndex, 1);
+                      if (!moved) return;
+                      nextIds.splice(toIndex, 0, moved);
+                      setDraggedAgendaItemId(null);
+                      reorderAgenda.mutate(nextIds);
+                    }}
+                  >
                     <button
                       onClick={() => {
                         if (
-                          ['WEBSITE', 'VIDEO', 'PRESENTATION', 'WHITEBOARD'].includes(
-                            item.type,
-                          )
+                          [
+                            'WEBSITE',
+                            'VIDEO',
+                            'PRESENTATION',
+                            'WHITEBOARD',
+                            'COBROWSE',
+                          ].includes(item.type)
                         ) {
                           setStageMode('content');
                         }
@@ -552,6 +952,13 @@ export function SessionPage() {
         </aside>
 
         <section className="meeting-stage">
+          {current.transcriptionEnabled ? (
+            <LiveCaptionsPanel
+              sessionId={sessionId}
+              canPublish={current.status === 'LIVE' && Boolean(media)}
+            />
+          ) : null}
+
           {hasSharedStage ? (
             <div className="stage-mode-switch" role="tablist" aria-label="Meeting stage mode">
               <button
@@ -559,7 +966,11 @@ export function SessionPage() {
                 className={stageMode === 'content' ? 'active' : ''}
                 onClick={() => setStageMode('content')}
               >
-                {hasWhiteboard ? 'Whiteboard' : 'Shared content'}
+                {hasWhiteboard
+                  ? 'Whiteboard'
+                  : hasCobrowse
+                    ? 'Co-browse'
+                    : 'Shared content'}
               </button>
               <button
                 type="button"
@@ -574,46 +985,112 @@ export function SessionPage() {
           {hasSharedStage && stageMode === 'content' && activeAgendaItem ? (
             hasWhiteboard ? (
               <WhiteboardStage sessionId={sessionId} title={activeAgendaItem.title} />
+            ) : hasCobrowse ? (
+              <CoBrowseStage
+                sessionId={sessionId}
+                item={activeAgendaItem}
+                sessionLive={current.status === 'LIVE'}
+              />
             ) : (
               <AgendaContentStage item={activeAgendaItem} />
             )
           ) : media ? (
             <LiveKitRoom
-              key={media.roomName}
+              key={`${media.roomName}:${media.expiresAt}`}
               token={media.token}
               serverUrl={media.url}
               connect
-              audio
-              video
+              audio={
+                devicePreferences.microphoneEnabled
+                  ? {
+                      ...(devicePreferences.microphoneDeviceId
+                        ? { deviceId: devicePreferences.microphoneDeviceId }
+                        : {}),
+                      echoCancellation: true,
+                      noiseSuppression: true,
+                      autoGainControl: true,
+                    }
+                  : false
+              }
+              video={
+                devicePreferences.cameraEnabled
+                  ? {
+                      ...(devicePreferences.cameraDeviceId
+                        ? { deviceId: devicePreferences.cameraDeviceId }
+                        : {}),
+                      resolution: { width: 1280, height: 720 },
+                    }
+                  : false
+              }
               data-lk-theme="default"
-              onDisconnected={() => setMedia(null)}
+              onConnected={() => setMediaError(null)}
+              onDisconnected={(reason) =>
+                setMediaError(
+                  reason === undefined
+                    ? 'The media room disconnected.'
+                    : `The media room disconnected: ${String(reason)}.`,
+                )
+              }
+              onError={(error) => setMediaError(error.message)}
+              onMediaDeviceFailure={(failure, kind) =>
+                setMediaError(
+                  `${kind ?? 'Media'} device failure: ${failure ?? 'unknown'}.`,
+                )
+              }
+              options={{
+                adaptiveStream: true,
+                dynacast: true,
+                disconnectOnPageLeave: true,
+              }}
             >
-              <VideoConference />
+              <MeetingConnectionStatus
+                error={mediaError}
+                retrying={join.isPending}
+                onRetry={() =>
+                  join.mutate(media.breakoutRoomId ?? undefined)
+                }
+              />
+              <SpotlightVideoConference />
             </LiveKitRoom>
           ) : (
-            <div className="stage-placeholder">
-              <div className="stage-orbit">
-                <span>S</span>
-              </div>
-              <span className="eyebrow">Secure media stage</span>
-              <h2>Ready when your participants are.</h2>
-              <p>
-                Joining requests a short-lived, room-scoped token from the backend. LiveKit
-                handles camera, microphone, screen sharing, adaptive subscriptions, and
-                reconnect behavior.
-              </p>
+            <div
+              className={waitingRoomImageUrl ? 'stage-placeholder branded-waiting-room has-image' : 'stage-placeholder branded-waiting-room'}
+              style={
+                waitingRoomImageUrl
+                  ? ({ '--waiting-room-image': `url("${waitingRoomImageUrl.replaceAll('"', '%22')}")` } as CSSProperties)
+                  : undefined
+              }
+            >
+              <div className="waiting-room-scrim" aria-hidden="true" />
+              <div className="waiting-room-content">
+                <div className="stage-orbit">
+                  <span>
+                    {logoUrl ? <img src={logoUrl} alt="" /> : workspaceName.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+                <span className="eyebrow">{workspaceName}</span>
+                <h2>Ready when your participants are.</h2>
+                <p>
+                  Joining requests a short-lived, room-scoped token from the backend. LiveKit
+                  handles camera, microphone, screen sharing, adaptive subscriptions, and
+                  reconnect behavior.
+                </p>
               {hasSharedStage ? (
                 <button
                   type="button"
                   className="button secondary large"
                   onClick={() => setStageMode('content')}
                 >
-                  {hasWhiteboard ? 'Open whiteboard' : 'Show shared content'}
+                  {hasWhiteboard
+                    ? 'Open whiteboard'
+                    : hasCobrowse
+                      ? 'Open co-browse'
+                      : 'Show shared content'}
                 </button>
               ) : null}
               <button
                 className="button primary large"
-                onClick={() => join.mutate(undefined)}
+                onClick={() => setPreflightOpen(true)}
                 disabled={join.isPending || !consentGranted}
               >
                 {!consentGranted
@@ -625,12 +1102,14 @@ export function SessionPage() {
               {join.error ? (
                 <div className="error-banner compact-error">{join.error.message}</div>
               ) : null}
+              </div>
             </div>
           )}
         </section>
 
         <SessionCollaborationPanel
           sessionId={sessionId}
+          activeBreakoutRoomId={media?.breakoutRoomId ?? null}
           onJoinBreakout={(roomId) => join.mutate(roomId)}
           onReturnMain={() => join.mutate(undefined)}
         />

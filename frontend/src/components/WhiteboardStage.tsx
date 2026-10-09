@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   type PointerEvent as ReactPointerEvent,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -12,6 +13,10 @@ import {
   type WhiteboardOperationRecord,
   type WhiteboardState,
 } from '../api/client';
+import {
+  publishWhiteboardCursor,
+  type WhiteboardCursorRealtimePayload,
+} from '../hooks/use-session-realtime';
 
 type Tool = 'pen' | 'rectangle' | 'note' | 'text' | 'eraser';
 type Point = { x: number; y: number };
@@ -42,7 +47,7 @@ function applyOperation(
   if (
     !rawObject ||
     typeof rawObject.id !== 'string' ||
-    !['stroke', 'shape', 'note', 'text'].includes(String(rawObject.type))
+    !['stroke', 'shape', 'note', 'text', 'image'].includes(String(rawObject.type))
   ) {
     return objects;
   }
@@ -85,6 +90,81 @@ function textValue(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
 
+function WhiteboardImageObject({
+  object,
+  erasing,
+  onRemove,
+}: {
+  object: WhiteboardObjectRecord;
+  erasing: boolean;
+  onRemove: () => void;
+}) {
+  const uploadId = textValue(object.uploadId);
+  const upload = useQuery({
+    queryKey: ['whiteboard-image-upload', uploadId],
+    queryFn: () => api.getUpload(uploadId),
+    enabled: Boolean(uploadId),
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === 'PENDING_SCAN' || status === 'SCANNING' ? 1500 : false;
+    },
+  });
+  const download = useQuery({
+    queryKey: ['whiteboard-image-download', uploadId],
+    queryFn: () => api.createUploadDownloadGrant(uploadId),
+    enabled: Boolean(uploadId && upload.data?.status === 'READY'),
+    staleTime: 4 * 60 * 1000,
+  });
+
+  const x = numberValue(object.x);
+  const y = numberValue(object.y);
+  const width = numberValue(object.width, 360);
+  const height = numberValue(object.height, 240);
+  const ready =
+    upload.data?.status === 'READY' &&
+    upload.data.mimeType.startsWith('image/') &&
+    Boolean(download.data?.url);
+  const failed =
+    Boolean(upload.error || download.error) ||
+    ['REJECTED', 'FAILED', 'DELETED'].includes(upload.data?.status ?? '');
+
+  return (
+    <g
+      className={erasing ? 'whiteboard-image-object erasing' : 'whiteboard-image-object'}
+      onPointerDown={(event) => {
+        if (!erasing) return;
+        event.stopPropagation();
+        onRemove();
+      }}
+    >
+      <rect
+        className="whiteboard-image-frame"
+        x={x}
+        y={y}
+        width={width}
+        height={height}
+        rx={12}
+      />
+      {ready ? (
+        <foreignObject x={x + 4} y={y + 4} width={Math.max(1, width - 8)} height={Math.max(1, height - 8)}>
+          <div className="whiteboard-image-inner">
+            <img src={download.data?.url} alt={textValue(object.filename) || 'Whiteboard image'} />
+          </div>
+        </foreignObject>
+      ) : (
+        <text
+          className={failed ? 'whiteboard-image-status error' : 'whiteboard-image-status'}
+          x={x + width / 2}
+          y={y + height / 2}
+          textAnchor="middle"
+        >
+          {failed ? 'Image unavailable' : 'Scanning image…'}
+        </text>
+      )}
+    </g>
+  );
+}
+
 export function WhiteboardStage({
   sessionId,
   title,
@@ -94,10 +174,16 @@ export function WhiteboardStage({
 }) {
   const queryClient = useQueryClient();
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const lastCursorSentAt = useRef(0);
   const [tool, setTool] = useState<Tool>('pen');
   const [strokePoints, setStrokePoints] = useState<Point[]>([]);
   const [shapeStart, setShapeStart] = useState<Point | null>(null);
   const [shapeCurrent, setShapeCurrent] = useState<Point | null>(null);
+  const [cursors, setCursors] = useState<
+    Record<string, WhiteboardCursorRealtimePayload>
+  >({});
+  const [imageProgress, setImageProgress] = useState('');
 
   const board = useQuery({
     queryKey: ['whiteboard', sessionId],
@@ -106,6 +192,45 @@ export function WhiteboardStage({
   });
 
   const objects = useMemo(() => materializeObjects(board.data), [board.data]);
+
+  useEffect(() => {
+    const eventName = `sessions:whiteboard-cursor:${sessionId}`;
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<WhiteboardCursorRealtimePayload>).detail;
+      if (!detail || detail.sessionId !== sessionId) return;
+      setCursors((current) => {
+        if (!detail.visible) {
+          if (!current[detail.userId]) return current;
+          const next = { ...current };
+          delete next[detail.userId];
+          return next;
+        }
+        return { ...current, [detail.userId]: detail };
+      });
+    };
+    window.addEventListener(eventName, handler);
+
+    const cleanup = window.setInterval(() => {
+      const cutoff = Date.now() - 10_000;
+      setCursors((current) => {
+        let changed = false;
+        const next = { ...current };
+        for (const [userId, cursor] of Object.entries(next)) {
+          if (Date.parse(cursor.occurredAt) < cutoff) {
+            delete next[userId];
+            changed = true;
+          }
+        }
+        return changed ? next : current;
+      });
+    }, 3000);
+
+    return () => {
+      window.removeEventListener(eventName, handler);
+      window.clearInterval(cleanup);
+      publishWhiteboardCursor(sessionId, { x: 0, y: 0, visible: false });
+    };
+  }, [sessionId]);
 
   const append = useMutation({
     mutationFn: ({
@@ -123,6 +248,61 @@ export function WhiteboardStage({
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['whiteboard', sessionId] });
     },
+  });
+
+  const uploadImage = useMutation({
+    mutationFn: async (file: File) => {
+      if (!file.type.startsWith('image/')) {
+        throw new Error('Choose a supported image file.');
+      }
+
+      setImageProgress('Preparing secure image upload…');
+      const prepared = await api.createUpload({
+        filename: file.name,
+        mimeType: file.type || 'application/octet-stream',
+        sizeBytes: file.size,
+        purpose: 'SESSION_RESOURCE',
+        sessionId,
+      });
+
+      setImageProgress('Uploading image to quarantine…');
+      const response = await fetch(prepared.upload.url, {
+        method: prepared.upload.method,
+        body: file,
+        headers: { 'content-type': file.type || 'application/octet-stream' },
+      });
+      if (!response.ok) {
+        throw new Error(`Secure image upload failed with status ${response.status}`);
+      }
+
+      setImageProgress('Scanning image before sharing…');
+      await api.completeUpload(prepared.asset.id);
+
+      const width = 360;
+      const height = 240;
+      await api.appendWhiteboardOperation(sessionId, {
+        clientOperationId: crypto.randomUUID(),
+        kind: 'IMAGE_ADD',
+        payload: {
+          object: {
+            id: crypto.randomUUID(),
+            type: 'image',
+            uploadId: prepared.asset.id,
+            filename: file.name,
+            x: (WIDTH - width) / 2,
+            y: (HEIGHT - height) / 2,
+            width,
+            height,
+          },
+        },
+      });
+    },
+    onSuccess: async () => {
+      setImageProgress('');
+      if (imageInputRef.current) imageInputRef.current.value = '';
+      await queryClient.invalidateQueries({ queryKey: ['whiteboard', sessionId] });
+    },
+    onError: () => setImageProgress(''),
   });
 
   const pointFor = (event: ReactPointerEvent<SVGSVGElement>): Point | null => {
@@ -199,12 +379,26 @@ export function WhiteboardStage({
     const point = pointFor(event);
     if (!point) return;
 
+    const now = performance.now();
+    if (now - lastCursorSentAt.current >= 45) {
+      lastCursorSentAt.current = now;
+      publishWhiteboardCursor(sessionId, {
+        x: point.x,
+        y: point.y,
+        visible: true,
+      });
+    }
+
     if (tool === 'pen' && strokePoints.length > 0) {
       setStrokePoints((points) =>
         points.length >= 800 ? points : [...points, point],
       );
     }
     if (tool === 'rectangle' && shapeStart) setShapeCurrent(point);
+  };
+
+  const handlePointerLeave = () => {
+    publishWhiteboardCursor(sessionId, { x: 0, y: 0, visible: false });
   };
 
   const handlePointerUp = () => {
@@ -283,7 +477,8 @@ export function WhiteboardStage({
         <div>
           <strong>{title}</strong>
           <span>
-            Synced · v{board.data?.version ?? 0}
+            Synced · v{board.data?.version ?? 0} · {Object.keys(cursors).length} collaborator
+            {Object.keys(cursors).length === 1 ? '' : 's'} active
             {append.isPending ? ' · saving…' : ''}
           </span>
         </div>
@@ -306,6 +501,23 @@ export function WhiteboardStage({
               {label}
             </button>
           ))}
+          <button
+            type="button"
+            disabled={uploadImage.isPending}
+            onClick={() => imageInputRef.current?.click()}
+          >
+            {uploadImage.isPending ? 'Uploading…' : 'Image'}
+          </button>
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) uploadImage.mutate(file);
+            }}
+          />
           <button type="button" className="danger-tool" onClick={clearBoard}>
             Clear
           </button>
@@ -321,6 +533,7 @@ export function WhiteboardStage({
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerUp}
+          onPointerLeave={handlePointerLeave}
         >
           <rect width={WIDTH} height={HEIGHT} className="whiteboard-background" />
 
@@ -390,6 +603,17 @@ export function WhiteboardStage({
               );
             }
 
+            if (object.type === 'image') {
+              return (
+                <WhiteboardImageObject
+                  key={object.id}
+                  object={object}
+                  erasing={tool === 'eraser'}
+                  onRemove={() => removeObject(object.id)}
+                />
+              );
+            }
+
             return (
               <text
                 key={object.id}
@@ -406,6 +630,19 @@ export function WhiteboardStage({
               </text>
             );
           })}
+
+          {Object.values(cursors).map((cursor) => (
+            <g
+              key={cursor.userId}
+              className="whiteboard-collaborator-cursor"
+              transform={`translate(${cursor.x} ${cursor.y})`}
+              pointerEvents="none"
+            >
+              <path d="M0 0 L0 24 L7 17 L13 30 L18 27 L12 15 L23 15 Z" />
+              <rect x={18} y={20} width={Math.max(72, cursor.displayName.length * 7 + 18)} height={24} rx={8} />
+              <text x={27} y={36}>{cursor.displayName.slice(0, 28)}</text>
+            </g>
+          ))}
 
           {strokePoints.length > 1 ? (
             <polyline
@@ -427,6 +664,12 @@ export function WhiteboardStage({
         </svg>
       </div>
 
+      {imageProgress ? (
+        <div className="whiteboard-upload-status">{imageProgress}</div>
+      ) : null}
+      {uploadImage.error ? (
+        <div className="error-banner whiteboard-error">{uploadImage.error.message}</div>
+      ) : null}
       {append.error ? (
         <div className="error-banner whiteboard-error">{append.error.message}</div>
       ) : null}

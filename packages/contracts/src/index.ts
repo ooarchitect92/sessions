@@ -31,6 +31,7 @@ export const AgendaItemTypeSchema = z.enum([
   'BREAKOUT',
   'QA',
   'SCREEN_SHARE',
+  'COBROWSE',
 ]);
 
 export const EventStatusSchema = z.enum(['DRAFT', 'PUBLISHED', 'LIVE', 'ENDED', 'CANCELLED']);
@@ -173,6 +174,7 @@ export const SessionSchema = z.object({
   recordingEnabled: z.boolean(),
   transcriptionEnabled: z.boolean(),
   currentAgendaItemId: z.uuid().nullable(),
+  currentAgendaActivatedAt: z.iso.datetime().nullable(),
   version: z.number().int().positive(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),

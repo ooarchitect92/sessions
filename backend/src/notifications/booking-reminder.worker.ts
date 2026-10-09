@@ -10,6 +10,8 @@ import {
 import { WorkerPrismaService } from '../database/worker-prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { EmailDeliveryProvider } from './email-delivery.provider';
+import { renderWorkspaceEmailTemplate } from './workspace-email-template';
+import { renderBrandedEmailHtml, workspaceEmailBrand } from './branded-email.renderer';
 
 const REMINDERS = [
   {
@@ -237,14 +239,64 @@ export class BookingReminderWorker {
         const title =
           delivery.bookingReservation.session?.title ??
           delivery.bookingReservation.bookingPage.title;
+        const configured = await this.prisma.$queryRaw<Array<{
+          enabled: boolean;
+          subject: string;
+          body_text: string;
+          signature: string;
+        }>>`
+          SELECT enabled, subject, body_text, signature
+          FROM workspace_email_templates
+          WHERE workspace_id = ${delivery.workspaceId}::uuid
+            AND kind = ${delivery.kind}
+          LIMIT 1
+        `;
+        const template = configured[0];
+        if (template && !template.enabled) {
+          await this.prisma.notificationDelivery.update({
+            where: { id: delivery.id },
+            data: {
+              status: NotificationStatus.CANCELLED,
+              nextAttemptAt: null,
+              lastError: 'workspace_template_disabled',
+            },
+          });
+          continue;
+        }
+        const variables = {
+          booking_title: title,
+          attendee_name: delivery.bookingReservation.name,
+          booking_time: startsAt,
+          booking_timezone: delivery.bookingReservation.bookingPage.timezone,
+        };
+        const fallbackSubject = `Reminder: ${title} starts in ${definition.label}`;
+        const fallbackBody = [
+          `Your scheduled session "${title}" starts in ${definition.label}.`,
+          `Time: ${startsAt} (${delivery.bookingReservation.bookingPage.timezone})`,
+          'Open your Sessions booking confirmation to manage or cancel this meeting.',
+        ].join('\n\n');
+        const subject = template
+          ? renderWorkspaceEmailTemplate(template.subject, variables).slice(0, 240)
+          : fallbackSubject;
+        const body = template
+          ? renderWorkspaceEmailTemplate(
+              template.body_text + (template.signature.trim() ? '\n\n' + template.signature : ''),
+              variables,
+            )
+          : fallbackBody;
+        const workspace = await this.prisma.workspace.findUnique({
+          where: { id: delivery.workspaceId },
+          select: { name: true, settings: true },
+        });
         const result = await this.provider.send({
           to: delivery.recipientEmail,
-          subject: `Reminder: ${title} starts in ${definition.label}`,
-          text: [
-            `Your scheduled session "${title}" starts in ${definition.label}.`,
-            `Time: ${startsAt} (${delivery.bookingReservation.bookingPage.timezone})`,
-            'Open your Sessions booking confirmation to manage or cancel this meeting.',
-          ].join('\n\n'),
+          subject,
+          text: body,
+          html: renderBrandedEmailHtml({
+            brand: workspaceEmailBrand(workspace),
+            heading: title,
+            text: body,
+          }),
           idempotencyKey: `booking-reminder:${delivery.id}`,
         });
 

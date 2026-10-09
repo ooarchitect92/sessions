@@ -18,6 +18,7 @@ import {
 } from "@prisma/client";
 import { createHash, randomUUID } from "node:crypto";
 import { AuditService } from "../audit/audit.service";
+import { BillingService } from "../billing/billing.service";
 import {
   HOST_ROLES,
   hasAnyRole,
@@ -54,6 +55,7 @@ export class EventsService {
     private readonly publicDatabase: WorkerPrismaService,
     private readonly audit: AuditService,
     private readonly outbox: OutboxService,
+    private readonly billing: BillingService,
   ) {}
 
   async create(
@@ -87,6 +89,8 @@ export class EventsService {
         }
         return existing.response as Prisma.JsonObject;
       }
+
+      await this.billing.assertCanCreateEvent(transaction, principal, input.capacity);
 
       const duplicate = await transaction.event.findUnique({
         where: {
@@ -129,28 +133,52 @@ export class EventsService {
           isPublic: true,
         },
       });
+      const workspaceTemplates = await transaction.$queryRaw<Array<{
+        kind: string;
+        enabled: boolean;
+        subject: string;
+        body_text: string;
+        signature: string;
+      }>>`
+        SELECT kind, enabled, subject, body_text, signature
+        FROM workspace_email_templates
+        WHERE kind IN ('EVENT_REMINDER_24H', 'EVENT_REMINDER_1H')
+      `;
+      const byKind = new Map(workspaceTemplates.map((item) => [item.kind, item]));
+      const eventTemplate = (
+        kind: EventReminderKind,
+        fallbackSubject: string,
+        fallbackBody: string,
+      ) => {
+        const configured = byKind.get(kind);
+        const signature = configured?.signature?.trim();
+        return {
+          organizationId: principal.organizationId,
+          workspaceId: principal.workspaceId,
+          eventId: event.id,
+          kind,
+          enabled: configured?.enabled ?? true,
+          subject: configured?.subject ?? fallbackSubject,
+          bodyText: configured
+            ? configured.body_text + (signature ? "\n\n" + signature : "")
+            : fallbackBody,
+        };
+      };
       await transaction.eventNotificationTemplate.createMany({
         data: [
-          {
-            organizationId: principal.organizationId,
-            workspaceId: principal.workspaceId,
-            eventId: event.id,
-            kind: EventReminderKind.EVENT_REMINDER_24H,
-            subject: "Reminder: {{event_title}} starts tomorrow",
-            bodyText:
-              "Hi {{attendee_name}},\n\n{{event_title}} starts in 24 hours.\n\nTime: {{event_time}} ({{event_timezone}})\n\nWe look forward to seeing you.",
-          },
-          {
-            organizationId: principal.organizationId,
-            workspaceId: principal.workspaceId,
-            eventId: event.id,
-            kind: EventReminderKind.EVENT_REMINDER_1H,
-            subject: "Reminder: {{event_title}} starts in 1 hour",
-            bodyText:
-              "Hi {{attendee_name}},\n\n{{event_title}} starts in 1 hour.\n\nTime: {{event_time}} ({{event_timezone}})\n\nYour event is coming up soon.",
-          },
+          eventTemplate(
+            EventReminderKind.EVENT_REMINDER_24H,
+            "Reminder: {{event_title}} starts tomorrow",
+            "Hi {{attendee_name}},\n\n{{event_title}} starts in 24 hours.\n\nTime: {{event_time}} ({{event_timezone}})\n\nWe look forward to seeing you.",
+          ),
+          eventTemplate(
+            EventReminderKind.EVENT_REMINDER_1H,
+            "Reminder: {{event_title}} starts in 1 hour",
+            "Hi {{attendee_name}},\n\n{{event_title}} starts in 1 hour.\n\nTime: {{event_time}} ({{event_timezone}})\n\nYour event is coming up soon.",
+          ),
         ],
       });
+      await this.billing.recordUsage(transaction, principal, 'event.created', 'event', event.id, 1, { capacity: event.capacity ?? null });
       const response = this.toJson(event);
       await this.audit.record(transaction, principal, {
         action: "event.created",
@@ -672,6 +700,7 @@ export class EventsService {
       eventSlug,
     );
     return {
+      workspaceBranding: await this.workspaceBranding(event.workspaceId),
       id: event.id,
       slug: event.slug,
       title: event.title,
@@ -795,6 +824,34 @@ export class EventsService {
     return event;
   }
 
+  private async workspaceBranding(workspaceId: string) {
+    const workspace = await this.publicDatabase.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { name: true, settings: true },
+    });
+    if (!workspace) return null;
+    const settings =
+      workspace.settings && typeof workspace.settings === 'object' && !Array.isArray(workspace.settings)
+        ? (workspace.settings as Record<string, unknown>)
+        : {};
+    const branding =
+      settings.branding && typeof settings.branding === 'object' && !Array.isArray(settings.branding)
+        ? (settings.branding as Record<string, unknown>)
+        : {};
+    return {
+      workspaceName: workspace.name,
+      logoUrl: typeof branding.logoUrl === 'string' ? branding.logoUrl : null,
+      primaryColor:
+        typeof branding.primaryColor === 'string' ? branding.primaryColor : null,
+      accentColor:
+        typeof branding.accentColor === 'string' ? branding.accentColor : null,
+      fontFamily: typeof branding.fontFamily === 'string' ? branding.fontFamily : null,
+      waitingRoomImageUrl:
+        typeof branding.waitingRoomImageUrl === 'string'
+          ? branding.waitingRoomImageUrl
+          : null,
+    };
+  }
   private async throwUpdateConflict(
     transaction: Prisma.TransactionClient,
     id: string,

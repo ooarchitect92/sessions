@@ -15,6 +15,7 @@ import { AcceptInvitationPage } from './pages/auth/AcceptInvitationPage';
 import { LoginPage } from './pages/auth/LoginPage';
 import { ResetPasswordPage } from './pages/auth/ResetPasswordPage';
 import { SignUpPage } from './pages/auth/SignUpPage';
+import { SsoCallbackPage } from './pages/auth/SsoCallbackPage';
 import { VerifyEmailPage } from './pages/auth/VerifyEmailPage';
 
 function ShelledRoutes() {
@@ -48,6 +49,7 @@ export function App() {
     <Routes>
       <Route path="/auth/login" element={<LoginPage />} />
       <Route path="/auth/signup" element={<SignUpPage />} />
+      <Route path="/auth/sso/callback" element={<SsoCallbackPage />} />
       <Route path="/auth/invitations/accept" element={<AcceptInvitationPage />} />
       <Route path="/auth/verify-email" element={<VerifyEmailPage />} />
       <Route path="/auth/reset-password" element={<ResetPasswordPage />} />

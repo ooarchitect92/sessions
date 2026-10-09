@@ -11,6 +11,26 @@ function formatSessionTime(value: string): string {
   }).format(new Date(value));
 }
 
+function csvCell(value: unknown): string {
+  const text = String(value ?? '');
+  return /[\",\n]/.test(text) ? `\"${text.replaceAll('\"', '\"\"')}\"` : text;
+}
+
+function downloadAnalyticsCsv(input: { filename: string; columns: string[]; rows: Array<Record<string, unknown>> }) {
+  const csv = [
+    input.columns.map(csvCell).join(','),
+    ...input.rows.map((row) => input.columns.map((column) => csvCell(row[column])).join(',')),
+  ].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = input.filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
 function statusClass(status: Session['status']): string {
   return `status-badge status-${status.toLowerCase()}`;
 }
@@ -153,6 +173,14 @@ export function DashboardPage() {
     queryKey: ['sessions'],
     queryFn: () => api.listSessions(),
   });
+  const analytics = useQuery({
+    queryKey: ['workspace-analytics', '30d'],
+    queryFn: () => api.getWorkspaceAnalytics(),
+  });
+  const exportAnalytics = useMutation({
+    mutationFn: () => api.exportWorkspaceAnalytics(),
+    onSuccess: (result) => downloadAnalyticsCsv(result),
+  });
   const instant = useMutation({
     mutationFn: async () => {
       const now = new Date();
@@ -202,13 +230,13 @@ export function DashboardPage() {
         </article>
         <article className="metric-card">
           <span className="metric-icon">◇</span>
-          <div><strong>0</strong><span>Memory items</span></div>
-          <small>Recording pipeline comes next</small>
+          <div><strong>{analytics.data?.overview.uniqueAttendees ?? 0}</strong><span>Unique attendees</span></div>
+          <small>Last 30 days</small>
         </article>
         <article className="metric-card">
           <span className="metric-icon">↗</span>
-          <div><strong>—</strong><span>Engagement</span></div>
-          <small>Analytics events not active yet</small>
+          <div><strong>{analytics.data?.overview.engagementEvents ?? 0}</strong><span>Engagement events</span></div>
+          <small>{analytics.data ? `${analytics.data.overview.eventAttendanceRate}% event attendance` : 'Loading workspace analytics'}</small>
         </article>
       </section>
 
@@ -274,6 +302,52 @@ export function DashboardPage() {
             </ul>
           </section>
         </aside>
+      </section>
+
+      <section className="panel workspace-analytics-panel">
+        <div className="panel-header">
+          <div>
+            <span className="eyebrow">Workspace analytics</span>
+            <h2>Performance · last 30 days</h2>
+          </div>
+          <button
+            className="button secondary"
+            type="button"
+            disabled={exportAnalytics.isPending}
+            onClick={() => exportAnalytics.mutate()}
+          >
+            {exportAnalytics.isPending ? 'Preparing export…' : 'Export CSV'}
+          </button>
+        </div>
+        {analytics.isLoading ? <div className="empty-state">Loading analytics…</div> : null}
+        {analytics.error ? <div className="error-banner">{analytics.error.message}</div> : null}
+        {exportAnalytics.error ? <div className="error-banner">{exportAnalytics.error.message}</div> : null}
+        {analytics.data ? (
+          <>
+            <div className="analytics-summary-grid">
+              <article><span>Sessions</span><strong>{analytics.data.overview.sessions}</strong><small>{analytics.data.overview.completedSessions} completed</small></article>
+              <article><span>Attendance time</span><strong>{Math.round(analytics.data.overview.totalAttendanceSeconds / 3600)}h</strong><small>{analytics.data.overview.uniqueAttendees} unique attendees</small></article>
+              <article><span>Event registrations</span><strong>{analytics.data.overview.eventRegistrations}</strong><small>{analytics.data.overview.eventAttendanceRate}% attendance</small></article>
+              <article><span>Bookings</span><strong>{analytics.data.overview.bookings}</strong><small>{analytics.data.overview.bookingConversionRate}% confirmed/completed</small></article>
+            </div>
+            <div className="analytics-table-wrap">
+              <table className="analytics-table">
+                <thead><tr><th>Top session</th><th>Attendees</th><th>Attendance</th><th>Engagement</th></tr></thead>
+                <tbody>
+                  {analytics.data.topSessions.map((item) => (
+                    <tr key={item.id}>
+                      <td><Link to={`/sessions/${item.id}`}>{item.title}</Link><small>{formatSessionTime(item.startsAt)}</small></td>
+                      <td>{item.uniqueAttendees}</td>
+                      <td>{Math.round(item.attendanceSeconds / 60)} min</td>
+                      <td>{item.engagementEvents}</td>
+                    </tr>
+                  ))}
+                  {analytics.data.topSessions.length === 0 ? <tr><td colSpan={4}>No sessions in this analytics window.</td></tr> : null}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ) : null}
       </section>
 
       {dialogOpen ? <CreateSessionDialog onClose={() => setDialogOpen(false)} /> : null}

@@ -1,4 +1,4 @@
-import { Controller, Get, Param, ParseUUIDPipe } from '@nestjs/common';
+import { Controller, Get, Param, ParseUUIDPipe, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentPrincipal } from '../common/auth/current-principal.decorator';
 import type { Principal } from '../common/auth/principal';
@@ -10,6 +10,23 @@ import { AnalyticsService } from './analytics.service';
 export class AnalyticsController {
   constructor(private readonly analytics: AnalyticsService) {}
 
+  @Get('workspace')
+  workspaceAnalytics(
+    @CurrentPrincipal() principal: Principal,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.analytics.workspaceAnalytics(principal, from, to);
+  }
+
+  @Get('workspace/export')
+  workspaceExport(
+    @CurrentPrincipal() principal: Principal,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.analytics.workspaceExport(principal, from, to);
+  }
   @Get('sessions/:sessionId')
   sessionAnalytics(
     @CurrentPrincipal() principal: Principal,

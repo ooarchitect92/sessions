@@ -11,7 +11,7 @@ import {
   WebSocketGateway,
   WebSocketServer,
 } from "@nestjs/websockets";
-import type { AgendaItem } from "@prisma/client";
+import { SessionStatus, type AgendaItem } from "@prisma/client";
 import type { Server, Socket } from "socket.io";
 import type { Subscription } from "rxjs";
 import { z } from "zod";
@@ -21,6 +21,7 @@ import { AuthService } from "../auth/auth.service";
 import type { AccessTokenClaims, Principal } from "../common/auth/principal";
 import { RealtimeEventsService } from "../infrastructure/realtime-events.service";
 import { SessionsService } from "../sessions/sessions.service";
+import { TranscriptionProviderService } from "../transcription/transcription-provider.service";
 
 const principalSchema = z.object({
   sub: z.string().uuid(),
@@ -40,9 +41,43 @@ const activateSchema = z.object({
   agendaItemId: z.string().uuid(),
 });
 
+const whiteboardCursorSchema = z.object({
+  sessionId: z.string().uuid(),
+  x: z.number().finite().min(0).max(1000),
+  y: z.number().finite().min(0).max(650),
+  visible: z.boolean().default(true),
+});
+
+const captionAudioSchema = z.object({
+  sessionId: z.string().uuid(),
+  sequence: z.number().int().min(0).max(1_000_000),
+  mimeType: z
+    .string()
+    .trim()
+    .min(1)
+    .max(120)
+    .refine(
+      (value) =>
+        [
+          "audio/webm",
+          "audio/webm;codecs=opus",
+          "audio/ogg",
+          "audio/ogg;codecs=opus",
+          "audio/mp4",
+          "audio/mp4;codecs=mp4a.40.2",
+        ].includes(value.toLowerCase()),
+      "Unsupported live-caption audio format",
+    ),
+  language: z.string().trim().min(2).max(32).optional().nullable(),
+  audio: z.unknown(),
+});
+
 type SocketData = {
   principal?: Principal;
   sessionIds?: Set<string>;
+  whiteboardCursorSentAt?: Map<string, number>;
+  captionAcceptedAt?: Map<string, number>;
+  captionInFlight?: Set<string>;
 };
 
 type AuthenticatedSocket = Socket & { data: SocketData };
@@ -79,6 +114,7 @@ export class RealtimeGateway
     private readonly sessions: SessionsService,
     private readonly agendas: AgendasService,
     private readonly realtimeEvents: RealtimeEventsService,
+    private readonly transcription: TranscriptionProviderService,
   ) {}
 
   afterInit(server: Server): void {
@@ -123,6 +159,9 @@ export class RealtimeGateway
       const parsed = principalSchema.parse(claims) as AccessTokenClaims;
       client.data.principal = await this.auth.resolvePrincipalFromClaims(parsed);
       client.data.sessionIds = new Set<string>();
+      client.data.whiteboardCursorSentAt = new Map<string, number>();
+      client.data.captionAcceptedAt = new Map<string, number>();
+      client.data.captionInFlight = new Set<string>();
       await client.join(this.userRoomName(client.data.principal.userId));
     } catch {
       client.emit("authorization.error", {
@@ -136,6 +175,15 @@ export class RealtimeGateway
     const principal = client.data.principal;
     if (!principal) return;
     for (const sessionId of client.data.sessionIds ?? []) {
+      client.to(this.roomName(sessionId)).emit("whiteboard.cursor.updated", {
+        sessionId,
+        userId: principal.userId,
+        displayName: principal.displayName,
+        x: 0,
+        y: 0,
+        visible: false,
+        occurredAt: new Date().toISOString(),
+      });
       try {
         await this.analytics.closeAttendance(principal, sessionId, client.id);
       } catch (error: unknown) {
@@ -189,6 +237,151 @@ export class RealtimeGateway
       agendaItemId,
     );
     return { ok: true, ...result };
+  }
+
+  @SubscribeMessage("whiteboard.cursor")
+  async updateWhiteboardCursor(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() payload: unknown,
+  ): Promise<{ ok: true; throttled?: true }> {
+    const principal = this.requirePrincipal(client);
+    const cursor = whiteboardCursorSchema.parse(payload);
+
+    if (!client.data.sessionIds?.has(cursor.sessionId)) {
+      throw new Error("Join the session before publishing whiteboard cursor state");
+    }
+
+    const now = Date.now();
+    const previous = client.data.whiteboardCursorSentAt?.get(cursor.sessionId) ?? 0;
+    if (cursor.visible && now - previous < 40) {
+      return { ok: true, throttled: true };
+    }
+    client.data.whiteboardCursorSentAt?.set(cursor.sessionId, now);
+
+    client.to(this.roomName(cursor.sessionId)).emit("whiteboard.cursor.updated", {
+      sessionId: cursor.sessionId,
+      userId: principal.userId,
+      displayName: principal.displayName,
+      x: cursor.x,
+      y: cursor.y,
+      visible: cursor.visible,
+      occurredAt: new Date(now).toISOString(),
+    });
+    return { ok: true };
+  }
+
+  @SubscribeMessage("caption.audio")
+  async transcribeLiveCaption(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() payload: unknown,
+  ): Promise<{
+    ok: true;
+    sequence?: number;
+    emitted?: boolean;
+    throttled?: true;
+  }> {
+    const principal = this.requirePrincipal(client);
+    const caption = captionAudioSchema.parse(payload);
+
+    if (!client.data.sessionIds?.has(caption.sessionId)) {
+      throw new Error("Join the session before publishing live-caption audio");
+    }
+
+    const session = await this.sessions.getById(principal, caption.sessionId);
+    if (session.status !== SessionStatus.LIVE) {
+      throw new Error("Live captions are only available during a live session");
+    }
+    if (!session.transcriptionEnabled) {
+      throw new Error("Live transcription is disabled for this session");
+    }
+    if (!this.transcription.isEnabled()) {
+      client.emit("caption.error", {
+        sessionId: caption.sessionId,
+        sequence: caption.sequence,
+        code: "provider_unavailable",
+        message: "Live transcription is not configured for this workspace runtime.",
+      });
+      return { ok: true, sequence: caption.sequence, emitted: false };
+    }
+
+    const now = Date.now();
+    const previous = client.data.captionAcceptedAt?.get(caption.sessionId) ?? 0;
+    if (now - previous < 1500 || client.data.captionInFlight?.has(caption.sessionId)) {
+      return { ok: true, sequence: caption.sequence, throttled: true };
+    }
+
+    const bytes = this.captionBuffer(caption.audio);
+    const maxBytes = this.config.get<number>(
+      "LIVE_CAPTION_MAX_CHUNK_BYTES",
+      2 * 1024 * 1024,
+    );
+    if (bytes.byteLength === 0 || bytes.byteLength > maxBytes) {
+      client.emit("caption.error", {
+        sessionId: caption.sessionId,
+        sequence: caption.sequence,
+        code: "invalid_chunk",
+        message: "Live-caption audio chunk is empty or exceeds the configured limit.",
+      });
+      return { ok: true, sequence: caption.sequence, emitted: false };
+    }
+
+    client.data.captionAcceptedAt?.set(caption.sessionId, now);
+    client.data.captionInFlight?.add(caption.sessionId);
+
+    try {
+      const result = await this.transcription.transcribe({
+        media: bytes,
+        mimeType: caption.mimeType,
+        filename: `live-${caption.sessionId}-${principal.userId}-${caption.sequence}.${this.captionExtension(caption.mimeType)}`,
+        language: caption.language ?? null,
+      });
+      const text = result.fullText.trim();
+      if (!text) {
+        return { ok: true, sequence: caption.sequence, emitted: false };
+      }
+
+      const event = {
+        sessionId: caption.sessionId,
+        sequence: caption.sequence,
+        speakerUserId: principal.userId,
+        speakerName: principal.displayName,
+        text: text.slice(0, 8000),
+        language: result.language ?? caption.language ?? null,
+        provider: result.provider,
+        occurredAt: new Date().toISOString(),
+      };
+      this.server.to(this.roomName(caption.sessionId)).emit("caption.final", event);
+      return { ok: true, sequence: caption.sequence, emitted: true };
+    } catch (error: unknown) {
+      this.logger.warn(
+        `Live caption transcription failed for ${principal.userId} in ${caption.sessionId}: ${error instanceof Error ? error.message : "unknown"}`,
+      );
+      client.emit("caption.error", {
+        sessionId: caption.sessionId,
+        sequence: caption.sequence,
+        code: "transcription_failed",
+        message: "This live-caption chunk could not be transcribed.",
+      });
+      return { ok: true, sequence: caption.sequence, emitted: false };
+    } finally {
+      client.data.captionInFlight?.delete(caption.sessionId);
+    }
+  }
+
+  private captionBuffer(value: unknown): Buffer {
+    if (Buffer.isBuffer(value)) return value;
+    if (value instanceof ArrayBuffer) return Buffer.from(value);
+    if (ArrayBuffer.isView(value)) {
+      return Buffer.from(value.buffer, value.byteOffset, value.byteLength);
+    }
+    return Buffer.alloc(0);
+  }
+
+  private captionExtension(mimeType: string): string {
+    const normalized = mimeType.toLowerCase();
+    if (normalized.startsWith("audio/mp4")) return "m4a";
+    if (normalized.startsWith("audio/ogg")) return "ogg";
+    return "webm";
   }
 
   private requirePrincipal(client: AuthenticatedSocket): Principal {

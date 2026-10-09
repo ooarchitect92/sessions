@@ -7,22 +7,29 @@ import { AnalyticsModule } from "./analytics/analytics.module";
 import { AiModule } from "./ai/ai.module";
 import { AuthModule } from "./auth/auth.module";
 import { BookingsModule } from "./bookings/bookings.module";
+import { BillingModule } from "./billing/billing.module";
 import { CalendarModule } from "./calendar/calendar.module";
 import { BreakoutsModule } from "./breakouts/breakouts.module";
 import { CollaborationModule } from "./collaboration/collaboration.module";
+import { CobrowseModule } from "./cobrowse/cobrowse.module";
 import { ContentModule } from "./content/content.module";
+import { CustomDomainsModule } from "./custom-domains/custom-domains.module";
 import { PrincipalGuard } from "./common/auth/principal.guard";
 import { validateEnvironment } from "./common/config/env.validation";
 import { ApiEnvelopeInterceptor } from "./common/http/api-envelope.interceptor";
 import { ApiExceptionFilter } from "./common/http/api-exception.filter";
 import { PrismaModule } from "./database/prisma.module";
 import { EventsModule } from "./events/events.module";
+import { GovernanceModule } from "./governance/governance.module";
+import { EnterpriseIdentityModule } from "./enterprise/enterprise-identity.module";
 import { HealthModule } from "./health/health.module";
 import { InfrastructureModule } from "./infrastructure/infrastructure.module";
+import { IntegrationsModule } from "./integrations/integrations.module";
 import { MediaModule } from "./media/media.module";
 import { MemoryModule } from "./memory/memory.module";
 import { NotificationsModule } from "./notifications/notifications.module";
 import { OutboxModule } from "./outbox/outbox.module";
+import { PrivacyModule } from "./privacy/privacy.module";
 import { RealtimeModule } from "./realtime/realtime.module";
 import { RecordingsModule } from "./recordings/recordings.module";
 import { RoomsModule } from "./rooms/rooms.module";
@@ -42,6 +49,8 @@ import { WorkspacesModule } from "./workspaces/workspaces.module";
     ScheduleModule.forRoot(),
     PrismaModule,
     InfrastructureModule,
+    IntegrationsModule,
+    CustomDomainsModule,
     AnalyticsModule,
     AiModule,
     AuthModule,
@@ -49,6 +58,7 @@ import { WorkspacesModule } from "./workspaces/workspaces.module";
     WorkspacesModule,
     HealthModule,
     OutboxModule,
+    PrivacyModule,
     MemoryModule,
     NotificationsModule,
     RecordingsModule,
@@ -58,9 +68,13 @@ import { WorkspacesModule } from "./workspaces/workspaces.module";
     RoomsModule,
     AgendasModule,
     EventsModule,
+    GovernanceModule,
+    EnterpriseIdentityModule,
     BookingsModule,
+    BillingModule,
     BreakoutsModule,
     CollaborationModule,
+    CobrowseModule,
     ContentModule,
     MediaModule,
     RealtimeModule,

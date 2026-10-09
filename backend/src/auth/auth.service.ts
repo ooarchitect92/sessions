@@ -122,6 +122,31 @@ export class AuthService {
     );
   }
 
+  async createExternalIdentitySession(
+    userId: string,
+    workspaceId: string,
+    metadata: AuthRequestMetadata,
+    identityProvider: 'OIDC' | 'SAML' = 'OIDC',
+  ): Promise<TokenBundle> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.status !== UserStatus.ACTIVE) {
+      throw new ForbiddenException('The enterprise identity is unavailable');
+    }
+    const membership = await this.prisma.workspaceMembership.findUnique({
+      where: { workspaceId_userId: { workspaceId, userId } },
+      include: { workspace: { include: { organization: true } } },
+    });
+    if (!membership) {
+      throw new ForbiddenException('Workspace access is unavailable');
+    }
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { failedLoginAttempts: 0, lockedUntil: null, lastLoginAt: new Date() },
+    });
+    return this.prisma.$transaction((transaction) =>
+      this.issueTokens(transaction, user, membership, metadata, randomUUID(), randomUUID(), identityProvider),
+    );
+  }
   async signUp(input: SignUpDto, metadata: AuthRequestMetadata) {
     this.assertLocalAuthenticationEnabled();
     this.assertTimeZone(input.timezone);
@@ -248,6 +273,7 @@ export class AuthService {
     if (!membership) {
       throw new ForbiddenException('This account does not have an active workspace');
     }
+    await this.assertLocalLoginAllowed(membership.workspaceId);
 
     await this.prisma.user.update({
       where: { id: user.id },
@@ -894,6 +920,19 @@ export class AuthService {
     };
   }
 
+  private async assertLocalLoginAllowed(workspaceId: string): Promise<void> {
+    const rows = await this.prisma.$queryRaw<Array<{ enforce_sso: boolean }>>`
+      SELECT enforce_sso
+      FROM enterprise_identity_connections
+      WHERE workspace_id = ${workspaceId}::uuid
+        AND enabled = TRUE
+        AND protocol IN ('OIDC', 'SAML')
+      LIMIT 1
+    `;
+    if (rows[0]?.enforce_sso) {
+      throw new ForbiddenException('This workspace requires enterprise SSO');
+    }
+  }
   private async recordFailedLogin(userId: string): Promise<void> {
     await this.prisma.$transaction(async (transaction) => {
       await transaction.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${userId}, 0))`;
@@ -1024,6 +1063,7 @@ export class AuthService {
           metadata,
           session.familyId,
           replacementId,
+          session.identityProvider,
         ),
       } as const;
     });
@@ -1042,6 +1082,7 @@ export class AuthService {
     metadata: AuthRequestMetadata,
     familyId: string = randomUUID(),
     sessionId: string = randomUUID(),
+    identityProvider: string | null = null,
   ): Promise<TokenBundle> {
     const refresh = this.security.createOpaqueToken(sessionId);
     const accessTokenExpiresIn = this.config.get<number>(
@@ -1062,6 +1103,7 @@ export class AuthService {
         refreshTokenHash: refresh.tokenHash,
         userAgent: metadata.userAgent?.slice(0, 500) || null,
         ipHash: this.security.hashIp(metadata.ip),
+        identityProvider,
         expiresAt: refreshTokenExpiresAt,
       },
     });

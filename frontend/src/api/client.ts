@@ -125,6 +125,74 @@ export interface CalendarConnectionRecord {
   updatedAt: string;
 }
 
+export interface ApiKeyRecord {
+  id: string;
+  name: string;
+  key_prefix: string;
+  scopes: string[];
+  last_used_at: string | null;
+  expires_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+  secret?: string;
+}
+
+export interface WebhookSubscriptionRecord {
+  id: string;
+  name: string;
+  endpoint_url: string;
+  event_types: string[];
+  active: boolean;
+  last_success_at: string | null;
+  last_failure_at: string | null;
+  created_at: string;
+  updated_at: string;
+  signingSecret?: string;
+}
+
+export interface WebhookDeliveryRecord {
+  id: string;
+  subscription_id: string;
+  event_type: string;
+  status: string;
+  attempts: number;
+  response_status: number | null;
+  last_error: string | null;
+  delivered_at: string | null;
+  dead_lettered_at: string | null;
+  created_at: string;
+}
+export interface CustomDomainRecord {
+  id: string;
+  hostname: string;
+  status: 'PENDING' | 'VERIFIED' | 'ACTIVE' | 'FAILED' | string;
+  tlsStatus: 'PENDING' | 'ISSUING' | 'ACTIVE' | 'FAILED' | string;
+  verifiedAt: string | null;
+  lastCheckedAt: string | null;
+  lastError: string | null;
+  createdAt: string;
+  dns: {
+    cname: { name: string; value: string };
+    txt: { name: string; value: string };
+  };
+}
+export type WorkspaceEmailTemplateKind =
+  | 'EVENT_REMINDER_24H'
+  | 'EVENT_REMINDER_1H'
+  | 'BOOKING_REMINDER_24H'
+  | 'BOOKING_REMINDER_1H';
+
+export interface WorkspaceEmailTemplateRecord {
+  id: string;
+  kind: WorkspaceEmailTemplateKind;
+  enabled: boolean;
+  subject: string;
+  body_text: string;
+  signature: string;
+  version: number;
+  created_at: string;
+  updated_at: string;
+}
 export interface WorkspaceInvitation {
   id: string;
   email: string;
@@ -140,6 +208,23 @@ export interface WorkspaceInvitation {
   developmentInvitationToken?: string;
 }
 
+export interface PrivacyExportPackage {
+  requestId: string;
+  exportedAt: string;
+  formatVersion: number;
+  profile: Record<string, unknown>;
+  memberships: Array<Record<string, unknown>>;
+  authoredContent: Record<string, unknown>;
+  activity: Record<string, unknown>;
+  integrations: Record<string, unknown>;
+}
+
+export interface PrivacyErasureResult {
+  requestId?: string;
+  erased: true;
+  strategy?: string;
+  signedOut?: boolean;
+}
 export interface LoginSession {
   id: string;
   workspace: { id: string; name: string; organization: string };
@@ -169,6 +254,20 @@ export interface AgendaDraftItem {
   durationSeconds: number;
   type: AgendaItemType;
   content: Record<string, unknown>;
+}
+
+export interface AgendaTemplateRecord {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  createdById: string;
+  name: string;
+  description: string | null;
+  items: AgendaDraftItem[];
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: { id: string; displayName: string };
 }
 
 export interface AgendaDraft {
@@ -201,6 +300,17 @@ export interface ResolvedEmbed {
   referrerPolicy: 'no-referrer';
 }
 
+export interface CobrowseStateRecord {
+  id: string | null;
+  sessionId: string;
+  url: string | null;
+  active: boolean;
+  controllerUserId: string | null;
+  startedById: string | null;
+  version: number;
+  updatedAt: string | null;
+}
+
 export interface MediaToken {
   url: string;
   token: string;
@@ -208,6 +318,40 @@ export interface MediaToken {
   expiresAt: string;
   roomName: string;
   breakoutRoomId: string | null;
+}
+
+export interface MediaParticipantTrack {
+  sid: string;
+  name: string | null;
+  muted: boolean;
+  kind: 'audio' | 'video' | 'data' | 'unknown';
+  source:
+    | 'unknown'
+    | 'camera'
+    | 'microphone'
+    | 'screen-share'
+    | 'screen-share-audio';
+}
+
+export interface MediaParticipantRecord {
+  identity: string;
+  name: string;
+  state: 'joining' | 'joined' | 'active' | 'disconnected' | 'unknown';
+  joinedAt: string | null;
+  isPublisher: boolean;
+  canPublish: boolean;
+  handRaised: boolean;
+  spotlighted: boolean;
+  roles: string[];
+  presenterRole: string | null;
+  tracks: MediaParticipantTrack[];
+}
+
+export interface MediaParticipantsResponse {
+  sessionId: string;
+  roomName: string;
+  breakoutRoomId: string | null;
+  participants: MediaParticipantRecord[];
 }
 
 export type BreakoutStatus = 'DRAFT' | 'OPEN' | 'CLOSED';
@@ -409,6 +553,134 @@ export interface SessionAnalyticsRecord {
   engagement: Record<string, number>;
 }
 
+export interface BillingCurrentRecord {
+  subscription: {
+    id: string;
+    planCode: string;
+    status: string;
+    seatQuantity: number;
+    currentPeriodStart: string;
+    currentPeriodEnd: string;
+    cancelAtPeriodEnd: boolean;
+    provider: string | null;
+  };
+  plan: {
+    code: string;
+    name: string;
+    monthlyPriceCents: number;
+    currency: string;
+    limits: {
+      seats: number;
+      sessionsPerMonth: number;
+      eventsPerMonth: number;
+      bookingPages: number;
+      eventCapacity: number;
+    };
+    features: Record<string, boolean>;
+  };
+  usage: { seats: number; sessions: number; events: number; bookingPages: number };
+}
+
+export interface BillingPlanRecord {
+  code: string;
+  name: string;
+  monthly_price_cents: number;
+  currency: string;
+  limits: BillingCurrentRecord['plan']['limits'];
+  features: Record<string, boolean>;
+}
+export interface RetentionPolicyRecord {
+  id: string;
+  recordingDays: number;
+  transcriptDays: number;
+  auditDays: number;
+  deleteOnExpiry: boolean;
+  legalHold: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AuditExportRecord {
+  filename: string;
+  columns: string[];
+  rows: Array<Record<string, string | number | boolean | null>>;
+  truncated: boolean;
+}
+export interface EnterpriseIdentityConnectionRecord {
+  id: string;
+  protocol: 'OIDC' | 'SAML';
+  enabled: boolean;
+  enforceSso: boolean;
+  issuerUrl: string | null;
+  clientId: string | null;
+  hasClientSecret: boolean;
+  authorizationEndpoint: string | null;
+  tokenEndpoint: string | null;
+  userinfoEndpoint: string | null;
+  jwksUri: string | null;
+  endSessionEndpoint: string | null;
+  scopes: string[];
+  emailDomains: string[];
+  roleAttribute: string | null;
+  roleMappings: Record<string, Exclude<WorkspaceRole, 'OWNER'>>;
+  defaultRole: Exclude<WorkspaceRole, 'OWNER'>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ScimTokenRecord {
+  id: string;
+  name: string;
+  key_prefix?: string;
+  keyPrefix?: string;
+  last_used_at?: string | null;
+  expires_at?: string | null;
+  revoked_at?: string | null;
+  created_at?: string;
+  token?: string;
+  expiresAt?: string | null;
+  createdAt?: string;
+}
+export interface WorkspaceAnalyticsRecord {
+  range: { from: string; to: string };
+  overview: {
+    sessions: number;
+    completedSessions: number;
+    liveSessions: number;
+    uniqueAttendees: number;
+    totalAttendanceSeconds: number;
+    averageAttendanceSecondsPerSession: number;
+    engagementEvents: number;
+    eventRegistrations: number;
+    eventAttendanceRate: number;
+    cancelledEventRegistrations: number;
+    bookings: number;
+    confirmedBookings: number;
+    cancelledBookings: number;
+    bookingConversionRate: number;
+  };
+  trend: Array<{
+    date: string;
+    sessions: number;
+    uniqueAttendees: number;
+    attendanceSeconds: number;
+    engagementEvents: number;
+  }>;
+  topSessions: Array<{
+    id: string;
+    title: string;
+    startsAt: string;
+    uniqueAttendees: number;
+    attendanceSeconds: number;
+    engagementEvents: number;
+  }>;
+}
+
+export interface WorkspaceAnalyticsExport {
+  filename: string;
+  columns: string[];
+  rows: Array<Record<string, string | number | boolean | null>>;
+}
 export interface BookingPageRecord extends BookingPage {
   _count?: { reservations: number };
 }
@@ -616,12 +888,13 @@ export type WhiteboardOperationKind =
   | 'SHAPE_ADD'
   | 'NOTE_ADD'
   | 'TEXT_ADD'
+  | 'IMAGE_ADD'
   | 'OBJECT_REMOVE'
   | 'CLEAR';
 
 export interface WhiteboardObjectRecord {
   id: string;
-  type: 'stroke' | 'shape' | 'note' | 'text';
+  type: 'stroke' | 'shape' | 'note' | 'text' | 'image';
   [key: string]: unknown;
 }
 
@@ -780,6 +1053,19 @@ export const api = {
     return publicRequest('/auth/login', { method: 'POST', body: JSON.stringify(input) });
   },
 
+  startEnterpriseSso(input: { workspaceSlug: string; returnTo?: string }): Promise<{ authorizationUrl: string }> {
+    return publicRequest('/enterprise/sso/start', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  exchangeEnterpriseSsoGrant(grant: string): Promise<AuthTokenBundle> {
+    return publicRequest<AuthTokenBundle>('/enterprise/sso/exchange', {
+      method: 'POST',
+      body: JSON.stringify({ grant }),
+    });
+  },
   completeMfa(input: { challengeToken: string; code: string }): Promise<AuthTokenBundle> {
     return publicRequest<AuthTokenBundle>('/auth/mfa/complete', {
       method: 'POST',
@@ -850,6 +1136,16 @@ export const api = {
     });
   },
 
+  exportMyPrivacyData(): Promise<PrivacyExportPackage> {
+    return request<PrivacyExportPackage>('/privacy/export');
+  },
+
+  eraseMyAccount(): Promise<PrivacyErasureResult> {
+    return request<PrivacyErasureResult>('/privacy/account', {
+      method: 'DELETE',
+      body: JSON.stringify({ confirmation: 'DELETE MY ACCOUNT' }),
+    });
+  },
   listLoginSessions(): Promise<LoginSession[]> {
     return request<LoginSession[]>('/auth/sessions');
   },
@@ -1021,6 +1317,61 @@ export const api = {
     });
   },
 
+  listAgendaTemplates(): Promise<AgendaTemplateRecord[]> {
+    return request<AgendaTemplateRecord[]>('/agenda-templates');
+  },
+
+  createAgendaTemplate(input: {
+    name: string;
+    description?: string;
+    items: AgendaDraftItem[];
+  }): Promise<AgendaTemplateRecord> {
+    return request<AgendaTemplateRecord>('/agenda-templates', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  createAgendaTemplateFromSession(
+    sessionId: string,
+    input: { name: string; description?: string },
+  ): Promise<AgendaTemplateRecord> {
+    return request<AgendaTemplateRecord>(`/agenda-templates/from-session/${sessionId}`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  updateAgendaTemplate(
+    templateId: string,
+    input: {
+      version: number;
+      name?: string;
+      description?: string;
+      items?: AgendaDraftItem[];
+    },
+  ): Promise<AgendaTemplateRecord> {
+    return request<AgendaTemplateRecord>(`/agenda-templates/${templateId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    });
+  },
+
+  deleteAgendaTemplate(templateId: string): Promise<{ id: string; deleted: true }> {
+    return request(`/agenda-templates/${templateId}`, { method: 'DELETE' });
+  },
+
+  applyAgendaTemplate(
+    templateId: string,
+    sessionId: string,
+    mode: 'APPEND' | 'REPLACE',
+  ): Promise<AgendaItem[]> {
+    return request<AgendaItem[]>(`/agenda-templates/${templateId}/apply/${sessionId}`, {
+      method: 'POST',
+      body: JSON.stringify({ mode }),
+    });
+  },
+
   generateAgendaDraft(sessionId: string, prompt?: string): Promise<AgendaDraft> {
     return request<AgendaDraft>(`/sessions/${sessionId}/agenda-items/generate-draft`, {
       method: "POST",
@@ -1036,6 +1387,16 @@ export const api = {
     return request<AgendaItem[]>(`/sessions/${sessionId}/agenda-items/apply-draft`, {
       method: "POST",
       body: JSON.stringify({ items, mode }),
+    });
+  },
+
+  reorderAgendaItems(
+    sessionId: string,
+    itemIds: string[],
+  ): Promise<AgendaItem[]> {
+    return request<AgendaItem[]>(`/sessions/${sessionId}/agenda-items/order`, {
+      method: 'PUT',
+      body: JSON.stringify({ itemIds }),
     });
   },
 
@@ -1117,6 +1478,55 @@ export const api = {
     });
   },
 
+  getCobrowseState(sessionId: string): Promise<CobrowseStateRecord> {
+    return request<CobrowseStateRecord>(`/sessions/${sessionId}/cobrowse`);
+  },
+
+  startCobrowse(sessionId: string, url: string): Promise<CobrowseStateRecord> {
+    return request<CobrowseStateRecord>(`/sessions/${sessionId}/cobrowse/start`, {
+      method: 'POST',
+      body: JSON.stringify({ url }),
+    });
+  },
+
+  navigateCobrowse(
+    sessionId: string,
+    version: number,
+    url: string,
+  ): Promise<CobrowseStateRecord> {
+    return request<CobrowseStateRecord>(
+      `/sessions/${sessionId}/cobrowse/navigate`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ version, url }),
+      },
+    );
+  },
+
+  grantCobrowseControl(
+    sessionId: string,
+    version: number,
+    controllerUserId: string,
+  ): Promise<CobrowseStateRecord> {
+    return request<CobrowseStateRecord>(
+      `/sessions/${sessionId}/cobrowse/control`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ version, controllerUserId }),
+      },
+    );
+  },
+
+  stopCobrowse(
+    sessionId: string,
+    version: number,
+  ): Promise<CobrowseStateRecord> {
+    return request<CobrowseStateRecord>(`/sessions/${sessionId}/cobrowse/stop`, {
+      method: 'POST',
+      body: JSON.stringify({ version }),
+    });
+  },
+
   createMediaToken(
     sessionId: string,
     breakoutRoomId?: string,
@@ -1127,6 +1537,104 @@ export const api = {
         breakoutRoomId ? { breakoutRoomId } : {},
       ),
     });
+  },
+
+  listMediaParticipants(
+    sessionId: string,
+    breakoutRoomId?: string | null,
+  ): Promise<MediaParticipantsResponse> {
+    const query = breakoutRoomId
+      ? `?breakoutRoomId=${encodeURIComponent(breakoutRoomId)}`
+      : '';
+    return request<MediaParticipantsResponse>(
+      `/sessions/${sessionId}/media-participants${query}`,
+    );
+  },
+
+  setMediaTrackMuted(
+    sessionId: string,
+    participantIdentity: string,
+    trackSid: string,
+    muted: boolean,
+    breakoutRoomId?: string | null,
+  ) {
+    const query = breakoutRoomId
+      ? `?breakoutRoomId=${encodeURIComponent(breakoutRoomId)}`
+      : '';
+    return request(
+      `/sessions/${sessionId}/media-participants/${participantIdentity}/tracks/${trackSid}${query}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ muted }),
+      },
+    );
+  },
+
+  setMyHandRaised(
+    sessionId: string,
+    raised: boolean,
+    breakoutRoomId?: string | null,
+  ) {
+    const query = breakoutRoomId
+      ? `?breakoutRoomId=${encodeURIComponent(breakoutRoomId)}`
+      : '';
+    return request(
+      `/sessions/${sessionId}/media-participants/me/hand-raise${query}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ raised }),
+      },
+    );
+  },
+
+  setMediaParticipantSpotlight(
+    sessionId: string,
+    participantIdentity: string,
+    spotlighted: boolean,
+    breakoutRoomId?: string | null,
+  ) {
+    const query = breakoutRoomId
+      ? `?breakoutRoomId=${encodeURIComponent(breakoutRoomId)}`
+      : '';
+    return request(
+      `/sessions/${sessionId}/media-participants/${participantIdentity}/spotlight${query}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ spotlighted }),
+      },
+    );
+  },
+
+  setMediaParticipantPublishing(
+    sessionId: string,
+    participantIdentity: string,
+    canPublish: boolean,
+    breakoutRoomId?: string | null,
+  ) {
+    const query = breakoutRoomId
+      ? `?breakoutRoomId=${encodeURIComponent(breakoutRoomId)}`
+      : '';
+    return request(
+      `/sessions/${sessionId}/media-participants/${participantIdentity}/media-permissions${query}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ canPublish }),
+      },
+    );
+  },
+
+  removeMediaParticipant(
+    sessionId: string,
+    participantIdentity: string,
+    breakoutRoomId?: string | null,
+  ) {
+    const query = breakoutRoomId
+      ? `?breakoutRoomId=${encodeURIComponent(breakoutRoomId)}`
+      : '';
+    return request(
+      `/sessions/${sessionId}/media-participants/${participantIdentity}${query}`,
+      { method: 'DELETE' },
+    );
   },
 
   getBreakouts(sessionId: string): Promise<BreakoutState> {
@@ -1315,6 +1823,94 @@ export const api = {
     );
   },
 
+  getRetentionPolicy(): Promise<RetentionPolicyRecord> {
+    return request<RetentionPolicyRecord>('/governance/retention');
+  },
+
+  saveRetentionPolicy(input: {
+    recordingDays: number;
+    transcriptDays: number;
+    auditDays: number;
+    deleteOnExpiry: boolean;
+    legalHold: boolean;
+  }): Promise<RetentionPolicyRecord> {
+    return request<RetentionPolicyRecord>('/governance/retention', {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    });
+  },
+
+  exportAuditLog(from?: string, to?: string): Promise<AuditExportRecord> {
+    const query = new URLSearchParams();
+    if (from) query.set('from', from);
+    if (to) query.set('to', to);
+    const suffix = query.size ? `?${query.toString()}` : '';
+    return request<AuditExportRecord>(`/governance/audit/export${suffix}`);
+  },
+  getEnterpriseSsoLogoutUrl(): Promise<{ url: string | null }> {
+    return request<{ url: string | null }>('/enterprise/sso/logout-url');
+  },
+  getEnterpriseIdentity(): Promise<EnterpriseIdentityConnectionRecord | null> {
+    return request<EnterpriseIdentityConnectionRecord | null>('/enterprise/identity');
+  },
+
+  saveEnterpriseIdentity(input: {
+    protocol: 'OIDC' | 'SAML';
+    enabled?: boolean;
+    enforceSso?: boolean;
+    issuerUrl?: string;
+    clientId?: string;
+    clientSecret?: string;
+    authorizationEndpoint?: string;
+    tokenEndpoint?: string;
+    userinfoEndpoint?: string;
+    jwksUri?: string;
+    endSessionEndpoint?: string;
+    scopes?: string[];
+    emailDomains?: string[];
+    roleAttribute?: string;
+    roleMappings?: Record<string, Exclude<WorkspaceRole, 'OWNER'>>;
+    defaultRole?: Exclude<WorkspaceRole, 'OWNER'>;
+  }): Promise<EnterpriseIdentityConnectionRecord> {
+    return request<EnterpriseIdentityConnectionRecord>('/enterprise/identity', {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    });
+  },
+
+  listScimTokens(): Promise<ScimTokenRecord[]> {
+    return request<ScimTokenRecord[]>('/enterprise/scim/tokens');
+  },
+
+  createScimToken(input: { name: string; expiresAt?: string }): Promise<ScimTokenRecord> {
+    return request<ScimTokenRecord>('/enterprise/scim/tokens', { method: 'POST', body: JSON.stringify(input) });
+  },
+
+  revokeScimToken(id: string): Promise<{ id: string; revoked: boolean }> {
+    return request<{ id: string; revoked: boolean }>(`/enterprise/scim/tokens/${id}`, { method: 'DELETE' });
+  },
+  getBillingCurrent(): Promise<BillingCurrentRecord> {
+    return request<BillingCurrentRecord>('/billing/current');
+  },
+
+  listBillingPlans(): Promise<BillingPlanRecord[]> {
+    return request<BillingPlanRecord[]>('/billing/plans');
+  },
+  getWorkspaceAnalytics(from?: string, to?: string): Promise<WorkspaceAnalyticsRecord> {
+    const query = new URLSearchParams();
+    if (from) query.set('from', from);
+    if (to) query.set('to', to);
+    const suffix = query.size ? `?${query.toString()}` : '';
+    return request<WorkspaceAnalyticsRecord>(`/analytics/workspace${suffix}`);
+  },
+
+  exportWorkspaceAnalytics(from?: string, to?: string): Promise<WorkspaceAnalyticsExport> {
+    const query = new URLSearchParams();
+    if (from) query.set('from', from);
+    if (to) query.set('to', to);
+    const suffix = query.size ? `?${query.toString()}` : '';
+    return request<WorkspaceAnalyticsExport>(`/analytics/workspace/export${suffix}`);
+  },
   getEventAnalytics(eventId: string): Promise<EventAnalyticsRecord> {
     return request<EventAnalyticsRecord>(`/analytics/events/${eventId}`);
   },
@@ -1353,6 +1949,92 @@ export const api = {
     return request<BookingPageRecord[]>("/bookings");
   },
 
+  listWorkspaceEmailTemplates(): Promise<WorkspaceEmailTemplateRecord[]> {
+    return request<WorkspaceEmailTemplateRecord[]>('/notifications/workspace/templates');
+  },
+
+  saveWorkspaceEmailTemplate(input: {
+    kind: WorkspaceEmailTemplateKind;
+    enabled?: boolean;
+    subject: string;
+    bodyText: string;
+    signature?: string;
+  }): Promise<WorkspaceEmailTemplateRecord> {
+    return request<WorkspaceEmailTemplateRecord>('/notifications/workspace/templates', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+  listCustomDomains(): Promise<CustomDomainRecord[]> {
+    return request<CustomDomainRecord[]>('/custom-domains');
+  },
+
+  createCustomDomain(hostname: string): Promise<CustomDomainRecord> {
+    return request<CustomDomainRecord>('/custom-domains', {
+      method: 'POST',
+      body: JSON.stringify({ hostname }),
+    });
+  },
+
+  verifyCustomDomain(domainId: string): Promise<CustomDomainRecord> {
+    return request<CustomDomainRecord>(`/custom-domains/${domainId}/verify`, {
+      method: 'POST',
+    });
+  },
+
+  deleteCustomDomain(domainId: string): Promise<{ id: string; deleted: true }> {
+    return request(`/custom-domains/${domainId}`, { method: 'DELETE' });
+  },
+  listApiKeys(): Promise<ApiKeyRecord[]> {
+    return request<ApiKeyRecord[]>('/integrations/api-keys');
+  },
+
+  createApiKey(input: { name: string; scopes: string[]; expiresInDays?: number }): Promise<ApiKeyRecord> {
+    return request<ApiKeyRecord>('/integrations/api-keys', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  revokeApiKey(apiKeyId: string): Promise<ApiKeyRecord> {
+    return request<ApiKeyRecord>(`/integrations/api-keys/${apiKeyId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  listWebhooks(): Promise<WebhookSubscriptionRecord[]> {
+    return request<WebhookSubscriptionRecord[]>('/integrations/webhooks');
+  },
+
+  createWebhook(input: { name: string; endpointUrl: string; eventTypes: string[] }): Promise<WebhookSubscriptionRecord> {
+    return request<WebhookSubscriptionRecord>('/integrations/webhooks', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  deleteWebhook(webhookId: string): Promise<{ id: string; deleted: true }> {
+    return request(`/integrations/webhooks/${webhookId}`, { method: 'DELETE' });
+  },
+
+  reconcileWebhook(webhookId: string, hours = 24): Promise<{ subscriptionId: string; hours: number; inserted: number }> {
+    return request(`/integrations/webhooks/${webhookId}/reconcile`, {
+      method: 'POST',
+      body: JSON.stringify({ hours }),
+    });
+  },
+
+  listWebhookDeliveries(webhookId: string): Promise<WebhookDeliveryRecord[]> {
+    return request<WebhookDeliveryRecord[]>(`/integrations/webhooks/${webhookId}/deliveries`);
+  },
+
+  retryWebhookDelivery(deliveryId: string): Promise<{ id: string; status: string }> {
+    return request(`/integrations/webhook-deliveries/${deliveryId}/retry`, { method: 'POST' });
+  },
+
+  replayWebhookDelivery(deliveryId: string): Promise<{ id: string; status: string; replayed: true }> {
+    return request(`/integrations/webhook-deliveries/${deliveryId}/replay`, { method: 'POST' });
+  },
   listCalendarConnections(): Promise<CalendarConnectionRecord[]> {
     return request<CalendarConnectionRecord[]>('/calendar/connections');
   },

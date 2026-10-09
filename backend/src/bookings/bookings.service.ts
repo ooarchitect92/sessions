@@ -14,6 +14,7 @@ import {
 } from '@prisma/client';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { AuditService } from '../audit/audit.service';
+import { BillingService } from '../billing/billing.service';
 import { CalendarService } from '../calendar/calendar.service';
 import { HOST_ROLES, hasAnyRole, type Principal } from '../common/auth/principal';
 import {
@@ -53,6 +54,7 @@ export class BookingsService {
     private readonly audit: AuditService,
     private readonly outbox: OutboxService,
     private readonly calendar: CalendarService,
+    private readonly billing: BillingService,
   ) {}
 
   async create(
@@ -85,6 +87,8 @@ export class BookingsService {
         return existing.response as Prisma.JsonObject;
       }
 
+      await this.billing.assertCanCreateBookingPage(transaction, principal);
+
       const duplicate = await transaction.bookingPage.findUnique({
         where: { workspaceId_slug: { workspaceId: principal.workspaceId, slug: input.slug } },
         select: { id: true },
@@ -108,6 +112,7 @@ export class BookingsService {
           intakeFields: input.intakeFields as unknown as Prisma.InputJsonValue,
         },
       });
+      await this.billing.recordUsage(transaction, principal, 'booking_page.created', 'booking_page', page.id);
       const response = this.toJson(page);
       await this.audit.record(transaction, principal, {
         action: 'booking_page.created',
@@ -265,7 +270,10 @@ export class BookingsService {
     bookingSlug: string,
   ) {
     const page = await this.findPublicPage(organizationSlug, workspaceSlug, bookingSlug);
-    return this.publicShape(page);
+    return {
+      ...this.publicShape(page),
+      workspaceBranding: await this.workspaceBranding(page.workspaceId),
+    };
   }
 
   async listPublicSlots(
@@ -663,6 +671,34 @@ export class BookingsService {
     return page;
   }
 
+  private async workspaceBranding(workspaceId: string) {
+    const workspace = await this.publicDatabase.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { name: true, settings: true },
+    });
+    if (!workspace) return null;
+    const settings =
+      workspace.settings && typeof workspace.settings === 'object' && !Array.isArray(workspace.settings)
+        ? (workspace.settings as Record<string, unknown>)
+        : {};
+    const branding =
+      settings.branding && typeof settings.branding === 'object' && !Array.isArray(settings.branding)
+        ? (settings.branding as Record<string, unknown>)
+        : {};
+    return {
+      workspaceName: workspace.name,
+      logoUrl: typeof branding.logoUrl === 'string' ? branding.logoUrl : null,
+      primaryColor:
+        typeof branding.primaryColor === 'string' ? branding.primaryColor : null,
+      accentColor:
+        typeof branding.accentColor === 'string' ? branding.accentColor : null,
+      fontFamily: typeof branding.fontFamily === 'string' ? branding.fontFamily : null,
+      waitingRoomImageUrl:
+        typeof branding.waitingRoomImageUrl === 'string'
+          ? branding.waitingRoomImageUrl
+          : null,
+    };
+  }
   private publicShape(page: BookingPage) {
     return {
       id: page.id,

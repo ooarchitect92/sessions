@@ -6,6 +6,14 @@ import {
 } from './DynamicPublicFormFields';
 import { publicApi } from './public-api';
 
+interface WorkspaceBranding {
+  workspaceName: string;
+  logoUrl: string | null;
+  primaryColor: string | null;
+  accentColor: string | null;
+  fontFamily: string | null;
+  waitingRoomImageUrl: string | null;
+}
 interface PublicEvent {
   id: string;
   slug: string;
@@ -32,6 +40,7 @@ interface PublicEvent {
   };
   status: 'PUBLISHED' | 'LIVE';
   registrationCount: number;
+  workspaceBranding: WorkspaceBranding | null;
   presenters: Array<{
     id: string;
     role: 'ORGANIZER' | 'HOST' | 'CO_HOST' | 'SPEAKER';
@@ -117,13 +126,21 @@ export function PublicEventPage({
 
   const remaining =
     event.capacity === null ? null : Math.max(0, event.capacity - event.registrationCount);
+  const brand = event.workspaceBranding;
+  const brandStyle = {
+    '--workspace-primary': brand?.primaryColor ?? '#183f38',
+    '--workspace-accent': brand?.accentColor ?? '#dcefe8',
+    ...(brand?.fontFamily ? { fontFamily: brand.fontFamily } : {}),
+  } as CSSProperties;
 
   return (
-    <main className="public-flow-page event-flow-page">
+    <main className="public-flow-page event-flow-page workspace-themed-public" style={brandStyle}>
       <header className="public-flow-nav">
         <a className="public-wordmark" href="/">
-          <span>S</span>
-          Sessions
+          <span>
+            {brand?.logoUrl ? <img src={brand.logoUrl} alt="" /> : (brand?.workspaceName || 'Sessions').charAt(0).toUpperCase()}
+          </span>
+          {brand?.workspaceName || 'Sessions'}
         </a>
         <span className="public-live-label">{event.status === 'LIVE' ? 'Live now' : 'Registration open'}</span>
       </header>
@@ -132,8 +149,8 @@ export function PublicEventPage({
         className="public-event-layout public-event-themed"
         style={
           {
-            '--event-primary': event.branding.primaryColor ?? '#183f38',
-            '--event-accent': event.branding.accentColor ?? '#dcefe8',
+            '--event-primary': event.branding.primaryColor ?? brand?.primaryColor ?? '#183f38',
+            '--event-accent': event.branding.accentColor ?? brand?.accentColor ?? '#dcefe8',
           } as CSSProperties
         }
       >
