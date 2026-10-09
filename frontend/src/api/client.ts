@@ -457,6 +457,11 @@ export interface TranscriptRecord {
   language: string | null;
   provider?: string | null;
   fullText?: string | null;
+  normalized: boolean;
+  normalizedMimeType: string | null;
+  diarized: boolean;
+  speakerCount: number | null;
+  qualityMetadata: Record<string, unknown>;
   version: number;
   completedAt: string | null;
   segments?: Array<{

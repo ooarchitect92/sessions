@@ -18,6 +18,20 @@ interface OpenAiVerboseResponse {
   segments?: OpenAiVerboseSegment[];
 }
 
+interface HttpTranscriptionSegment {
+  startMs?: unknown;
+  endMs?: unknown;
+  speakerLabel?: unknown;
+  text?: unknown;
+}
+
+interface HttpTranscriptionResponse {
+  provider?: unknown;
+  language?: unknown;
+  fullText?: unknown;
+  segments?: unknown;
+}
+
 @Injectable()
 export class TranscriptionProviderService {
   constructor(private readonly config: ConfigService) {}
@@ -39,6 +53,9 @@ export class TranscriptionProviderService {
     if (provider === 'openai') {
       return this.openAiTranscription(request);
     }
+    if (provider === 'http') {
+      return this.httpTranscription(request);
+    }
 
     throw new Error('stt_provider_disabled');
   }
@@ -57,6 +74,85 @@ export class TranscriptionProviderService {
           text,
         },
       ],
+    };
+  }
+
+  private async httpTranscription(
+    request: TranscriptionRequest,
+  ): Promise<TranscriptionResult> {
+    const endpoint = this.config.getOrThrow<string>('STT_HTTP_ENDPOINT');
+    const apiKey = this.config.getOrThrow<string>('STT_HTTP_API_KEY');
+
+    const form = new FormData();
+    const mediaBytes = new Uint8Array(request.media.byteLength);
+    mediaBytes.set(request.media);
+    form.append(
+      'file',
+      new Blob([mediaBytes.buffer], { type: request.mimeType }),
+      request.filename,
+    );
+    if (request.language) form.append('language', request.language);
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${apiKey}`,
+      },
+      body: form,
+    });
+    if (!response.ok) {
+      throw new Error(`stt_http_provider_${response.status}`);
+    }
+
+    const payload = (await response.json()) as HttpTranscriptionResponse;
+    const segmentsRaw = Array.isArray(payload.segments)
+      ? (payload.segments as HttpTranscriptionSegment[])
+      : [];
+    const segments = segmentsRaw.flatMap((segment) => {
+      if (
+        typeof segment.startMs !== 'number' ||
+        typeof segment.endMs !== 'number' ||
+        typeof segment.text !== 'string' ||
+        !segment.text.trim()
+      ) {
+        return [];
+      }
+      return [{
+        startMs: Math.max(0, Math.round(segment.startMs)),
+        endMs: Math.max(0, Math.round(segment.endMs)),
+        speakerLabel:
+          typeof segment.speakerLabel === 'string' &&
+          segment.speakerLabel.trim()
+            ? segment.speakerLabel.trim().slice(0, 160)
+            : null,
+        text: segment.text.trim(),
+      }];
+    });
+    const fullText =
+      typeof payload.fullText === 'string' && payload.fullText.trim()
+        ? payload.fullText.trim()
+        : segments.map((segment) => segment.text).join(' ').trim();
+    if (!fullText) throw new Error('stt_provider_empty_transcript');
+
+    return {
+      provider:
+        typeof payload.provider === 'string' && payload.provider.trim()
+          ? `http:${payload.provider.trim().slice(0, 80)}`
+          : 'http',
+      language:
+        typeof payload.language === 'string' && payload.language.trim()
+          ? payload.language.trim()
+          : request.language ?? null,
+      fullText,
+      segments:
+        segments.length > 0
+          ? segments
+          : [{
+              startMs: 0,
+              endMs: 0,
+              speakerLabel: null,
+              text: fullText,
+            }],
     };
   }
 

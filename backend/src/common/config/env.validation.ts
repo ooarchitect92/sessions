@@ -58,7 +58,9 @@ const environmentSchema = z
     CLAMAV_HOST: z.string().min(1).default('127.0.0.1'),
     CLAMAV_PORT: z.coerce.number().int().min(1).max(65535).default(3310),
     CLAMAV_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120000).default(15000),
-    STT_PROVIDER: z.enum(['disabled', 'mock', 'openai']).default('disabled'),
+    STT_PROVIDER: z.enum(['disabled', 'mock', 'openai', 'http']).default('disabled'),
+    STT_HTTP_ENDPOINT: z.string().url().optional(),
+    STT_HTTP_API_KEY: z.string().min(1).optional(),
     STT_OPENAI_API_KEY: z.string().min(1).optional(),
     STT_OPENAI_ENDPOINT: z
       .string()
@@ -71,6 +73,21 @@ const environmentSchema = z
       .min(1024)
       .max(500 * 1024 * 1024)
       .default(25 * 1024 * 1024),
+    STT_MEDIA_NORMALIZATION: z.enum(['disabled', 'ffmpeg']).default('disabled'),
+    FFMPEG_PATH: z.string().min(1).max(500).default('ffmpeg'),
+    STT_NORMALIZATION_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .min(1000)
+      .max(600000)
+      .default(120000),
+    STT_NORMALIZED_MAX_BYTES: z.coerce
+      .number()
+      .int()
+      .min(1024)
+      .max(500 * 1024 * 1024)
+      .default(100 * 1024 * 1024),
+    STT_REQUIRE_DIARIZATION: optionalBoolean.default(false),
     AI_PROVIDER: z.enum(['disabled', 'mock', 'openai']).default('disabled'),
     AI_OPENAI_API_KEY: z.string().min(1).optional(),
     AI_OPENAI_ENDPOINT: z
@@ -109,6 +126,20 @@ const environmentSchema = z
       context.addIssue({ code: 'custom', path: [path], message });
     };
 
+    if (value.STT_PROVIDER === 'http') {
+      if (!value.STT_HTTP_ENDPOINT) {
+        issue(
+          'STT_HTTP_ENDPOINT',
+          'STT_HTTP_ENDPOINT is required when STT_PROVIDER=http',
+        );
+      }
+      if (!value.STT_HTTP_API_KEY) {
+        issue(
+          'STT_HTTP_API_KEY',
+          'STT_HTTP_API_KEY is required when STT_PROVIDER=http',
+        );
+      }
+    }
     if (value.STT_PROVIDER === 'openai' && !value.STT_OPENAI_API_KEY) {
       issue(
         'STT_OPENAI_API_KEY',
@@ -238,6 +269,15 @@ const environmentSchema = z
     }
     if (value.STT_PROVIDER === 'mock') {
       issue('STT_PROVIDER', 'STT_PROVIDER=mock is forbidden in production');
+    }
+    if (
+      value.STT_PROVIDER !== 'disabled' &&
+      value.STT_MEDIA_NORMALIZATION !== 'ffmpeg'
+    ) {
+      issue(
+        'STT_MEDIA_NORMALIZATION',
+        'Production transcription requires STT_MEDIA_NORMALIZATION=ffmpeg',
+      );
     }
     if (value.AI_PROVIDER === 'mock') {
       issue('AI_PROVIDER', 'AI_PROVIDER=mock is forbidden in production');
