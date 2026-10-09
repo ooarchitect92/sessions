@@ -55,7 +55,9 @@
 - [x] workspace memory list, detail page and database text search
 - [x] transcript segment model with speaker/timestamp fields
 - [x] reviewed summary, decision, action-item and citation model
-- [ ] streaming captions, media normalization and diarization qualification
+- [ ] streaming captions
+- [x] ffmpeg media normalization, diarization-capable STT adapter, persisted quality metadata and optional diarization enforcement
+- [ ] production diarization provider qualification evidence
 - [x] transcript correction, revision history and language policy
 - [x] object-storage access, signed playback and secure download paths
 - [x] provider-abstracted post-session STT worker with bounded media ingestion and durable transcript segments
