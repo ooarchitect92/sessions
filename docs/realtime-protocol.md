@@ -23,6 +23,7 @@ Host authority is never granted permanently because a user once joined as a host
 
 - `session.join { sessionId }`
 - `agenda.activate { sessionId, agendaItemId }`
+- `whiteboard.cursor { sessionId, x, y, visible }` — ephemeral, authenticated cursor presence for collaborators already joined to the session room. Coordinates are bounded to the whiteboard canvas and visible updates are rate-limited server-side.
 
 Agenda activation is also available through HTTP and uses the same domain service. Chat, poll, and Q&A mutations currently use HTTP commands so validation, audit, idempotency policy, and error envelopes remain consistent; their committed results are then broadcast over Socket.IO.
 
@@ -58,6 +59,11 @@ Only one poll can be live in a session. Answers are upserted by `(pollId, respon
 
 Webinar attendee questions enter moderation; ordinary meeting questions may be approved immediately. Public list results never expose an anonymous author's display name.
 
+### Whiteboard
+
+- `whiteboard.operation.appended` — emitted after a durable operation commit.
+- `whiteboard.cursor.updated { sessionId, userId, displayName, x, y, visible, occurredAt }` — ephemeral collaborator cursor state. Cursor state is intentionally not persisted and is cleared when the sender leaves the canvas or disconnects.
+
 ### Memory
 
 - `memory.updated`
@@ -84,7 +90,7 @@ Socket presence is advisory. A tab crash, mobile suspension, or network partitio
 ## Planned namespaces and events
 
 - `chat.message.edited`, `chat.message.deleted`, `chat.reaction.changed`
-- `whiteboard.operation`, `whiteboard.snapshot.ready`
+- `whiteboard.snapshot.ready`
 - `breakout.created`, `breakout.assignment.changed`, `breakout.broadcast`
 - `recording.started`, `recording.stopped`, `caption.partial`, `caption.final`
 - `timer.started`, `timer.paused`, `timer.expired`
