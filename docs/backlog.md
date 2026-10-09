@@ -75,7 +75,8 @@
 - [ ] provider integration framework, credential governance and pinned/egress-proxy SSRF-safe delivery
 - [x] workspace branding editor with persisted logo/colors/font/waiting-room identity, server validation, and propagation to public event/booking surfaces
 - [x] custom-domain control plane with tenant-scoped persistence, CNAME/TXT ownership verification and TLS-pending lifecycle
-- [ ] workspace email-template editor and provider-backed automated TLS issuance/routing
+- [x] workspace email-template editor with versioned event/booking reminder defaults, variable validation, signature support, and worker rendering
+- [ ] provider-backed automated TLS issuance/routing and richer branded HTML email rendering
 - [ ] analytics aggregation and governed exports
 - [ ] plans, subscriptions, entitlements, seats, quota ledger and reconciliation
 - [ ] SAML/OIDC enterprise SSO, SCIM, audit exports and retention policies
