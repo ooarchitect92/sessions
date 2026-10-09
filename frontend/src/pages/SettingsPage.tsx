@@ -938,7 +938,7 @@ function EnterpriseSettings() {
         protocol: 'OIDC', enabled, enforceSso, issuerUrl, clientId, ...(clientSecret ? { clientSecret } : {}),
         authorizationEndpoint, tokenEndpoint, userinfoEndpoint, jwksUri, endSessionEndpoint, scopes: ['openid','profile','email'],
         emailDomains: domains.split(',').map((item) => item.trim()).filter(Boolean),
-        roleAttribute: roleAttribute.trim() || undefined,
+        ...(roleAttribute.trim() ? { roleAttribute: roleAttribute.trim() } : {}),
         roleMappings,
         defaultRole,
       });
