@@ -129,26 +129,49 @@ export class EventsService {
           isPublic: true,
         },
       });
+      const workspaceTemplates = await transaction.$queryRaw<Array<{
+        kind: string;
+        enabled: boolean;
+        subject: string;
+        body_text: string;
+        signature: string;
+      }>>`
+        SELECT kind, enabled, subject, body_text, signature
+        FROM workspace_email_templates
+        WHERE kind IN ('EVENT_REMINDER_24H', 'EVENT_REMINDER_1H')
+      `;
+      const byKind = new Map(workspaceTemplates.map((item) => [item.kind, item]));
+      const eventTemplate = (
+        kind: EventReminderKind,
+        fallbackSubject: string,
+        fallbackBody: string,
+      ) => {
+        const configured = byKind.get(kind);
+        const signature = configured?.signature?.trim();
+        return {
+          organizationId: principal.organizationId,
+          workspaceId: principal.workspaceId,
+          eventId: event.id,
+          kind,
+          enabled: configured?.enabled ?? true,
+          subject: configured?.subject ?? fallbackSubject,
+          bodyText: configured
+            ? configured.body_text + (signature ? "\n\n" + signature : "")
+            : fallbackBody,
+        };
+      };
       await transaction.eventNotificationTemplate.createMany({
         data: [
-          {
-            organizationId: principal.organizationId,
-            workspaceId: principal.workspaceId,
-            eventId: event.id,
-            kind: EventReminderKind.EVENT_REMINDER_24H,
-            subject: "Reminder: {{event_title}} starts tomorrow",
-            bodyText:
-              "Hi {{attendee_name}},\n\n{{event_title}} starts in 24 hours.\n\nTime: {{event_time}} ({{event_timezone}})\n\nWe look forward to seeing you.",
-          },
-          {
-            organizationId: principal.organizationId,
-            workspaceId: principal.workspaceId,
-            eventId: event.id,
-            kind: EventReminderKind.EVENT_REMINDER_1H,
-            subject: "Reminder: {{event_title}} starts in 1 hour",
-            bodyText:
-              "Hi {{attendee_name}},\n\n{{event_title}} starts in 1 hour.\n\nTime: {{event_time}} ({{event_timezone}})\n\nYour event is coming up soon.",
-          },
+          eventTemplate(
+            EventReminderKind.EVENT_REMINDER_24H,
+            "Reminder: {{event_title}} starts tomorrow",
+            "Hi {{attendee_name}},\n\n{{event_title}} starts in 24 hours.\n\nTime: {{event_time}} ({{event_timezone}})\n\nWe look forward to seeing you.",
+          ),
+          eventTemplate(
+            EventReminderKind.EVENT_REMINDER_1H,
+            "Reminder: {{event_title}} starts in 1 hour",
+            "Hi {{attendee_name}},\n\n{{event_title}} starts in 1 hour.\n\nTime: {{event_time}} ({{event_timezone}})\n\nYour event is coming up soon.",
+          ),
         ],
       });
       const response = this.toJson(event);
