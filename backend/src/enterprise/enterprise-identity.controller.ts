@@ -1,11 +1,13 @@
-import { Body, Controller, Delete, Get, Headers, Param, ParseUUIDPipe, Patch, Post, Put } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, Param, ParseUUIDPipe, Patch, Post, Put, Query, Req, Res } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { IsArray, IsBoolean, IsIn, IsOptional, IsString, IsUrl, IsUUID, Length } from 'class-validator';
+import { IsArray, IsBoolean, IsIn, IsOptional, IsString, IsUrl, Length } from 'class-validator';
 import { WorkspaceRole } from '@prisma/client';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import { CurrentPrincipal } from '../common/auth/current-principal.decorator';
 import type { Principal } from '../common/auth/principal';
 import { Public } from '../common/auth/public.decorator';
 import { EnterpriseIdentityService } from './enterprise-identity.service';
+import { OidcLoginService } from './oidc-login.service';
 
 class EnterpriseIdentityDto {
   @IsIn(['OIDC','SAML']) protocol!: 'OIDC' | 'SAML';
@@ -26,12 +28,48 @@ class EnterpriseIdentityDto {
 class CreateScimTokenDto { @IsString() @Length(2,120) name!: string; @IsOptional() @IsString() expiresAt?: string; }
 class ScimCreateUserDto { @IsOptional() @IsString() externalId?: string; @IsString() userName!: string; @IsOptional() @IsBoolean() active?: boolean; @IsOptional() @IsString() displayName?: string; @IsOptional() name?: { formatted?: string }; }
 class ScimPatchUserDto { @IsOptional() Operations?: Array<{ op?: string; path?: string; value?: unknown }>; }
+class StartOidcDto {
+  @IsString() @Length(2,120) workspaceSlug!: string;
+  @IsOptional() @IsString() @Length(1,500) returnTo?: string;
+}
+class ExchangeOidcGrantDto { @IsString() @Length(20,500) grant!: string; }
 
 @ApiTags('enterprise')
 @ApiBearerAuth()
 @Controller('enterprise')
 export class EnterpriseIdentityController {
-  constructor(private readonly enterprise: EnterpriseIdentityService) {}
+  constructor(
+    private readonly enterprise: EnterpriseIdentityService,
+    private readonly oidc: OidcLoginService,
+  ) {}
+  @Public()
+  @Post('sso/start')
+  startSso(@Body() body: StartOidcDto) {
+    return this.oidc.start(body.workspaceSlug, body.returnTo);
+  }
+
+  @Public()
+  @Get('sso/callback')
+  async ssoCallback(
+    @Query('state') state: string | undefined,
+    @Query('code') code: string | undefined,
+    @Res() reply: FastifyReply,
+  ) {
+    const redirect = await this.oidc.callback(state, code);
+    return reply.redirect(redirect);
+  }
+
+  @Public()
+  @Post('sso/exchange')
+  exchangeSsoGrant(
+    @Body() body: ExchangeOidcGrantDto,
+    @Req() request: FastifyRequest,
+  ) {
+    return this.oidc.exchangeGrant(body.grant, {
+      userAgent: request.headers['user-agent'],
+      ip: request.ip,
+    });
+  }
   @Get('identity') getIdentity(@CurrentPrincipal() principal: Principal) { return this.enterprise.getConnection(principal); }
   @Put('identity') updateIdentity(@CurrentPrincipal() principal: Principal, @Body() body: EnterpriseIdentityDto) { return this.enterprise.upsertConnection(principal, body); }
   @Get('scim/tokens') listTokens(@CurrentPrincipal() principal: Principal) { return this.enterprise.listScimTokens(principal); }
