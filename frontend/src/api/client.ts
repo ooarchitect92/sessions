@@ -1377,6 +1377,16 @@ export const api = {
     });
   },
 
+  reorderAgendaItems(
+    sessionId: string,
+    itemIds: string[],
+  ): Promise<AgendaItem[]> {
+    return request<AgendaItem[]>(`/sessions/${sessionId}/agenda-items/order`, {
+      method: 'PUT',
+      body: JSON.stringify({ itemIds }),
+    });
+  },
+
   activateAgendaItem(sessionId: string, agendaItemId: string) {
     return request<{
       sessionId: string;
