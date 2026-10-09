@@ -309,6 +309,38 @@ export interface MediaToken {
   breakoutRoomId: string | null;
 }
 
+export interface MediaParticipantTrack {
+  sid: string;
+  name: string | null;
+  muted: boolean;
+  kind: 'audio' | 'video' | 'data' | 'unknown';
+  source:
+    | 'unknown'
+    | 'camera'
+    | 'microphone'
+    | 'screen-share'
+    | 'screen-share-audio';
+}
+
+export interface MediaParticipantRecord {
+  identity: string;
+  name: string;
+  state: 'joining' | 'joined' | 'active' | 'disconnected' | 'unknown';
+  joinedAt: string | null;
+  isPublisher: boolean;
+  canPublish: boolean;
+  roles: string[];
+  presenterRole: string | null;
+  tracks: MediaParticipantTrack[];
+}
+
+export interface MediaParticipantsResponse {
+  sessionId: string;
+  roomName: string;
+  breakoutRoomId: string | null;
+  participants: MediaParticipantRecord[];
+}
+
 export type BreakoutStatus = 'DRAFT' | 'OPEN' | 'CLOSED';
 
 export interface BreakoutAssignmentRecord {
@@ -1432,6 +1464,51 @@ export const api = {
         breakoutRoomId ? { breakoutRoomId } : {},
       ),
     });
+  },
+
+  listMediaParticipants(
+    sessionId: string,
+    breakoutRoomId?: string | null,
+  ): Promise<MediaParticipantsResponse> {
+    const query = breakoutRoomId
+      ? `?breakoutRoomId=${encodeURIComponent(breakoutRoomId)}`
+      : '';
+    return request<MediaParticipantsResponse>(
+      `/sessions/${sessionId}/media-participants${query}`,
+    );
+  },
+
+  setMediaTrackMuted(
+    sessionId: string,
+    participantIdentity: string,
+    trackSid: string,
+    muted: boolean,
+    breakoutRoomId?: string | null,
+  ) {
+    const query = breakoutRoomId
+      ? `?breakoutRoomId=${encodeURIComponent(breakoutRoomId)}`
+      : '';
+    return request(
+      `/sessions/${sessionId}/media-participants/${participantIdentity}/tracks/${trackSid}${query}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ muted }),
+      },
+    );
+  },
+
+  removeMediaParticipant(
+    sessionId: string,
+    participantIdentity: string,
+    breakoutRoomId?: string | null,
+  ) {
+    const query = breakoutRoomId
+      ? `?breakoutRoomId=${encodeURIComponent(breakoutRoomId)}`
+      : '';
+    return request(
+      `/sessions/${sessionId}/media-participants/${participantIdentity}${query}`,
+      { method: 'DELETE' },
+    );
   },
 
   getBreakouts(sessionId: string): Promise<BreakoutState> {
