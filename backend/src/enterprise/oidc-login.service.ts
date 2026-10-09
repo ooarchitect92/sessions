@@ -188,6 +188,7 @@ export class OidcLoginService {
       headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' },
       body,
       signal: AbortSignal.timeout(10_000),
+      redirect: 'error',
     });
     if (!response.ok) throw new UnauthorizedException('OIDC token exchange failed');
     const payload = (await response.json()) as { id_token?: string };
@@ -202,7 +203,11 @@ export class OidcLoginService {
     const claims = this.decodeJson<IdTokenClaims>(parts[1]);
     if (header.alg !== 'RS256' || !header.kid) throw new UnauthorizedException('OIDC ID token algorithm is not supported');
     await this.assertPublicHttpsUrl(connection.jwks_uri);
-    const response = await fetch(connection.jwks_uri, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(10_000) });
+    const response = await fetch(connection.jwks_uri, {
+      headers: { accept: 'application/json' },
+      signal: AbortSignal.timeout(10_000),
+      redirect: 'error',
+    });
     if (!response.ok) throw new UnauthorizedException('OIDC JWKS retrieval failed');
     const jwks = (await response.json()) as { keys?: Array<Record<string, unknown>> };
     const jwk = jwks.keys?.find((item) => item.kid === header.kid);
