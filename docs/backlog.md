@@ -71,7 +71,8 @@
 
 ## Phase 5 — platform and enterprise
 
-- [ ] API keys, webhook subscriptions, HMAC signatures, replay and reconciliation
+- [x] tenant-scoped API-key and webhook-subscription administration with encrypted signing secrets, audit evidence and outbox events
+- [ ] HMAC delivery worker, replay and reconciliation
 - [ ] provider integration framework, credential governance and SSRF-safe egress
 - [ ] branding, email templates, custom domains and automated TLS
 - [ ] analytics aggregation and governed exports
