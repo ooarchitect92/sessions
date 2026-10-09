@@ -89,3 +89,10 @@ Custom-domain onboarding follows a proof-before-routing lifecycle:
 7. keep the domain unavailable for public brand resolution until TLS is explicitly marked `ACTIVE` by the infrastructure provisioning path.
 
 The application therefore does not confuse DNS ownership with certificate readiness. Automated certificate issuance/renewal and edge-router reconciliation remain infrastructure qualification work; the domain model and outbox handoff are ready for that provider.
+
+
+## Workspace analytics exports
+
+A background rollup worker recomputes a configurable recent UTC-day window from source-of-truth sessions, attendance intervals, engagement events, events, registrations and booking reservations. Attendance intervals are clipped to each day and merged per participant/session so reconnects do not double-count overlapping ranges. Rollups run on application startup and every five minutes, processing workspaces in bounded batches.
+
+Workspace analytics are available to host/analyst roles. API keys require `analytics:read`; CSV export requires the separate `analytics:export` scope. Exports contain aggregate daily metrics only—no attendee names or email addresses—and each export writes an audit event with date range, row count and format.
