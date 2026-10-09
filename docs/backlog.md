@@ -37,6 +37,8 @@
 - [x] secure whiteboard image assets through the existing quarantine, malware-scan and signed-download pipeline
 - [x] breakout assignment, assignment-aware media-room transition and host broadcast
 - [x] HTTPS agenda content blocks, provider normalization and sandboxed embed resolver
+- [x] permissioned synchronized co-browse navigation with tenant persistence, optimistic versions, host control grants, audit/outbox evidence and realtime updates
+- [ ] governed remote-browser provider for cross-origin click/type control and production co-browse isolation qualification
 - [x] upload quarantine, malware scan and signed downloads
 - [x] recording, transcript and summary artifact state models
 - [x] post-session artifact requests, audit evidence and retry controls
