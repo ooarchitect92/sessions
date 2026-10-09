@@ -329,6 +329,7 @@ export interface MediaParticipantRecord {
   joinedAt: string | null;
   isPublisher: boolean;
   canPublish: boolean;
+  handRaised: boolean;
   roles: string[];
   presenterRole: string | null;
   tracks: MediaParticipantTrack[];
@@ -1493,6 +1494,23 @@ export const api = {
       {
         method: 'PATCH',
         body: JSON.stringify({ muted }),
+      },
+    );
+  },
+
+  setMyHandRaised(
+    sessionId: string,
+    raised: boolean,
+    breakoutRoomId?: string | null,
+  ) {
+    const query = breakoutRoomId
+      ? `?breakoutRoomId=${encodeURIComponent(breakoutRoomId)}`
+      : '';
+    return request(
+      `/sessions/${sessionId}/media-participants/me/hand-raise${query}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ raised }),
       },
     );
   },
