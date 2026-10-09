@@ -162,6 +162,31 @@ export interface CustomDomainRecord {
   updatedAt: string;
 }
 
+export interface WorkspaceAnalyticsDay {
+  date: string;
+  sessionsScheduled: number;
+  uniqueAttendees: number;
+  attendanceSeconds: number;
+  engagementEvents: number;
+  eventsScheduled: number;
+  registrationsCreated: number;
+  bookingReservationsCreated: number;
+  computedAt: string;
+}
+
+export interface WorkspaceAnalyticsRecord {
+  range: { from: string; to: string; days: number };
+  totals: Omit<WorkspaceAnalyticsDay, 'date' | 'computedAt'>;
+  lastComputedAt: string | null;
+  days: WorkspaceAnalyticsDay[];
+}
+
+export interface WorkspaceAnalyticsExport {
+  filename: string;
+  contentType: string;
+  csv: string;
+}
+
 export interface WorkspaceInvitation {
   id: string;
   email: string;
@@ -1401,6 +1426,30 @@ export const api = {
 
   getSessionAnalytics(sessionId: string): Promise<SessionAnalyticsRecord> {
     return request<SessionAnalyticsRecord>(`/analytics/sessions/${sessionId}`);
+  },
+
+  getWorkspaceAnalytics(
+    from?: string,
+    to?: string,
+  ): Promise<WorkspaceAnalyticsRecord> {
+    const params = new URLSearchParams();
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    const query = params.size ? `?${params.toString()}` : '';
+    return request<WorkspaceAnalyticsRecord>(`/analytics/workspace${query}`);
+  },
+
+  exportWorkspaceAnalytics(
+    from?: string,
+    to?: string,
+  ): Promise<WorkspaceAnalyticsExport> {
+    const params = new URLSearchParams();
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    const query = params.size ? `?${params.toString()}` : '';
+    return request<WorkspaceAnalyticsExport>(
+      `/analytics/workspace/export${query}`,
+    );
   },
 
   updateEvent(
