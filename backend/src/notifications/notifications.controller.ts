@@ -15,6 +15,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentPrincipal } from '../common/auth/current-principal.decorator';
 import type { Principal } from '../common/auth/principal';
 import { UpdateEventNotificationTemplateDto } from './dto/update-event-notification-template.dto';
+import { UpsertWorkspaceEmailTemplateDto } from './dto/upsert-workspace-email-template.dto';
 import { NotificationsService } from './notifications.service';
 
 function parseVersion(value: string | undefined): number {
@@ -34,6 +35,18 @@ function parseVersion(value: string | undefined): number {
 export class NotificationsController {
   constructor(private readonly notifications: NotificationsService) {}
 
+  @Get('workspace/templates')
+  listWorkspaceEmailTemplates(@CurrentPrincipal() principal: Principal) {
+    return this.notifications.listWorkspaceEmailTemplates(principal);
+  }
+
+  @Post('workspace/templates')
+  upsertWorkspaceEmailTemplate(
+    @CurrentPrincipal() principal: Principal,
+    @Body() body: UpsertWorkspaceEmailTemplateDto,
+  ) {
+    return this.notifications.upsertWorkspaceEmailTemplate(principal, body);
+  }
   @Get('bookings/:reservationId')
   listBookingDeliveries(
     @CurrentPrincipal() principal: Principal,
