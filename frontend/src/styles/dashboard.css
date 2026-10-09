@@ -407,3 +407,33 @@
     text-align: left;
   }
 }
+
+
+.transcript-quality-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.transcript-quality-badges span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 23px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.transcript-quality-badges span.ready {
+  border-color: rgba(42, 120, 94, 0.28);
+  background: rgba(42, 120, 94, 0.1);
+  color: #276e58;
+}
+
+.transcript-quality-badges span.neutral {
+  background: #f5f3ed;
+  color: var(--muted);
+}
