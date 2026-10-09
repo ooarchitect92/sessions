@@ -214,6 +214,17 @@ enum WebhookDeliveryStatus {
   DEAD_LETTER
 }
 
+enum ProviderConnectionKind {
+  EMAIL_HTTP
+  CRM_HTTP
+}
+
+enum ProviderConnectionStatus {
+  ACTIVE
+  DISABLED
+  ERROR
+}
+
 model Organization {
   id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name                String                @db.VarChar(160)
@@ -262,6 +273,7 @@ model Organization {
   apiKeys              ApiKey[]
   webhookSubscriptions WebhookSubscription[]
   webhookDeliveries    WebhookDelivery[]
+  providerConnections  ProviderConnection[]
 
   @@map("organizations")
 }
@@ -367,6 +379,7 @@ model User {
   approvedAiExternalActions AiExternalAction[] @relation("AiExternalActionApprover")
   createdApiKeys          ApiKey[]                @relation("ApiKeyCreator")
   createdWebhookSubscriptions WebhookSubscription[] @relation("WebhookSubscriptionCreator")
+  createdProviderConnections ProviderConnection[] @relation("ProviderConnectionCreator")
 
   @@index([status])
   @@map("users")
@@ -1342,6 +1355,33 @@ model WebhookDelivery {
   @@index([organizationId, workspaceId, status, nextAttemptAt])
   @@index([subscriptionId, createdAt])
   @@map("webhook_deliveries")
+}
+
+model ProviderConnection {
+  id                  String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId      String                   @map("organization_id") @db.Uuid
+  workspaceId         String                   @map("workspace_id") @db.Uuid
+  createdById         String                   @map("created_by_id") @db.Uuid
+  kind                ProviderConnectionKind
+  name                String                   @db.VarChar(160)
+  endpointUrl         String                   @map("endpoint_url") @db.Text
+  secretCiphertext    String                   @map("secret_ciphertext") @db.Text
+  credentialVersion   Int                      @default(1) @map("credential_version")
+  config              Json                     @default("{}")
+  status              ProviderConnectionStatus @default(ACTIVE)
+  lastUsedAt          DateTime?                @map("last_used_at") @db.Timestamptz(6)
+  lastSuccessAt       DateTime?                @map("last_success_at") @db.Timestamptz(6)
+  lastFailureAt       DateTime?                @map("last_failure_at") @db.Timestamptz(6)
+  lastError           String?                  @map("last_error") @db.VarChar(1000)
+  createdAt           DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization        Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace           Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy           User                     @relation("ProviderConnectionCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@unique([workspaceId, kind])
+  @@index([organizationId, workspaceId, status])
+  @@map("provider_connections")
 }
 
 model IdempotencyKey {
