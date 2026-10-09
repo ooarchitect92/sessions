@@ -73,7 +73,7 @@
 - [x] webhook replay/reconciliation controls
 - [ ] production webhook delivery qualification and pinned-egress hardening
 - [ ] provider integration framework, credential governance and pinned/egress-proxy SSRF-safe delivery
-- [x] workspace branding editor with persisted logo/colors/font/waiting-room identity and server validation
+- [x] workspace branding editor with persisted logo/colors/font/waiting-room identity, server validation, and propagation to public event/booking surfaces
 - [ ] workspace email-template editor, custom domains and automated TLS
 - [ ] analytics aggregation and governed exports
 - [ ] plans, subscriptions, entitlements, seats, quota ledger and reconciliation
