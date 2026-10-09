@@ -7,8 +7,22 @@ Phase 5 begins with a tenant-scoped control plane for API keys and outbound webh
 - Owner/admin only administration.
 - A generated key is returned exactly once at creation time.
 - Only a SHA-256 digest and short non-secret prefix are persisted.
-- Keys can carry explicit scopes, optional expiration, last-used metadata and durable revocation state.
+- Keys carry explicit scopes, optional expiration, last-used metadata and durable revocation state.
+- Issued scopes are validated against a fixed catalog instead of accepting arbitrary privilege strings.
+- Bearer credentials using the `sess_<prefix>_<secret>` format are authenticated before JWT parsing.
+- API keys resolve through the creator's current active workspace membership so removed access or disabled users invalidate the machine credential.
+- Machine access is default-deny: an API-key request can reach only endpoints explicitly decorated for API-key scopes.
 - Creation/revocation emits audit and transactional-outbox evidence.
+
+### Supported machine scopes
+
+- `sessions:read`, `sessions:write`
+- `rooms:read`, `rooms:write`
+- `bookings:read`, `bookings:write`
+- `events:read`, `events:write`
+- `memory:read`, `memory:write`
+
+Read endpoints inherit their domain `:read` scope; mutating endpoints explicitly require the corresponding `:write` scope. Integration-management, identity, workspace administration and all other endpoints remain unavailable to API keys unless a later reviewed change explicitly opts them in.
 
 ## Webhook subscriptions
 
