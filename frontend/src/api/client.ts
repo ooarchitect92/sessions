@@ -1497,6 +1497,24 @@ export const api = {
     );
   },
 
+  setMediaParticipantPublishing(
+    sessionId: string,
+    participantIdentity: string,
+    canPublish: boolean,
+    breakoutRoomId?: string | null,
+  ) {
+    const query = breakoutRoomId
+      ? `?breakoutRoomId=${encodeURIComponent(breakoutRoomId)}`
+      : '';
+    return request(
+      `/sessions/${sessionId}/media-participants/${participantIdentity}/media-permissions${query}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ canPublish }),
+      },
+    );
+  },
+
   removeMediaParticipant(
     sessionId: string,
     participantIdentity: string,
