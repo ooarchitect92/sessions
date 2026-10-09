@@ -105,6 +105,26 @@ export interface WorkspaceDomainRecord {
   updatedAt: string;
 }
 
+export type WorkspaceEmailTemplateKind =
+  | 'BOOKING_REMINDER_24H'
+  | 'BOOKING_REMINDER_1H'
+  | 'EVENT_REMINDER_24H'
+  | 'EVENT_REMINDER_1H';
+
+export interface WorkspaceEmailTemplateRecord {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  kind: WorkspaceEmailTemplateKind;
+  enabled: boolean;
+  subject: string;
+  bodyText: string;
+  signatureText: string | null;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface WorkspaceMember {
   id: string;
   role: WorkspaceRole;
@@ -950,6 +970,27 @@ export const api = {
   removeWorkspaceDomain(domainId: string): Promise<{ id: string; removed: true }> {
     return request(`/workspaces/current/domains/${domainId}`, {
       method: 'DELETE',
+    });
+  },
+
+  listWorkspaceEmailTemplates(): Promise<WorkspaceEmailTemplateRecord[]> {
+    return request('/notifications/workspace/templates');
+  },
+
+  updateWorkspaceEmailTemplate(
+    kind: WorkspaceEmailTemplateKind,
+    version: number,
+    input: {
+      enabled?: boolean;
+      subject?: string;
+      bodyText?: string;
+      signatureText?: string;
+    },
+  ): Promise<WorkspaceEmailTemplateRecord> {
+    return request(`/notifications/workspace/templates/${kind}`, {
+      method: 'PATCH',
+      headers: { 'if-match': String(version) },
+      body: JSON.stringify(input),
     });
   },
 

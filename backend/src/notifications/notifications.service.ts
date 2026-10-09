@@ -7,15 +7,86 @@ import {
 import {
   EventReminderKind,
   NotificationStatus,
+  WorkspaceEmailTemplateKind,
 } from '@prisma/client';
-import { HOST_ROLES, hasAnyRole, type Principal } from '../common/auth/principal';
+import {
+  ADMIN_ROLES,
+  HOST_ROLES,
+  hasAnyRole,
+  type Principal,
+} from '../common/auth/principal';
 import { TenantDatabaseService } from '../database/tenant-database.service';
 import { UpdateEventNotificationTemplateDto } from './dto/update-event-notification-template.dto';
+import { UpdateWorkspaceEmailTemplateDto } from './dto/update-workspace-email-template.dto';
 import { assertEventReminderTemplate } from './event-reminder-template';
+import {
+  assertWorkspaceEmailTemplate,
+  DEFAULT_WORKSPACE_EMAIL_TEMPLATES,
+} from './workspace-email-template';
 
 @Injectable()
 export class NotificationsService {
   constructor(private readonly database: TenantDatabaseService) {}
+
+  async listWorkspaceTemplates(principal: Principal) {
+    this.assertAdmin(principal);
+    return this.database.run(principal, async (transaction) => {
+      await this.ensureWorkspaceTemplates(transaction, principal);
+      return transaction.workspaceEmailTemplate.findMany({
+        orderBy: { kind: 'asc' },
+      });
+    });
+  }
+
+  async updateWorkspaceTemplate(
+    principal: Principal,
+    kind: WorkspaceEmailTemplateKind,
+    expectedVersion: number,
+    input: UpdateWorkspaceEmailTemplateDto,
+  ) {
+    this.assertAdmin(principal);
+    return this.database.run(principal, async (transaction) => {
+      await this.ensureWorkspaceTemplates(transaction, principal);
+      const current = await transaction.workspaceEmailTemplate.findUnique({
+        where: {
+          workspaceId_kind: {
+            workspaceId: principal.workspaceId,
+            kind,
+          },
+        },
+      });
+      if (!current) throw new NotFoundException('Workspace email template not found');
+      if (current.version !== expectedVersion) {
+        throw new ConflictException(
+          `Workspace email template version conflict. Current version is ${current.version}`,
+        );
+      }
+      const subject = input.subject?.trim() ?? current.subject;
+      const bodyText = input.bodyText?.trim() ?? current.bodyText;
+      const signatureText =
+        input.signatureText !== undefined
+          ? input.signatureText.trim() || null
+          : current.signatureText;
+      assertWorkspaceEmailTemplate(kind, subject, bodyText, signatureText);
+
+      const updated = await transaction.workspaceEmailTemplate.updateMany({
+        where: { id: current.id, version: expectedVersion },
+        data: {
+          ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
+          subject,
+          bodyText,
+          signatureText,
+          version: { increment: 1 },
+        },
+      });
+      if (updated.count === 0) {
+        throw new ConflictException('Workspace email template version conflict');
+      }
+      return transaction.workspaceEmailTemplate.findUniqueOrThrow({
+        where: { id: current.id },
+      });
+    });
+  }
 
   async listBookingDeliveries(principal: Principal, reservationId: string) {
     this.assertHost(principal);
@@ -156,6 +227,35 @@ export class NotificationsService {
         },
       });
     });
+  }
+
+  private async ensureWorkspaceTemplates(
+    transaction: Parameters<Parameters<TenantDatabaseService['run']>[1]>[0],
+    principal: Principal,
+  ): Promise<void> {
+    await transaction.workspaceEmailTemplate.createMany({
+      data: (
+        Object.entries(DEFAULT_WORKSPACE_EMAIL_TEMPLATES) as Array<
+          [
+            WorkspaceEmailTemplateKind,
+            { subject: string; bodyText: string },
+          ]
+        >
+      ).map(([kind, template]) => ({
+        organizationId: principal.organizationId,
+        workspaceId: principal.workspaceId,
+        kind,
+        subject: template.subject,
+        bodyText: template.bodyText,
+      })),
+      skipDuplicates: true,
+    });
+  }
+
+  private assertAdmin(principal: Principal): void {
+    if (!hasAnyRole(principal, ADMIN_ROLES)) {
+      throw new ForbiddenException('An owner or admin role is required');
+    }
   }
 
   private assertHost(principal: Principal): void {

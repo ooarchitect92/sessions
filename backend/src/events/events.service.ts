@@ -13,6 +13,7 @@ import {
   RegistrationStatus,
   SessionKind,
   SessionStatus,
+  WorkspaceEmailTemplateKind,
   type Event,
   type EventRegistration,
 } from "@prisma/client";
@@ -129,6 +130,26 @@ export class EventsService {
           isPublic: true,
         },
       });
+      const workspaceTemplates = await transaction.workspaceEmailTemplate.findMany({
+        where: {
+          workspaceId: principal.workspaceId,
+          kind: {
+            in: [
+              WorkspaceEmailTemplateKind.EVENT_REMINDER_24H,
+              WorkspaceEmailTemplateKind.EVENT_REMINDER_1H,
+            ],
+          },
+        },
+      });
+      const workspaceTemplateByKind = new Map(
+        workspaceTemplates.map((template) => [template.kind, template]),
+      );
+      const reminder24 = workspaceTemplateByKind.get(
+        WorkspaceEmailTemplateKind.EVENT_REMINDER_24H,
+      );
+      const reminder1 = workspaceTemplateByKind.get(
+        WorkspaceEmailTemplateKind.EVENT_REMINDER_1H,
+      );
       await transaction.eventNotificationTemplate.createMany({
         data: [
           {
@@ -136,8 +157,12 @@ export class EventsService {
             workspaceId: principal.workspaceId,
             eventId: event.id,
             kind: EventReminderKind.EVENT_REMINDER_24H,
-            subject: "Reminder: {{event_title}} starts tomorrow",
+            enabled: reminder24?.enabled ?? true,
+            subject:
+              reminder24?.subject ??
+              "Reminder: {{event_title}} starts tomorrow",
             bodyText:
+              reminder24?.bodyText ??
               "Hi {{attendee_name}},\n\n{{event_title}} starts in 24 hours.\n\nTime: {{event_time}} ({{event_timezone}})\n\nWe look forward to seeing you.",
           },
           {
@@ -145,8 +170,12 @@ export class EventsService {
             workspaceId: principal.workspaceId,
             eventId: event.id,
             kind: EventReminderKind.EVENT_REMINDER_1H,
-            subject: "Reminder: {{event_title}} starts in 1 hour",
+            enabled: reminder1?.enabled ?? true,
+            subject:
+              reminder1?.subject ??
+              "Reminder: {{event_title}} starts in 1 hour",
             bodyText:
+              reminder1?.bodyText ??
               "Hi {{attendee_name}},\n\n{{event_title}} starts in 1 hour.\n\nTime: {{event_time}} ({{event_timezone}})\n\nYour event is coming up soon.",
           },
         ],

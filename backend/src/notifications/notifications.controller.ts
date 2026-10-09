@@ -10,11 +10,15 @@ import {
   Patch,
   Post,
 } from '@nestjs/common';
-import { EventReminderKind } from '@prisma/client';
+import {
+  EventReminderKind,
+  WorkspaceEmailTemplateKind,
+} from '@prisma/client';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentPrincipal } from '../common/auth/current-principal.decorator';
 import type { Principal } from '../common/auth/principal';
 import { UpdateEventNotificationTemplateDto } from './dto/update-event-notification-template.dto';
+import { UpdateWorkspaceEmailTemplateDto } from './dto/update-workspace-email-template.dto';
 import { NotificationsService } from './notifications.service';
 
 function parseVersion(value: string | undefined): number {
@@ -33,6 +37,27 @@ function parseVersion(value: string | undefined): number {
 @Controller('notifications')
 export class NotificationsController {
   constructor(private readonly notifications: NotificationsService) {}
+
+  @Get('workspace/templates')
+  listWorkspaceTemplates(@CurrentPrincipal() principal: Principal) {
+    return this.notifications.listWorkspaceTemplates(principal);
+  }
+
+  @Patch('workspace/templates/:kind')
+  updateWorkspaceTemplate(
+    @CurrentPrincipal() principal: Principal,
+    @Param('kind', new ParseEnumPipe(WorkspaceEmailTemplateKind))
+    kind: WorkspaceEmailTemplateKind,
+    @Headers('if-match') ifMatch: string | undefined,
+    @Body() body: UpdateWorkspaceEmailTemplateDto,
+  ) {
+    return this.notifications.updateWorkspaceTemplate(
+      principal,
+      kind,
+      parseVersion(ifMatch),
+      body,
+    );
+  }
 
   @Get('bookings/:reservationId')
   listBookingDeliveries(
