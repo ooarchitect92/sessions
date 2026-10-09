@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AiModule } from '../ai/ai.module';
 import { AuditModule } from '../audit/audit.module';
+import { IntegrationsModule } from '../integrations/integrations.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { OutboxModule } from '../outbox/outbox.module';
 import { RecordingsController, TranscriptsController } from './artifacts.controller';
@@ -12,7 +13,13 @@ import { MemoryController } from './memory.controller';
 import { MemoryService } from './memory.service';
 
 @Module({
-  imports: [AiModule, AuditModule, NotificationsModule, OutboxModule],
+  imports: [
+    AiModule,
+    AuditModule,
+    IntegrationsModule,
+    NotificationsModule,
+    OutboxModule,
+  ],
   controllers: [MemoryController, RecordingsController, TranscriptsController],
   providers: [
     MemoryService,
