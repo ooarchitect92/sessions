@@ -22,6 +22,8 @@ export function SessionPage() {
   const [media, setMedia] = useState<MediaToken | null>(null);
   const [agendaEditorOpen, setAgendaEditorOpen] = useState(false);
   const [agendaAiPrompt, setAgendaAiPrompt] = useState('');
+  const [templateName, setTemplateName] = useState('');
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [agendaDraft, setAgendaDraft] = useState<Awaited<
     ReturnType<typeof api.generateAgendaDraft>
   > | null>(null);
@@ -53,6 +55,11 @@ export function SessionPage() {
     queryKey: ['session', sessionId],
     queryFn: () => api.getSession(sessionId),
     enabled: Boolean(sessionId),
+  });
+
+  const agendaTemplates = useQuery({
+    queryKey: ['agenda-templates'],
+    queryFn: () => api.listAgendaTemplates(),
   });
 
   const recordingConsent = useQuery({
@@ -103,6 +110,38 @@ export function SessionPage() {
     mutationFn: (agendaItemId: string) => api.activateAgendaItem(sessionId, agendaItemId),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+    },
+  });
+
+  const saveAgendaTemplate = useMutation({
+    mutationFn: () => {
+      if (!templateName.trim()) throw new Error('Enter a template name');
+      return api.createAgendaTemplateFromSession(sessionId, {
+        name: templateName.trim(),
+      });
+    },
+    onSuccess: async (template) => {
+      setTemplateName('');
+      setSelectedTemplateId(template.id);
+      await queryClient.invalidateQueries({ queryKey: ['agenda-templates'] });
+    },
+  });
+
+  const applyAgendaTemplate = useMutation({
+    mutationFn: (mode: 'APPEND' | 'REPLACE') => {
+      if (!selectedTemplateId) throw new Error('Choose an agenda template');
+      return api.applyAgendaTemplate(selectedTemplateId, sessionId, mode);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+    },
+  });
+
+  const deleteAgendaTemplate = useMutation({
+    mutationFn: (templateId: string) => api.deleteAgendaTemplate(templateId),
+    onSuccess: async (_, templateId) => {
+      if (selectedTemplateId === templateId) setSelectedTemplateId('');
+      await queryClient.invalidateQueries({ queryKey: ['agenda-templates'] });
     },
   });
 
@@ -378,6 +417,110 @@ export function SessionPage() {
           </div>
           {agendaEditorOpen ? (
             <div className="agenda-editor-stack">
+              <section className="agenda-ai-draft">
+                <div className="agenda-ai-heading">
+                  <div>
+                    <span className="eyebrow">Reusable templates</span>
+                    <strong>Save and reuse this run of show</strong>
+                  </div>
+                  <span className="review-pill">{agendaTemplates.data?.length ?? 0} saved</span>
+                </div>
+                <div className="agenda-form-grid">
+                  <label>
+                    Template
+                    <select
+                      value={selectedTemplateId}
+                      onChange={(event) => setSelectedTemplateId(event.target.value)}
+                    >
+                      <option value="">Choose template…</option>
+                      {agendaTemplates.data?.map((template) => (
+                        <option key={template.id} value={template.id}>
+                          {template.name} · {template.items.length} items
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Save current agenda as
+                    <input
+                      value={templateName}
+                      onChange={(event) => setTemplateName(event.target.value)}
+                      maxLength={160}
+                      placeholder="Sales demo"
+                    />
+                  </label>
+                </div>
+                <div className="agenda-draft-actions">
+                  <button
+                    type="button"
+                    className="button secondary"
+                    onClick={() => saveAgendaTemplate.mutate()}
+                    disabled={
+                      saveAgendaTemplate.isPending ||
+                      !templateName.trim() ||
+                      current.agendaItems.length === 0
+                    }
+                  >
+                    {saveAgendaTemplate.isPending ? 'Saving…' : 'Save template'}
+                  </button>
+                  <button
+                    type="button"
+                    className="button secondary"
+                    onClick={() => applyAgendaTemplate.mutate('APPEND')}
+                    disabled={!selectedTemplateId || applyAgendaTemplate.isPending}
+                  >
+                    Append template
+                  </button>
+                  <button
+                    type="button"
+                    className="button primary"
+                    onClick={() => {
+                      if (
+                        current.agendaItems.length === 0 ||
+                        window.confirm('Replace the current agenda with the selected template?')
+                      ) {
+                        applyAgendaTemplate.mutate('REPLACE');
+                      }
+                    }}
+                    disabled={!selectedTemplateId || applyAgendaTemplate.isPending}
+                  >
+                    Replace agenda
+                  </button>
+                </div>
+                {selectedTemplateId ? (
+                  <button
+                    type="button"
+                    className="button danger full-width"
+                    disabled={deleteAgendaTemplate.isPending}
+                    onClick={() => {
+                      const selected = agendaTemplates.data?.find(
+                        (template) => template.id === selectedTemplateId,
+                      );
+                      if (
+                        selected &&
+                        window.confirm(`Delete agenda template "${selected.name}"?`)
+                      ) {
+                        deleteAgendaTemplate.mutate(selectedTemplateId);
+                      }
+                    }}
+                  >
+                    Delete selected template
+                  </button>
+                ) : null}
+                {agendaTemplates.error ? (
+                  <div className="error-banner">{agendaTemplates.error.message}</div>
+                ) : null}
+                {saveAgendaTemplate.error ? (
+                  <div className="error-banner">{saveAgendaTemplate.error.message}</div>
+                ) : null}
+                {applyAgendaTemplate.error ? (
+                  <div className="error-banner">{applyAgendaTemplate.error.message}</div>
+                ) : null}
+                {deleteAgendaTemplate.error ? (
+                  <div className="error-banner">{deleteAgendaTemplate.error.message}</div>
+                ) : null}
+              </section>
+
               <section className="agenda-ai-draft">
                 <div className="agenda-ai-heading">
                   <div>
