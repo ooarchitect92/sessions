@@ -13,6 +13,7 @@ import {
 import { AuditService } from '../audit/audit.service';
 import { HOST_ROLES, hasAnyRole, type Principal } from '../common/auth/principal';
 import { TenantDatabaseService } from '../database/tenant-database.service';
+import { GovernanceService } from '../governance/governance.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { RecordConsentDto } from './dto/record-consent.dto';
 import { UpdateRecordingRetentionDto } from './dto/update-retention.dto';
@@ -26,6 +27,7 @@ export class RecordingsService {
     private readonly outbox: OutboxService,
     private readonly config: ConfigService,
     private readonly objectStore: S3ObjectStoreService,
+    private readonly governance: GovernanceService,
   ) {}
 
   async getConsentStatus(principal: Principal, sessionId: string) {
@@ -181,13 +183,16 @@ export class RecordingsService {
       });
       const count = (decision: RecordingConsentDecision) =>
         grouped.find((entry) => entry.decision === decision)?._count._all ?? 0;
-      const retentionDays = this.config.get<number>('RECORDING_RETENTION_DAYS', 30);
+      const retention = await this.governance.resolveRetentionForRecording(
+        transaction,
+        principal,
+      );
       const recording = await transaction.recording.create({
         data: {
           organizationId: principal.organizationId,
           workspaceId: principal.workspaceId,
           sessionId: session.id,
-          retentionUntil: new Date(Date.now() + retentionDays * 24 * 60 * 60_000),
+          retentionUntil: retention.retentionUntil,
           consentSnapshot: {
             required: true,
             policyVersion: consent.policyVersion,
