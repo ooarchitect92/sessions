@@ -82,7 +82,9 @@
 - [ ] automated TLS issuance/renewal and edge-router reconciliation
 - [x] scheduled daily workspace analytics rollups with reconnect-safe attendance aggregation
 - [x] role/scoped aggregate analytics API and audited CSV exports
-- [ ] plans, subscriptions, entitlements, seats, quota ledger and reconciliation
+- [x] plan catalog, workspace subscriptions, transactional seat enforcement, immutable usage ledger, quota reservations and reconciliation
+- [x] webhook and AI external-action quota reservation/commit/release metering
+- [ ] signature-verified billing-provider checkout/webhooks and recording/transcription/storage metering
 - [ ] SAML/OIDC enterprise SSO, SCIM, audit exports and retention policies
 - [ ] localization, accessibility certification, regional cells and disaster-recovery qualification
 
