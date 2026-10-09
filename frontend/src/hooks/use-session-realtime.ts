@@ -146,6 +146,9 @@ export function useSessionRealtime(sessionId: string): void {
           void queryClient.invalidateQueries({ queryKey: ['breakouts', sessionId] });
         });
       }
+      socket.on('cobrowse.updated', () => {
+        void queryClient.invalidateQueries({ queryKey: ['cobrowse', sessionId] });
+      });
       for (const eventName of [
         'poll.created',
         'poll.launched',
