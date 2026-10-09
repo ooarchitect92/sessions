@@ -48,7 +48,7 @@ export class OidcLoginService {
   ) {}
 
   async start(workspaceSlug: string, returnTo?: string) {
-    const workspace = await this.prisma.workspace.findUnique({
+    const workspace = await this.prisma.workspace.findFirst({
       where: { slug: workspaceSlug.trim().toLowerCase() },
       select: { id: true, organizationId: true },
     });
@@ -207,8 +207,18 @@ export class OidcLoginService {
     const jwks = (await response.json()) as { keys?: Array<Record<string, unknown>> };
     const jwk = jwks.keys?.find((item) => item.kid === header.kid);
     if (!jwk) throw new UnauthorizedException('OIDC signing key was not found');
+    const kty = typeof jwk.kty === 'string' ? jwk.kty : '';
+    const n = typeof jwk.n === 'string' ? jwk.n : '';
+    const e = typeof jwk.e === 'string' ? jwk.e : '';
+    if (kty !== 'RSA' || !n || !e) {
+      throw new UnauthorizedException('OIDC signing key is not a valid RSA key');
+    }
     let publicKey;
-    try { publicKey = createPublicKey({ key: jwk as JsonWebKey, format: 'jwk' }); } catch { throw new UnauthorizedException('OIDC signing key is invalid'); }
+    try {
+      publicKey = createPublicKey({ key: { kty, n, e }, format: 'jwk' });
+    } catch {
+      throw new UnauthorizedException('OIDC signing key is invalid');
+    }
     const valid = verifySignature('RSA-SHA256', Buffer.from(`${parts[0]}.${parts[1]}`), publicKey, Buffer.from(parts[2], 'base64url'));
     if (!valid) throw new UnauthorizedException('OIDC ID token signature is invalid');
     const now = Math.floor(Date.now() / 1000);
