@@ -13,8 +13,6 @@ import {
 } from '@prisma/client';
 import { randomBytes } from 'node:crypto';
 import { resolveTxt } from 'node:dns/promises';
-import { isIP } from 'node:net';
-import { domainToASCII } from 'node:url';
 import { AuditService } from '../audit/audit.service';
 import {
   ADMIN_ROLES,
@@ -26,6 +24,7 @@ import { WorkerPrismaService } from '../database/worker-prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
 import type { CreateCustomDomainDto } from './dto/create-custom-domain.dto';
 import type { UpdateBrandingDto } from './dto/update-branding.dto';
+import { normalizeCustomDomainHostname } from './custom-domain-policy';
 
 @Injectable()
 export class BrandingService {
@@ -96,7 +95,7 @@ export class BrandingService {
 
   async createDomain(principal: Principal, input: CreateCustomDomainDto) {
     this.assertAdmin(principal);
-    const hostname = this.normalizeHostname(input.hostname);
+    const hostname = normalizeCustomDomainHostname(input.hostname);
     const verificationName = `_sessions-verification.${hostname}`;
     const verificationValue =
       'sessions-domain-verification=' +
@@ -261,7 +260,7 @@ export class BrandingService {
   }
 
   async resolvePublicBranding(hostnameInput: string) {
-    const hostname = this.normalizeHostname(hostnameInput);
+    const hostname = normalizeCustomDomainHostname(hostnameInput);
     const domain = await this.worker.customDomain.findUnique({
       where: { hostname },
       include: {
@@ -413,49 +412,6 @@ export class BrandingService {
       createdAt: domain.createdAt,
       updatedAt: domain.updatedAt,
     };
-  }
-
-  private normalizeHostname(value: string): string {
-    if (typeof value !== 'string') {
-      throw new BadRequestException('A hostname is required');
-    }
-    const raw = value.trim().toLowerCase().replace(/\.$/, '');
-    if (
-      !raw ||
-      raw.includes('://') ||
-      raw.includes('/') ||
-      raw.includes(':') ||
-      raw.includes('*') ||
-      isIP(raw) !== 0
-    ) {
-      throw new BadRequestException('Enter a valid hostname without protocol or path');
-    }
-    const ascii = domainToASCII(raw);
-    if (!ascii || ascii.length > 200) {
-      throw new BadRequestException('Custom domain hostname is invalid');
-    }
-    if (
-      ascii === 'localhost' ||
-      ascii.endsWith('.localhost') ||
-      ascii.endsWith('.local') ||
-      ascii.endsWith('.internal') ||
-      ascii.endsWith('.home.arpa')
-    ) {
-      throw new BadRequestException('Local or internal hostnames are not allowed');
-    }
-    const labels = ascii.split('.');
-    if (
-      labels.length < 2 ||
-      labels.some(
-        (label) =>
-          label.length < 1 ||
-          label.length > 63 ||
-          !/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(label),
-      )
-    ) {
-      throw new BadRequestException('Custom domain hostname is invalid');
-    }
-    return ascii;
   }
 
   private nullable(value: string | null): string | null {
