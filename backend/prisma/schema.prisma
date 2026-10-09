@@ -225,6 +225,20 @@ enum ProviderConnectionStatus {
   ERROR
 }
 
+enum CustomDomainStatus {
+  PENDING_VERIFICATION
+  VERIFIED
+  DISABLED
+  ERROR
+}
+
+enum CustomDomainTlsStatus {
+  NOT_REQUESTED
+  PENDING
+  ACTIVE
+  ERROR
+}
+
 model Organization {
   id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name                String                @db.VarChar(160)
@@ -274,6 +288,8 @@ model Organization {
   webhookSubscriptions WebhookSubscription[]
   webhookDeliveries    WebhookDelivery[]
   providerConnections  ProviderConnection[]
+  workspaceBrandings   WorkspaceBranding[]
+  customDomains        CustomDomain[]
 
   @@map("organizations")
 }
@@ -331,6 +347,8 @@ model Workspace {
   webhookSubscriptions WebhookSubscription[]
   webhookDeliveries    WebhookDelivery[]
   providerConnections  ProviderConnection[]
+  branding             WorkspaceBranding?
+  customDomains        CustomDomain[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -1356,6 +1374,50 @@ model WebhookDelivery {
   @@index([organizationId, workspaceId, status, nextAttemptAt])
   @@index([subscriptionId, createdAt])
   @@map("webhook_deliveries")
+}
+
+model WorkspaceBranding {
+  id                   String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId       String       @map("organization_id") @db.Uuid
+  workspaceId          String       @unique @map("workspace_id") @db.Uuid
+  displayName          String?      @map("display_name") @db.VarChar(160)
+  logoUrl              String?      @map("logo_url") @db.Text
+  faviconUrl           String?      @map("favicon_url") @db.Text
+  primaryColor         String?      @map("primary_color") @db.VarChar(7)
+  accentColor          String?      @map("accent_color") @db.VarChar(7)
+  emailFromName        String?      @map("email_from_name") @db.VarChar(160)
+  supportUrl           String?      @map("support_url") @db.Text
+  hideSessionsBranding Boolean      @default(false) @map("hide_sessions_branding")
+  createdAt            DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace            Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, workspaceId])
+  @@map("workspace_brandings")
+}
+
+model CustomDomain {
+  id                String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId    String                @map("organization_id") @db.Uuid
+  workspaceId       String                @map("workspace_id") @db.Uuid
+  hostname          String                @unique @db.Citext
+  verificationName  String                @map("verification_name") @db.VarChar(253)
+  verificationValue String                @map("verification_value") @db.VarChar(255)
+  status            CustomDomainStatus    @default(PENDING_VERIFICATION)
+  tlsStatus         CustomDomainTlsStatus @default(NOT_REQUESTED) @map("tls_status")
+  verifiedAt        DateTime?             @map("verified_at") @db.Timestamptz(6)
+  lastCheckedAt     DateTime?             @map("last_checked_at") @db.Timestamptz(6)
+  tlsProvisionedAt  DateTime?             @map("tls_provisioned_at") @db.Timestamptz(6)
+  lastError         String?               @map("last_error") @db.VarChar(1000)
+  createdAt         DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization      Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace         Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, workspaceId, status])
+  @@index([workspaceId, createdAt])
+  @@map("custom_domains")
 }
 
 model ProviderConnection {
