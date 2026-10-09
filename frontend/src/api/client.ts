@@ -176,6 +176,23 @@ export interface CustomDomainRecord {
     txt: { name: string; value: string };
   };
 }
+export type WorkspaceEmailTemplateKind =
+  | 'EVENT_REMINDER_24H'
+  | 'EVENT_REMINDER_1H'
+  | 'BOOKING_REMINDER_24H'
+  | 'BOOKING_REMINDER_1H';
+
+export interface WorkspaceEmailTemplateRecord {
+  id: string;
+  kind: WorkspaceEmailTemplateKind;
+  enabled: boolean;
+  subject: string;
+  body_text: string;
+  signature: string;
+  version: number;
+  created_at: string;
+  updated_at: string;
+}
 export interface WorkspaceInvitation {
   id: string;
   email: string;
@@ -1404,6 +1421,22 @@ export const api = {
     return request<BookingPageRecord[]>("/bookings");
   },
 
+  listWorkspaceEmailTemplates(): Promise<WorkspaceEmailTemplateRecord[]> {
+    return request<WorkspaceEmailTemplateRecord[]>('/notifications/workspace/templates');
+  },
+
+  saveWorkspaceEmailTemplate(input: {
+    kind: WorkspaceEmailTemplateKind;
+    enabled?: boolean;
+    subject: string;
+    bodyText: string;
+    signature?: string;
+  }): Promise<WorkspaceEmailTemplateRecord> {
+    return request<WorkspaceEmailTemplateRecord>('/notifications/workspace/templates', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
   listCustomDomains(): Promise<CustomDomainRecord[]> {
     return request<CustomDomainRecord[]>('/custom-domains');
   },
