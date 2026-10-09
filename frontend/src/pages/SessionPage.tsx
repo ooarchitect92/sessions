@@ -957,6 +957,7 @@ export function SessionPage() {
 
         <SessionCollaborationPanel
           sessionId={sessionId}
+          activeBreakoutRoomId={media?.breakoutRoomId ?? null}
           onJoinBreakout={(roomId) => join.mutate(roomId)}
           onReturnMain={() => join.mutate(undefined)}
         />
