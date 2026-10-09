@@ -80,7 +80,8 @@
 - [x] tenant-scoped branding profile, white-label settings and DNS-verified custom-domain control plane
 - [x] TLS provisioning request handoff with explicit pending/active/error state
 - [ ] automated TLS issuance/renewal and edge-router reconciliation
-- [ ] analytics aggregation and governed exports
+- [x] scheduled daily workspace analytics rollups with reconnect-safe attendance aggregation
+- [x] role/scoped aggregate analytics API and audited CSV exports
 - [ ] plans, subscriptions, entitlements, seats, quota ledger and reconciliation
 - [ ] SAML/OIDC enterprise SSO, SCIM, audit exports and retention policies
 - [ ] localization, accessibility certification, regional cells and disaster-recovery qualification
