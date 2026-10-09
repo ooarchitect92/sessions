@@ -11,12 +11,82 @@ import {
 import { HOST_ROLES, hasAnyRole, type Principal } from '../common/auth/principal';
 import { TenantDatabaseService } from '../database/tenant-database.service';
 import { UpdateEventNotificationTemplateDto } from './dto/update-event-notification-template.dto';
+import { UpsertWorkspaceEmailTemplateDto } from './dto/upsert-workspace-email-template.dto';
 import { assertEventReminderTemplate } from './event-reminder-template';
 
 @Injectable()
 export class NotificationsService {
   constructor(private readonly database: TenantDatabaseService) {}
 
+  async listWorkspaceEmailTemplates(principal: Principal) {
+    this.assertHost(principal);
+    return this.database.run(principal, (transaction) =>
+      transaction.$queryRaw<Array<{
+        id: string;
+        kind: string;
+        enabled: boolean;
+        subject: string;
+        body_text: string;
+        signature: string;
+        version: number;
+        created_at: Date;
+        updated_at: Date;
+      }>>`
+        SELECT id, kind, enabled, subject, body_text, signature, version, created_at, updated_at
+        FROM workspace_email_templates
+        ORDER BY kind ASC
+      `,
+    );
+  }
+
+  async upsertWorkspaceEmailTemplate(
+    principal: Principal,
+    input: UpsertWorkspaceEmailTemplateDto,
+  ) {
+    this.assertHost(principal);
+    const subject = input.subject.trim();
+    const bodyText = input.bodyText.trim();
+    const signature = input.signature?.trim() ?? '';
+    if (!subject || !bodyText) {
+      throw new ConflictException('Email template subject and body are required');
+    }
+
+    return this.database.run(principal, async (transaction) => {
+      const rows = await transaction.$queryRaw<Array<{
+        id: string;
+        kind: string;
+        enabled: boolean;
+        subject: string;
+        body_text: string;
+        signature: string;
+        version: number;
+        created_at: Date;
+        updated_at: Date;
+      }>>`
+        INSERT INTO workspace_email_templates (
+          organization_id, workspace_id, kind, enabled, subject, body_text, signature
+        ) VALUES (
+          ${principal.organizationId}::uuid,
+          ${principal.workspaceId}::uuid,
+          ${input.kind},
+          ${input.enabled ?? true},
+          ${subject},
+          ${bodyText},
+          ${signature}
+        )
+        ON CONFLICT (workspace_id, kind)
+        DO UPDATE SET
+          enabled = EXCLUDED.enabled,
+          subject = EXCLUDED.subject,
+          body_text = EXCLUDED.body_text,
+          signature = EXCLUDED.signature,
+          version = workspace_email_templates.version + 1,
+          updated_at = NOW()
+        RETURNING id, kind, enabled, subject, body_text, signature, version, created_at, updated_at
+      `;
+      return rows[0];
+    });
+  }
   async listBookingDeliveries(principal: Principal, reservationId: string) {
     this.assertHost(principal);
     return this.database.run(principal, async (transaction) => {
