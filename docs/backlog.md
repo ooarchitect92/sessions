@@ -82,7 +82,8 @@
 - [x] plan catalog, workspace subscriptions, server-side entitlements, seat/resource quota enforcement and idempotent usage ledger
 - [ ] payment-provider checkout/webhooks, invoice lifecycle and subscription reconciliation
 - [x] enterprise identity control plane with encrypted OIDC configuration, allowed-domain policy, SCIM 2.0 bearer tokens and workspace provisioning/deprovisioning
-- [ ] qualified OIDC/SAML login redirects/callbacks, IdP logout, group/role mapping, audit exports and retention policies
+- [x] governed workspace audit CSV export and retention-policy administration with legal-hold-aware recording defaults
+- [ ] qualified OIDC/SAML login redirects/callbacks, IdP logout, group/role mapping and lifecycle-worker enforcement for transcript/audit retention
 - [ ] localization, accessibility certification, regional cells and disaster-recovery qualification
 
 A checkbox is marked complete only when a meaningful user path, persistence, authorization, validation and failure behavior exist. Provider qualification, scale evidence and operational recovery remain separate release gates even when the internal domain workflow is implemented.
