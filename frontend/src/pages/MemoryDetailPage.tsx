@@ -929,6 +929,16 @@ export function MemoryDetailPage() {
                     Language {item.transcript.language ?? 'unknown'} · version{' '}
                     {item.transcript.version}
                   </small>
+                  <div className="transcript-quality-badges">
+                    <span className={item.transcript.normalized ? 'ready' : 'neutral'}>
+                      {item.transcript.normalized ? 'Normalized audio' : 'Source media'}
+                    </span>
+                    <span className={item.transcript.diarized ? 'ready' : 'neutral'}>
+                      {item.transcript.diarized
+                        ? `${item.transcript.speakerCount ?? 0} speakers labeled`
+                        : 'Speaker labels not qualified'}
+                    </span>
+                  </div>
                 ) : null}
               </div>
               {item.transcript?.status === 'READY' ? (
