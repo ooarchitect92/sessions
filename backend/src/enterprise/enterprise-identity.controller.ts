@@ -73,6 +73,10 @@ export class EnterpriseIdentityController {
       ...(userAgent ? { userAgent } : {}),
     });
   }
+  @Get('sso/logout-url')
+  ssoLogoutUrl(@CurrentPrincipal() principal: Principal) {
+    return this.oidc.logoutUrl(principal);
+  }
   @Get('identity') getIdentity(@CurrentPrincipal() principal: Principal) { return this.enterprise.getConnection(principal); }
   @Put('identity') updateIdentity(@CurrentPrincipal() principal: Principal, @Body() body: EnterpriseIdentityDto) { return this.enterprise.upsertConnection(principal, body); }
   @Get('scim/tokens') listTokens(@CurrentPrincipal() principal: Principal) { return this.enterprise.listScimTokens(principal); }
