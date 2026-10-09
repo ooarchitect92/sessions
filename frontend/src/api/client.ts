@@ -300,6 +300,17 @@ export interface ResolvedEmbed {
   referrerPolicy: 'no-referrer';
 }
 
+export interface CobrowseStateRecord {
+  id: string | null;
+  sessionId: string;
+  url: string | null;
+  active: boolean;
+  controllerUserId: string | null;
+  startedById: string | null;
+  version: number;
+  updatedAt: string | null;
+}
+
 export interface MediaToken {
   url: string;
   token: string;
@@ -1464,6 +1475,55 @@ export const api = {
     return request(`/sessions/${sessionId}/recording-consent`, {
       method: "POST",
       body: JSON.stringify({ decision, policyVersion, noticeVersion }),
+    });
+  },
+
+  getCobrowseState(sessionId: string): Promise<CobrowseStateRecord> {
+    return request<CobrowseStateRecord>(`/sessions/${sessionId}/cobrowse`);
+  },
+
+  startCobrowse(sessionId: string, url: string): Promise<CobrowseStateRecord> {
+    return request<CobrowseStateRecord>(`/sessions/${sessionId}/cobrowse/start`, {
+      method: 'POST',
+      body: JSON.stringify({ url }),
+    });
+  },
+
+  navigateCobrowse(
+    sessionId: string,
+    version: number,
+    url: string,
+  ): Promise<CobrowseStateRecord> {
+    return request<CobrowseStateRecord>(
+      `/sessions/${sessionId}/cobrowse/navigate`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ version, url }),
+      },
+    );
+  },
+
+  grantCobrowseControl(
+    sessionId: string,
+    version: number,
+    controllerUserId: string,
+  ): Promise<CobrowseStateRecord> {
+    return request<CobrowseStateRecord>(
+      `/sessions/${sessionId}/cobrowse/control`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ version, controllerUserId }),
+      },
+    );
+  },
+
+  stopCobrowse(
+    sessionId: string,
+    version: number,
+  ): Promise<CobrowseStateRecord> {
+    return request<CobrowseStateRecord>(`/sessions/${sessionId}/cobrowse/stop`, {
+      method: 'POST',
+      body: JSON.stringify({ version }),
     });
   },
 
