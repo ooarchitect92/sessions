@@ -74,7 +74,8 @@
 - [ ] production webhook delivery qualification and pinned-egress hardening
 - [ ] provider integration framework, credential governance and pinned/egress-proxy SSRF-safe delivery
 - [x] workspace branding editor with persisted logo/colors/font/waiting-room identity, server validation, and propagation to public event/booking surfaces
-- [ ] workspace email-template editor, custom domains and automated TLS
+- [x] custom-domain control plane with tenant-scoped persistence, CNAME/TXT ownership verification and TLS-pending lifecycle
+- [ ] workspace email-template editor and provider-backed automated TLS issuance/routing
 - [ ] analytics aggregation and governed exports
 - [ ] plans, subscriptions, entitlements, seats, quota ledger and reconciliation
 - [ ] SAML/OIDC enterprise SSO, SCIM, audit exports and retention policies
