@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { ApiKeyStatus, Prisma } from '@prisma/client';
+import { ApiKeyStatus, Prisma, WebhookDeliveryStatus } from '@prisma/client';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { AuditService } from '../audit/audit.service';
 import { SecurityService } from '../auth/security.service';
@@ -222,9 +222,12 @@ export class IntegrationsService {
       });
       if (!existing) throw new NotFoundException('Webhook subscription not found');
 
-      await transaction.webhookSubscription.delete({ where: { id: subscriptionId } });
+      const updated = await transaction.webhookSubscription.update({
+        where: { id: subscriptionId },
+        data: { enabled: false },
+      });
       await this.audit.record(transaction, principal, {
-        action: 'integration.webhook.deleted',
+        action: 'integration.webhook.disabled',
         resourceType: 'webhook_subscription',
         resourceId: existing.id,
         metadata: { endpointUrl: existing.endpointUrl },
@@ -232,10 +235,89 @@ export class IntegrationsService {
       await this.outbox.enqueue(transaction, principal, {
         aggregateType: 'webhook_subscription',
         aggregateId: existing.id,
-        eventType: 'integration.webhook.deleted',
+        eventType: 'integration.webhook.disabled',
         payload: { subscriptionId: existing.id, endpointUrl: existing.endpointUrl },
       });
-      return { id: existing.id, deleted: true };
+      return { id: updated.id, enabled: updated.enabled };
+    });
+  }
+
+  async listWebhookDeliveries(principal: Principal, subscriptionId: string) {
+    this.assertAdmin(principal);
+    return this.database.run(principal, async (transaction) => {
+      const subscription = await transaction.webhookSubscription.findUnique({
+        where: { id: subscriptionId },
+        select: { id: true },
+      });
+      if (!subscription) throw new NotFoundException('Webhook subscription not found');
+
+      return transaction.webhookDelivery.findMany({
+        where: { subscriptionId },
+        select: {
+          id: true,
+          outboxEventId: true,
+          eventType: true,
+          status: true,
+          attempts: true,
+          nextAttemptAt: true,
+          lastAttemptAt: true,
+          responseStatus: true,
+          responseBodySnippet: true,
+          lastError: true,
+          deliveredAt: true,
+          replayCount: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+      });
+    });
+  }
+
+  async replayWebhookDelivery(principal: Principal, deliveryId: string) {
+    this.assertAdmin(principal);
+    return this.database.run(principal, async (transaction) => {
+      const delivery = await transaction.webhookDelivery.findUnique({
+        where: { id: deliveryId },
+        include: { subscription: { select: { enabled: true } } },
+      });
+      if (!delivery) throw new NotFoundException('Webhook delivery not found');
+      if (!delivery.subscription.enabled) {
+        throw new BadRequestException('Webhook subscription is disabled');
+      }
+      if (
+        delivery.status !== WebhookDeliveryStatus.DEAD_LETTER &&
+        delivery.status !== WebhookDeliveryStatus.FAILED &&
+        delivery.status !== WebhookDeliveryStatus.DELIVERED
+      ) {
+        throw new BadRequestException('Webhook delivery is not replayable in its current state');
+      }
+
+      const updated = await transaction.webhookDelivery.update({
+        where: { id: deliveryId },
+        data: {
+          status: WebhookDeliveryStatus.PENDING,
+          nextAttemptAt: new Date(),
+          lastError: null,
+          responseStatus: null,
+          responseBodySnippet: null,
+          deliveredAt: null,
+          replayCount: { increment: 1 },
+        },
+      });
+      await this.audit.record(transaction, principal, {
+        action: 'integration.webhook.delivery_replayed',
+        resourceType: 'webhook_delivery',
+        resourceId: updated.id,
+        metadata: {
+          subscriptionId: updated.subscriptionId,
+          outboxEventId: updated.outboxEventId,
+          eventType: updated.eventType,
+          replayCount: updated.replayCount,
+        },
+      });
+      return updated;
     });
   }
 
