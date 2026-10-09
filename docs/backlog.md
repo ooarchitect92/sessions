@@ -75,7 +75,8 @@
 - [x] default-deny API-key bearer authentication with current-membership validation, supported scope catalog and read/write endpoint enforcement
 - [x] HMAC webhook delivery worker with durable retries, dead-letter state, replay and reconciliation history
 - [x] SSRF-safe pinned HTTPS webhook egress boundary with redirect blocking, timeout and bounded responses
-- [ ] broader provider integration framework and credential governance
+- [x] tenant-scoped email/CRM provider connection vault with encrypted rotation, lifecycle, health evidence and SSRF-safe runtime egress
+- [ ] OAuth connector consolidation and real-provider qualification
 - [ ] branding, email templates, custom domains and automated TLS
 - [ ] analytics aggregation and governed exports
 - [ ] plans, subscriptions, entitlements, seats, quota ledger and reconciliation
