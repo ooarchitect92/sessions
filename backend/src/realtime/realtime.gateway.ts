@@ -40,9 +40,17 @@ const activateSchema = z.object({
   agendaItemId: z.string().uuid(),
 });
 
+const whiteboardCursorSchema = z.object({
+  sessionId: z.string().uuid(),
+  x: z.number().finite().min(0).max(1000),
+  y: z.number().finite().min(0).max(650),
+  visible: z.boolean().default(true),
+});
+
 type SocketData = {
   principal?: Principal;
   sessionIds?: Set<string>;
+  whiteboardCursorSentAt?: Map<string, number>;
 };
 
 type AuthenticatedSocket = Socket & { data: SocketData };
@@ -123,6 +131,7 @@ export class RealtimeGateway
       const parsed = principalSchema.parse(claims) as AccessTokenClaims;
       client.data.principal = await this.auth.resolvePrincipalFromClaims(parsed);
       client.data.sessionIds = new Set<string>();
+      client.data.whiteboardCursorSentAt = new Map<string, number>();
       await client.join(this.userRoomName(client.data.principal.userId));
     } catch {
       client.emit("authorization.error", {
@@ -136,6 +145,15 @@ export class RealtimeGateway
     const principal = client.data.principal;
     if (!principal) return;
     for (const sessionId of client.data.sessionIds ?? []) {
+      client.to(this.roomName(sessionId)).emit("whiteboard.cursor.updated", {
+        sessionId,
+        userId: principal.userId,
+        displayName: principal.displayName,
+        x: 0,
+        y: 0,
+        visible: false,
+        occurredAt: new Date().toISOString(),
+      });
       try {
         await this.analytics.closeAttendance(principal, sessionId, client.id);
       } catch (error: unknown) {
@@ -189,6 +207,37 @@ export class RealtimeGateway
       agendaItemId,
     );
     return { ok: true, ...result };
+  }
+
+  @SubscribeMessage("whiteboard.cursor")
+  async updateWhiteboardCursor(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() payload: unknown,
+  ): Promise<{ ok: true; throttled?: true }> {
+    const principal = this.requirePrincipal(client);
+    const cursor = whiteboardCursorSchema.parse(payload);
+
+    if (!client.data.sessionIds?.has(cursor.sessionId)) {
+      throw new Error("Join the session before publishing whiteboard cursor state");
+    }
+
+    const now = Date.now();
+    const previous = client.data.whiteboardCursorSentAt?.get(cursor.sessionId) ?? 0;
+    if (cursor.visible && now - previous < 40) {
+      return { ok: true, throttled: true };
+    }
+    client.data.whiteboardCursorSentAt?.set(cursor.sessionId, now);
+
+    client.to(this.roomName(cursor.sessionId)).emit("whiteboard.cursor.updated", {
+      sessionId: cursor.sessionId,
+      userId: principal.userId,
+      displayName: principal.displayName,
+      x: cursor.x,
+      y: cursor.y,
+      visible: cursor.visible,
+      occurredAt: new Date(now).toISOString(),
+    });
+    return { ok: true };
   }
 
   private requirePrincipal(client: AuthenticatedSocket): Principal {
