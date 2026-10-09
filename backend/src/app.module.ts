@@ -11,6 +11,7 @@ import { CalendarModule } from "./calendar/calendar.module";
 import { BreakoutsModule } from "./breakouts/breakouts.module";
 import { CollaborationModule } from "./collaboration/collaboration.module";
 import { ContentModule } from "./content/content.module";
+import { CustomDomainsModule } from "./custom-domains/custom-domains.module";
 import { PrincipalGuard } from "./common/auth/principal.guard";
 import { validateEnvironment } from "./common/config/env.validation";
 import { ApiEnvelopeInterceptor } from "./common/http/api-envelope.interceptor";
@@ -44,6 +45,7 @@ import { WorkspacesModule } from "./workspaces/workspaces.module";
     PrismaModule,
     InfrastructureModule,
     IntegrationsModule,
+    CustomDomainsModule,
     AnalyticsModule,
     AiModule,
     AuthModule,
