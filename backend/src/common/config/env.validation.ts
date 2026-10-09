@@ -103,6 +103,8 @@ const environmentSchema = z
     MICROSOFT_CALENDAR_CLIENT_SECRET: z.string().min(1).optional(),
     MICROSOFT_CALENDAR_TENANT: z.string().min(1).default('common'),
     OUTBOX_POLL_MS: z.coerce.number().int().min(250).max(60000).default(1000),
+    WEBHOOK_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(8),
+    WEBHOOK_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(10000),
   })
   .superRefine((value, context) => {
     const issue = (path: keyof typeof value, message: string) => {
