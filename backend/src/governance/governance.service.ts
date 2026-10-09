@@ -118,7 +118,12 @@ export class GovernanceService {
 
   async resolveRetentionForRecording(client: GovernanceClient, principal: Principal) {
     const policy = await this.retentionPolicy(client, principal);
-    if (policy.legalHold) return { retentionUntil: null as Date | null, legalHold: true };
+    if (policy.legalHold || !policy.deleteOnExpiry) {
+      return {
+        retentionUntil: null as Date | null,
+        legalHold: policy.legalHold,
+      };
+    }
     return {
       retentionUntil: new Date(Date.now() + policy.recordingDays * 24 * 60 * 60_000),
       legalHold: false,
