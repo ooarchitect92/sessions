@@ -65,9 +65,10 @@ export class EnterpriseIdentityController {
     @Body() body: ExchangeOidcGrantDto,
     @Req() request: FastifyRequest,
   ) {
+    const userAgent = request.headers['user-agent'];
     return this.oidc.exchangeGrant(body.grant, {
-      userAgent: request.headers['user-agent'],
       ip: request.ip,
+      ...(userAgent ? { userAgent } : {}),
     });
   }
   @Get('identity') getIdentity(@CurrentPrincipal() principal: Principal) { return this.enterprise.getConnection(principal); }
