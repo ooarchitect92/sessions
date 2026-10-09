@@ -1306,6 +1306,7 @@ model AuthSession {
   refreshTokenHash String        @map("refresh_token_hash") @db.VarChar(64)
   userAgent        String?       @map("user_agent") @db.VarChar(500)
   ipHash           String?       @map("ip_hash") @db.VarChar(64)
+  identityProvider String?       @map("identity_provider") @db.VarChar(32)
   expiresAt        DateTime      @map("expires_at") @db.Timestamptz(6)
   lastUsedAt       DateTime      @default(now()) @map("last_used_at") @db.Timestamptz(6)
   revokedAt        DateTime?     @map("revoked_at") @db.Timestamptz(6)
