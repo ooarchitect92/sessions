@@ -126,6 +126,7 @@ export class AuthService {
     userId: string,
     workspaceId: string,
     metadata: AuthRequestMetadata,
+    identityProvider: 'OIDC' | 'SAML' = 'OIDC',
   ): Promise<TokenBundle> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user || user.status !== UserStatus.ACTIVE) {
@@ -143,7 +144,7 @@ export class AuthService {
       data: { failedLoginAttempts: 0, lockedUntil: null, lastLoginAt: new Date() },
     });
     return this.prisma.$transaction((transaction) =>
-      this.issueTokens(transaction, user, membership, metadata),
+      this.issueTokens(transaction, user, membership, metadata, randomUUID(), randomUUID(), identityProvider),
     );
   }
   async signUp(input: SignUpDto, metadata: AuthRequestMetadata) {
@@ -1062,6 +1063,7 @@ export class AuthService {
           metadata,
           session.familyId,
           replacementId,
+          session.identityProvider,
         ),
       } as const;
     });
@@ -1080,6 +1082,7 @@ export class AuthService {
     metadata: AuthRequestMetadata,
     familyId: string = randomUUID(),
     sessionId: string = randomUUID(),
+    identityProvider: string | null = null,
   ): Promise<TokenBundle> {
     const refresh = this.security.createOpaqueToken(sessionId);
     const accessTokenExpiresIn = this.config.get<number>(
@@ -1100,6 +1103,7 @@ export class AuthService {
         refreshTokenHash: refresh.tokenHash,
         userAgent: metadata.userAgent?.slice(0, 500) || null,
         ipHash: this.security.hashIp(metadata.ip),
+        identityProvider,
         expiresAt: refreshTokenExpiresAt,
       },
     });
