@@ -477,6 +477,46 @@ export interface SessionAnalyticsRecord {
   engagement: Record<string, number>;
 }
 
+export interface WorkspaceAnalyticsRecord {
+  range: { from: string; to: string };
+  overview: {
+    sessions: number;
+    completedSessions: number;
+    liveSessions: number;
+    uniqueAttendees: number;
+    totalAttendanceSeconds: number;
+    averageAttendanceSecondsPerSession: number;
+    engagementEvents: number;
+    eventRegistrations: number;
+    eventAttendanceRate: number;
+    cancelledEventRegistrations: number;
+    bookings: number;
+    confirmedBookings: number;
+    cancelledBookings: number;
+    bookingConversionRate: number;
+  };
+  trend: Array<{
+    date: string;
+    sessions: number;
+    uniqueAttendees: number;
+    attendanceSeconds: number;
+    engagementEvents: number;
+  }>;
+  topSessions: Array<{
+    id: string;
+    title: string;
+    startsAt: string;
+    uniqueAttendees: number;
+    attendanceSeconds: number;
+    engagementEvents: number;
+  }>;
+}
+
+export interface WorkspaceAnalyticsExport {
+  filename: string;
+  columns: string[];
+  rows: Array<Record<string, string | number | boolean | null>>;
+}
 export interface BookingPageRecord extends BookingPage {
   _count?: { reservations: number };
 }
@@ -1383,6 +1423,21 @@ export const api = {
     );
   },
 
+  getWorkspaceAnalytics(from?: string, to?: string): Promise<WorkspaceAnalyticsRecord> {
+    const query = new URLSearchParams();
+    if (from) query.set('from', from);
+    if (to) query.set('to', to);
+    const suffix = query.size ? `?${query.toString()}` : '';
+    return request<WorkspaceAnalyticsRecord>(`/analytics/workspace${suffix}`);
+  },
+
+  exportWorkspaceAnalytics(from?: string, to?: string): Promise<WorkspaceAnalyticsExport> {
+    const query = new URLSearchParams();
+    if (from) query.set('from', from);
+    if (to) query.set('to', to);
+    const suffix = query.size ? `?${query.toString()}` : '';
+    return request<WorkspaceAnalyticsExport>(`/analytics/workspace/export${suffix}`);
+  },
   getEventAnalytics(eventId: string): Promise<EventAnalyticsRecord> {
     return request<EventAnalyticsRecord>(`/analytics/events/${eventId}`);
   },
