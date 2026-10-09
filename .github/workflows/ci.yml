@@ -51,21 +51,7 @@ jobs:
 
   migration-smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    services:
-      postgres:
-        image: pgvector/pgvector:pg17
-        env:
-          POSTGRES_DB: sessions
-          POSTGRES_USER: sessions
-          POSTGRES_PASSWORD: sessions
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U sessions -d sessions"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
+    timeout-minutes: 20
     env:
       DATABASE_URL: postgresql://sessions:sessions@localhost:5432/sessions?schema=public
       MIGRATION_DATABASE_URL: postgresql://sessions:sessions@localhost:5432/sessions?schema=public
@@ -74,6 +60,25 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Prepare PostgreSQL with pgvector
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql postgresql-server-dev-all build-essential
+          sudo systemctl start postgresql
+          rm -rf /tmp/pgvector
+          git clone --depth 1 --branch v0.8.7 https://github.com/pgvector/pgvector.git /tmp/pgvector
+          make -C /tmp/pgvector OPTFLAGS=""
+          sudo make -C /tmp/pgvector install
+          sudo -u postgres psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $
+          BEGIN
+            IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'sessions') THEN
+              CREATE ROLE sessions LOGIN PASSWORD 'sessions' SUPERUSER;
+            END IF;
+          END
+          $;
+          SQL
+          sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='sessions'" | grep -q 1             || sudo -u postgres createdb -O sessions sessions
       - run: cp .env.example .env
       - run: npm install --no-audit --no-fund
       - run: npm run db:generate
