@@ -5,7 +5,7 @@ import { useSearchParams } from 'react-router-dom';
 import { api, type WorkspaceMember } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 
-const TABS = ['workspace', 'members', 'workspaces', 'integrations', 'security'] as const;
+const TABS = ['workspace', 'branding', 'members', 'workspaces', 'integrations', 'security'] as const;
 type SettingsTab = (typeof TABS)[number];
 
 const MEMBER_ROLES: WorkspaceRole[] = ['ADMIN', 'HOST', 'MEMBER', 'ANALYST', 'GUEST'];
@@ -59,28 +59,33 @@ export function SettingsPage() {
               <span>
                 {item === 'workspace'
                   ? '◇'
-                  : item === 'members'
-                    ? '◎'
-                    : item === 'workspaces'
-                      ? '▦'
-                      : item === 'integrations'
-                        ? '⛓'
-                        : '⌾'}
+                  : item === 'branding'
+                    ? '✦'
+                    : item === 'members'
+                      ? '◎'
+                      : item === 'workspaces'
+                        ? '▦'
+                        : item === 'integrations'
+                          ? '⛓'
+                          : '⌾'}
               </span>
               {item === 'workspace'
                 ? 'Workspace profile'
-                : item === 'members'
-                  ? 'Members and invites'
-                  : item === 'workspaces'
-                    ? 'Your workspaces'
-                    : item === 'integrations'
-                      ? 'Integrations'
-                      : 'Security'}
+                : item === 'branding'
+                  ? 'Branding and domains'
+                  : item === 'members'
+                    ? 'Members and invites'
+                    : item === 'workspaces'
+                      ? 'Your workspaces'
+                      : item === 'integrations'
+                        ? 'Integrations'
+                        : 'Security'}
             </button>
           ))}
         </nav>
         <section className="settings-content">
           {tab === 'workspace' ? <WorkspaceProfile /> : null}
+          {tab === 'branding' ? <BrandingSettings /> : null}
           {tab === 'members' ? <MembersAndInvitations /> : null}
           {tab === 'workspaces' ? <WorkspaceDirectory /> : null}
           {tab === 'integrations' ? <IntegrationsSettings /> : null}
@@ -218,6 +223,361 @@ function WorkspaceProfile() {
           label="Audience workflows"
           value={workspace.data._count.events + workspace.data._count.bookingPages}
         />
+      </section>
+    </div>
+  );
+}
+
+function BrandingSettings() {
+  const auth = useAuth();
+  const queryClient = useQueryClient();
+  const currentRole = auth.me?.principal.roles[0] ?? 'GUEST';
+  const canManage = ['OWNER', 'ADMIN'].includes(currentRole);
+
+  const branding = useQuery({
+    queryKey: ['workspace-branding'],
+    queryFn: () => api.getWorkspaceBranding(),
+  });
+  const domains = useQuery({
+    queryKey: ['custom-domains'],
+    queryFn: () => api.listCustomDomains(),
+    enabled: canManage,
+  });
+
+  const [displayName, setDisplayName] = useState('');
+  const [logoUrl, setLogoUrl] = useState('');
+  const [faviconUrl, setFaviconUrl] = useState('');
+  const [primaryColor, setPrimaryColor] = useState('#5B5FF5');
+  const [accentColor, setAccentColor] = useState('#14B8A6');
+  const [emailFromName, setEmailFromName] = useState('');
+  const [supportUrl, setSupportUrl] = useState('');
+  const [hideSessionsBranding, setHideSessionsBranding] = useState(false);
+  const [hostname, setHostname] = useState('');
+
+  useEffect(() => {
+    if (!branding.data) return;
+    setDisplayName(branding.data.displayName ?? '');
+    setLogoUrl(branding.data.logoUrl ?? '');
+    setFaviconUrl(branding.data.faviconUrl ?? '');
+    setPrimaryColor(branding.data.primaryColor ?? '#5B5FF5');
+    setAccentColor(branding.data.accentColor ?? '#14B8A6');
+    setEmailFromName(branding.data.emailFromName ?? '');
+    setSupportUrl(branding.data.supportUrl ?? '');
+    setHideSessionsBranding(branding.data.hideSessionsBranding);
+  }, [branding.data]);
+
+  const saveBranding = useMutation({
+    mutationFn: () =>
+      api.updateWorkspaceBranding({
+        displayName: displayName.trim() || null,
+        logoUrl: logoUrl.trim() || null,
+        faviconUrl: faviconUrl.trim() || null,
+        primaryColor,
+        accentColor,
+        emailFromName: emailFromName.trim() || null,
+        supportUrl: supportUrl.trim() || null,
+        hideSessionsBranding,
+      }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['workspace-branding'] });
+    },
+  });
+
+  const addDomain = useMutation({
+    mutationFn: () => api.createCustomDomain(hostname.trim()),
+    onSuccess: async () => {
+      setHostname('');
+      await queryClient.invalidateQueries({ queryKey: ['custom-domains'] });
+    },
+  });
+
+  const verifyDomain = useMutation({
+    mutationFn: (domainId: string) => api.verifyCustomDomain(domainId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['custom-domains'] });
+    },
+  });
+
+  const disableDomain = useMutation({
+    mutationFn: (domainId: string) => api.disableCustomDomain(domainId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['custom-domains'] });
+    },
+  });
+
+  if (branding.isLoading) return <SettingsLoading />;
+  if (branding.error) return <SettingsError message={branding.error.message} />;
+
+  return (
+    <div className="settings-stack">
+      <section className="panel settings-panel">
+        <div className="settings-panel-heading">
+          <div>
+            <span className="eyebrow">Workspace identity</span>
+            <h2>Brand appearance</h2>
+            <p>
+              Apply a workspace-owned identity to public and customer-facing experiences.
+              Brand assets remain isolated to the current tenant.
+            </p>
+          </div>
+          <span className="settings-role-chip">{currentRole.toLowerCase()}</span>
+        </div>
+
+        <form
+          className="settings-form"
+          onSubmit={(event: FormEvent) => {
+            event.preventDefault();
+            saveBranding.mutate();
+          }}
+        >
+          <div className="settings-form-grid">
+            <label>
+              Display name
+              <input
+                disabled={!canManage}
+                maxLength={160}
+                value={displayName}
+                onChange={(event) => setDisplayName(event.target.value)}
+                placeholder="Your company"
+              />
+            </label>
+            <label>
+              Email sender name
+              <input
+                disabled={!canManage}
+                maxLength={160}
+                value={emailFromName}
+                onChange={(event) => setEmailFromName(event.target.value)}
+                placeholder="Your company"
+              />
+            </label>
+            <label className="settings-grid-span">
+              Logo URL
+              <input
+                disabled={!canManage}
+                type="url"
+                value={logoUrl}
+                onChange={(event) => setLogoUrl(event.target.value)}
+                placeholder="https://cdn.example.com/logo.svg"
+              />
+            </label>
+            <label className="settings-grid-span">
+              Favicon URL
+              <input
+                disabled={!canManage}
+                type="url"
+                value={faviconUrl}
+                onChange={(event) => setFaviconUrl(event.target.value)}
+                placeholder="https://cdn.example.com/favicon.png"
+              />
+            </label>
+            <label>
+              Primary color
+              <input
+                disabled={!canManage}
+                type="color"
+                value={primaryColor}
+                onChange={(event) => setPrimaryColor(event.target.value.toUpperCase())}
+              />
+            </label>
+            <label>
+              Accent color
+              <input
+                disabled={!canManage}
+                type="color"
+                value={accentColor}
+                onChange={(event) => setAccentColor(event.target.value.toUpperCase())}
+              />
+            </label>
+            <label className="settings-grid-span">
+              Support URL
+              <input
+                disabled={!canManage}
+                type="url"
+                value={supportUrl}
+                onChange={(event) => setSupportUrl(event.target.value)}
+                placeholder="https://support.example.com"
+              />
+            </label>
+          </div>
+
+          <label className="settings-toggle-row">
+            <input
+              disabled={!canManage}
+              type="checkbox"
+              checked={hideSessionsBranding}
+              onChange={(event) => setHideSessionsBranding(event.target.checked)}
+            />
+            <span>
+              <strong>Hide Sessions branding</strong>
+              <small>
+                Remove the platform brand from customer-facing surfaces where white-label
+                presentation is supported.
+              </small>
+            </span>
+          </label>
+
+          <div className="workspace-directory-grid">
+            <article className="workspace-directory-card">
+              <span>Live preview</span>
+              <h3>{displayName.trim() || 'Your workspace'}</h3>
+              {logoUrl ? (
+                <img
+                  src={logoUrl}
+                  alt="Brand logo preview"
+                  style={{ maxWidth: '160px', maxHeight: '56px', objectFit: 'contain' }}
+                />
+              ) : (
+                <p>Add an HTTPS logo URL to preview the brand asset.</p>
+              )}
+              <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                <span
+                  aria-label="Primary brand color"
+                  style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '8px',
+                    background: primaryColor,
+                  }}
+                />
+                <span
+                  aria-label="Accent brand color"
+                  style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '8px',
+                    background: accentColor,
+                  }}
+                />
+              </div>
+            </article>
+          </div>
+
+          {saveBranding.error ? (
+            <div className="error-banner">{saveBranding.error.message}</div>
+          ) : null}
+          {saveBranding.isSuccess ? (
+            <div className="success-banner">Brand settings saved.</div>
+          ) : null}
+          <div className="settings-actions">
+            <button
+              className="button primary"
+              disabled={!canManage || saveBranding.isPending}
+            >
+              {saveBranding.isPending ? 'Saving…' : 'Save branding'}
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <section className="panel settings-panel">
+        <div className="settings-panel-heading">
+          <div>
+            <span className="eyebrow">Verified customer hostnames</span>
+            <h2>Custom domains</h2>
+            <p>
+              Prove DNS ownership first. After verification, the platform requests TLS
+              provisioning through the infrastructure event pipeline.
+            </p>
+          </div>
+          <span className="count-pill">{domains.data?.length ?? 0}</span>
+        </div>
+
+        <form
+          className="invite-row"
+          onSubmit={(event: FormEvent) => {
+            event.preventDefault();
+            addDomain.mutate();
+          }}
+        >
+          <input
+            disabled={!canManage}
+            required
+            value={hostname}
+            onChange={(event) => setHostname(event.target.value)}
+            placeholder="meet.example.com"
+          />
+          <button
+            className="button primary"
+            disabled={!canManage || addDomain.isPending || hostname.trim().length < 4}
+          >
+            {addDomain.isPending ? 'Adding…' : 'Add domain'}
+          </button>
+        </form>
+
+        {domains.isLoading ? <SettingsLoading /> : null}
+        {domains.error ? <SettingsError message={domains.error.message} /> : null}
+        {addDomain.error ? <div className="error-banner">{addDomain.error.message}</div> : null}
+        {verifyDomain.error ? (
+          <div className="error-banner">{verifyDomain.error.message}</div>
+        ) : null}
+        {disableDomain.error ? (
+          <div className="error-banner">{disableDomain.error.message}</div>
+        ) : null}
+
+        <div className="settings-table">
+          {domains.data?.map((domain) => (
+            <div className="settings-table-row" key={domain.id}>
+              <div className="member-copy">
+                <strong>{domain.hostname}</strong>
+                <span>
+                  Domain {domain.status.toLowerCase().replaceAll('_', ' ')} · TLS{' '}
+                  {domain.tlsStatus.toLowerCase().replaceAll('_', ' ')}
+                </span>
+                <small>
+                  Last checked {formatDate(domain.lastCheckedAt)} · verified{' '}
+                  {formatDate(domain.verifiedAt)}
+                </small>
+                <div className="development-token-box">
+                  <div>
+                    <strong>1. Ownership TXT record</strong>
+                    <small>{domain.verification.type}</small>
+                  </div>
+                  <code>{domain.verification.name}</code>
+                  <code>{domain.verification.value}</code>
+                </div>
+                <div className="development-token-box">
+                  <div>
+                    <strong>2. Routing record</strong>
+                    <small>{domain.routing.type}</small>
+                  </div>
+                  <code>{domain.routing.name}</code>
+                  <code>{domain.routing.value}</code>
+                </div>
+                {domain.lastError ? (
+                  <div className="error-banner">{domain.lastError}</div>
+                ) : null}
+              </div>
+              {domain.status !== 'DISABLED' && domain.status !== 'VERIFIED' ? (
+                <button
+                  type="button"
+                  className="button primary"
+                  disabled={!canManage || verifyDomain.isPending}
+                  onClick={() => verifyDomain.mutate(domain.id)}
+                >
+                  Verify DNS
+                </button>
+              ) : null}
+              {domain.status !== 'DISABLED' ? (
+                <button
+                  type="button"
+                  className="settings-row-action danger-text"
+                  disabled={!canManage || disableDomain.isPending}
+                  onClick={() => {
+                    if (window.confirm(`Disable ${domain.hostname}?`)) {
+                      disableDomain.mutate(domain.id);
+                    }
+                  }}
+                >
+                  Disable
+                </button>
+              ) : null}
+            </div>
+          ))}
+          {domains.data?.length === 0 ? (
+            <div className="settings-empty-row">No custom domains configured.</div>
+          ) : null}
+        </div>
       </section>
     </div>
   );
