@@ -72,3 +72,20 @@ Provider credentials are encrypted with the shared AES-256-GCM sensitive-value b
 Provider endpoints must resolve to public HTTPS addresses before create, update, or re-enable. Runtime email/CRM calls use the DNS-pinned bounded HTTPS transport already used by webhook delivery, so tenant-configured endpoints inherit the same application-level SSRF boundary. Provider execution records last-used/success/failure timestamps and bounded error state.
 
 The existing environment-configured email/CRM adapters remain as backward-compatible fallback when a workspace has no governed provider connection. Google/Microsoft Calendar continue to use their existing OAuth-specific connection/token lifecycle. Consolidating OAuth providers behind the generic connection framework and completing real-provider qualification remain later release gates.
+
+
+## Branding and custom domains
+
+Each workspace can persist a tenant-isolated brand profile with display name, HTTPS logo/favicon/support URLs, six-digit primary/accent colors, email sender name and a white-label presentation flag. Owner/admin mutations emit audit and transactional-outbox evidence.
+
+Custom-domain onboarding follows a proof-before-routing lifecycle:
+
+1. normalize and globally reserve the requested hostname;
+2. generate a unique `_sessions-verification.<hostname>` TXT challenge;
+3. return exact TXT and platform CNAME instructions;
+4. verify ownership through authoritative DNS TXT lookup;
+5. persist verification/check/error evidence;
+6. enqueue `branding.domain.tls.requested` after first successful verification;
+7. keep the domain unavailable for public brand resolution until TLS is explicitly marked `ACTIVE` by the infrastructure provisioning path.
+
+The application therefore does not confuse DNS ownership with certificate readiness. Automated certificate issuance/renewal and edge-router reconciliation remain infrastructure qualification work; the domain model and outbox handoff are ready for that provider.
