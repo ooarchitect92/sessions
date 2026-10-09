@@ -234,7 +234,11 @@ export class AgendaTemplatesService {
       if (input.mode === 'REPLACE') {
         await transaction.session.update({
           where: { id: sessionId },
-          data: { currentAgendaItemId: null, version: { increment: 1 } },
+          data: {
+            currentAgendaItemId: null,
+            currentAgendaActivatedAt: null,
+            version: { increment: 1 },
+          },
         });
         await transaction.agendaItem.deleteMany({ where: { sessionId } });
       }
