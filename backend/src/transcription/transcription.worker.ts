@@ -5,6 +5,8 @@ import { ArtifactStatus, Prisma, SessionStatus } from '@prisma/client';
 import { WorkerPrismaService } from '../database/worker-prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { S3ObjectStoreService } from '../recordings/s3-object-store.service';
+import { DiarizationProviderService } from './diarization-provider.service';
+import { MediaNormalizationService } from './media-normalization.service';
 import { TranscriptionProviderService } from './transcription-provider.service';
 
 @Injectable()
@@ -18,6 +20,8 @@ export class TranscriptionWorker {
     private readonly outbox: OutboxService,
     private readonly objectStore: S3ObjectStoreService,
     private readonly provider: TranscriptionProviderService,
+    private readonly normalizer: MediaNormalizationService,
+    private readonly diarization: DiarizationProviderService,
   ) {}
 
   @Interval(2500)
@@ -78,11 +82,22 @@ export class TranscriptionWorker {
           maxBytes,
         );
         const mimeType = transcript.recording.mimeType ?? 'video/mp4';
-        const result = await this.provider.transcribe({
+        const normalized = await this.normalizer.normalize({
           media,
           mimeType,
           filename: `session-${transcript.sessionId}.mp4`,
+        });
+        const transcription = await this.provider.transcribe({
+          media: normalized.media,
+          mimeType: normalized.mimeType,
+          filename: normalized.filename,
           language: transcript.language,
+        });
+        const result = await this.diarization.diarize({
+          media: normalized.media,
+          mimeType: normalized.mimeType,
+          filename: normalized.filename,
+          transcription,
         });
 
         await this.prisma.$transaction(async (transaction) => {
@@ -131,6 +146,11 @@ export class TranscriptionWorker {
                 provider: result.provider,
                 language: result.language ?? transcript.language,
                 segmentCount: result.segments.length,
+                mediaNormalization: this.normalizer.providerName(),
+                diarizationProvider: this.diarization.providerName(),
+                speakerLabeledSegmentCount: result.segments.filter(
+                  (segment) => Boolean(segment.speakerLabel),
+                ).length,
               } as Prisma.InputJsonObject,
             },
           );
