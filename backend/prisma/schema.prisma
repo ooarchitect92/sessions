@@ -330,6 +330,7 @@ model Workspace {
   apiKeys              ApiKey[]
   webhookSubscriptions WebhookSubscription[]
   webhookDeliveries    WebhookDelivery[]
+  providerConnections  ProviderConnection[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
