@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Headers, Param, ParseUUIDPipe, Patch, Post, Put, Query, Req, Res } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { IsArray, IsBoolean, IsIn, IsOptional, IsString, IsUrl, Length } from 'class-validator';
+import { IsArray, IsBoolean, IsIn, IsObject, IsOptional, IsString, IsUrl, Length } from 'class-validator';
 import { WorkspaceRole } from '@prisma/client';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { CurrentPrincipal } from '../common/auth/current-principal.decorator';
@@ -20,9 +20,11 @@ class EnterpriseIdentityDto {
   @IsOptional() @IsUrl({ protocols: ['https'], require_protocol: true }) tokenEndpoint?: string;
   @IsOptional() @IsUrl({ protocols: ['https'], require_protocol: true }) userinfoEndpoint?: string;
   @IsOptional() @IsUrl({ protocols: ['https'], require_protocol: true }) jwksUri?: string;
+  @IsOptional() @IsUrl({ protocols: ['https'], require_protocol: true }) endSessionEndpoint?: string;
   @IsOptional() @IsArray() @IsString({ each: true }) scopes?: string[];
   @IsOptional() @IsArray() @IsString({ each: true }) emailDomains?: string[];
   @IsOptional() @IsString() @Length(1,120) roleAttribute?: string;
+  @IsOptional() @IsObject() roleMappings?: Record<string, WorkspaceRole>;
   @IsOptional() @IsIn(['ADMIN','HOST','MEMBER','ANALYST','GUEST']) defaultRole?: WorkspaceRole;
 }
 class CreateScimTokenDto { @IsString() @Length(2,120) name!: string; @IsOptional() @IsString() expiresAt?: string; }
