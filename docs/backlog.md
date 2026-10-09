@@ -79,7 +79,8 @@
 - [x] branded HTML email rendering with workspace logo/colors and escaped text fallback
 - [ ] provider-backed automated TLS issuance/routing
 - [x] workspace analytics aggregation with attendance, engagement, event-registration and booking metrics plus audited CSV exports
-- [ ] plans, subscriptions, entitlements, seats, quota ledger and reconciliation
+- [x] plan catalog, workspace subscriptions, server-side entitlements, seat/resource quota enforcement and idempotent usage ledger
+- [ ] payment-provider checkout/webhooks, invoice lifecycle and subscription reconciliation
 - [ ] SAML/OIDC enterprise SSO, SCIM, audit exports and retention policies
 - [ ] localization, accessibility certification, regional cells and disaster-recovery qualification
 
