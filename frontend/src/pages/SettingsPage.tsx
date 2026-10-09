@@ -5,6 +5,8 @@ import { useSearchParams } from 'react-router-dom';
 import {
   api,
   type WorkspaceDomainRecord,
+  type WorkspaceEmailTemplateKind,
+  type WorkspaceEmailTemplateRecord,
   type WorkspaceMember,
 } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
@@ -12,6 +14,7 @@ import { useAuth } from '../auth/AuthContext';
 const TABS = [
   'workspace',
   'branding',
+  'emails',
   'members',
   'workspaces',
   'integrations',
@@ -72,6 +75,8 @@ export function SettingsPage() {
                   ? '◇'
                   : item === 'branding'
                     ? '✦'
+                    : item === 'emails'
+                    ? '✉'
                     : item === 'members'
                       ? '◎'
                       : item === 'workspaces'
@@ -84,6 +89,8 @@ export function SettingsPage() {
                 ? 'Workspace profile'
                 : item === 'branding'
                   ? 'Branding and domains'
+                  : item === 'emails'
+                  ? 'Email templates'
                   : item === 'members'
                     ? 'Members and invites'
                     : item === 'workspaces'
@@ -97,6 +104,7 @@ export function SettingsPage() {
         <section className="settings-content">
           {tab === 'workspace' ? <WorkspaceProfile /> : null}
           {tab === 'branding' ? <BrandingAndDomains /> : null}
+          {tab === 'emails' ? <WorkspaceEmailTemplates /> : null}
           {tab === 'members' ? <MembersAndInvitations /> : null}
           {tab === 'workspaces' ? <WorkspaceDirectory /> : null}
           {tab === 'integrations' ? <IntegrationsSettings /> : null}
@@ -480,6 +488,180 @@ function BrandingAndDomains() {
         </div>
       </section>
     </div>
+  );
+}
+
+const WORKSPACE_TEMPLATE_LABELS: Record<WorkspaceEmailTemplateKind, string> = {
+  BOOKING_REMINDER_24H: 'Booking reminder · 24 hours',
+  BOOKING_REMINDER_1H: 'Booking reminder · 1 hour',
+  EVENT_REMINDER_24H: 'Event reminder · 24 hours',
+  EVENT_REMINDER_1H: 'Event reminder · 1 hour',
+};
+
+function WorkspaceEmailTemplates() {
+  const queryClient = useQueryClient();
+  const workspace = useQuery({
+    queryKey: ['workspace-current'],
+    queryFn: () => api.getCurrentWorkspace(),
+  });
+  const templates = useQuery({
+    queryKey: ['workspace-email-templates'],
+    queryFn: () => api.listWorkspaceEmailTemplates(),
+  });
+  const canManage = ['OWNER', 'ADMIN'].includes(
+    workspace.data?.currentRole ?? 'GUEST',
+  );
+
+  if (templates.isLoading || workspace.isLoading) return <SettingsLoading />;
+  if (templates.error || workspace.error) {
+    return (
+      <SettingsError
+        message={
+          templates.error?.message ??
+          workspace.error?.message ??
+          'Email templates unavailable'
+        }
+      />
+    );
+  }
+
+  return (
+    <div className="settings-stack">
+      <section className="panel settings-panel">
+        <div className="settings-panel-heading">
+          <div>
+            <span className="eyebrow">Branded notifications</span>
+            <h2>Workspace email templates</h2>
+            <p>
+              Configure booking and event reminder copy once per workspace.
+              New events inherit the event reminder defaults; booking reminders
+              render the current workspace template at delivery time.
+            </p>
+          </div>
+        </div>
+        <div className="settings-stack">
+          {templates.data?.map((template) => (
+            <WorkspaceEmailTemplateEditor
+              key={template.id}
+              template={template}
+              canManage={canManage}
+              onSaved={async () =>
+                queryClient.invalidateQueries({
+                  queryKey: ['workspace-email-templates'],
+                })
+              }
+            />
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function WorkspaceEmailTemplateEditor({
+  template,
+  canManage,
+  onSaved,
+}: {
+  template: WorkspaceEmailTemplateRecord;
+  canManage: boolean;
+  onSaved: () => Promise<unknown>;
+}) {
+  const [enabled, setEnabled] = useState(template.enabled);
+  const [subject, setSubject] = useState(template.subject);
+  const [bodyText, setBodyText] = useState(template.bodyText);
+  const [signatureText, setSignatureText] = useState(
+    template.signatureText ?? '',
+  );
+  useEffect(() => {
+    setEnabled(template.enabled);
+    setSubject(template.subject);
+    setBodyText(template.bodyText);
+    setSignatureText(template.signatureText ?? '');
+  }, [template]);
+
+  const update = useMutation({
+    mutationFn: () =>
+      api.updateWorkspaceEmailTemplate(template.kind, template.version, {
+        enabled,
+        subject,
+        bodyText,
+        signatureText,
+      }),
+    onSuccess: onSaved,
+  });
+
+  const variables = template.kind.startsWith('BOOKING_')
+    ? '{{attendee_name}}, {{booking_title}}, {{booking_time}}, {{booking_timezone}}, {{workspace_name}}'
+    : '{{attendee_name}}, {{event_title}}, {{event_time}}, {{event_timezone}}, {{workspace_name}}';
+
+  return (
+    <article className="panel settings-panel">
+      <div className="settings-panel-heading compact-settings-heading">
+        <div>
+          <span className="eyebrow">Version {template.version}</span>
+          <h3>{WORKSPACE_TEMPLATE_LABELS[template.kind]}</h3>
+          <small>Variables: {variables}</small>
+        </div>
+        <label className="settings-toggle-row">
+          <input
+            type="checkbox"
+            disabled={!canManage}
+            checked={enabled}
+            onChange={(event) => setEnabled(event.target.checked)}
+          />
+          <span>
+            <strong>Enabled</strong>
+          </span>
+        </label>
+      </div>
+      <div className="settings-form">
+        <label>
+          Subject
+          <input
+            disabled={!canManage}
+            maxLength={240}
+            value={subject}
+            onChange={(event) => setSubject(event.target.value)}
+          />
+        </label>
+        <label>
+          Message
+          <textarea
+            disabled={!canManage}
+            rows={7}
+            value={bodyText}
+            onChange={(event) => setBodyText(event.target.value)}
+          />
+        </label>
+        <label>
+          Global signature for this template
+          <textarea
+            disabled={!canManage}
+            rows={3}
+            value={signatureText}
+            onChange={(event) => setSignatureText(event.target.value)}
+            placeholder="— {{workspace_name}}"
+          />
+        </label>
+        {update.error ? (
+          <div className="error-banner">{update.error.message}</div>
+        ) : null}
+        {update.isSuccess ? (
+          <div className="success-banner">Template saved.</div>
+        ) : null}
+        <div className="settings-actions">
+          <button
+            type="button"
+            className="button primary"
+            disabled={!canManage || update.isPending || !subject.trim() || !bodyText.trim()}
+            onClick={() => update.mutate()}
+          >
+            {update.isPending ? 'Saving…' : 'Save template'}
+          </button>
+        </div>
+      </div>
+    </article>
   );
 }
 

@@ -13,6 +13,7 @@ import {
   RegistrationStatus,
   SessionKind,
   SessionStatus,
+  WorkspaceEmailTemplateKind,
   type Event,
   type EventRegistration,
 } from "@prisma/client";
@@ -129,6 +130,44 @@ export class EventsService {
           isPublic: true,
         },
       });
+      const [workspaceTemplates, workspace] = await Promise.all([
+        transaction.workspaceEmailTemplate.findMany({
+          where: {
+            workspaceId: principal.workspaceId,
+            kind: {
+              in: [
+                WorkspaceEmailTemplateKind.EVENT_REMINDER_24H,
+                WorkspaceEmailTemplateKind.EVENT_REMINDER_1H,
+              ],
+            },
+          },
+        }),
+        transaction.workspace.findUniqueOrThrow({
+          where: { id: principal.workspaceId },
+          select: { name: true },
+        }),
+      ]);
+      const workspaceTemplateByKind = new Map(
+        workspaceTemplates.map((template) => [template.kind, template]),
+      );
+      const reminder24 = workspaceTemplateByKind.get(
+        WorkspaceEmailTemplateKind.EVENT_REMINDER_24H,
+      );
+      const reminder1 = workspaceTemplateByKind.get(
+        WorkspaceEmailTemplateKind.EVENT_REMINDER_1H,
+      );
+      const eventTemplateText = (
+        value: string,
+        signatureText?: string | null,
+      ): string => {
+        const renderWorkspaceName = (source: string) =>
+          source.replace(/{{\s*workspace_name\s*}}/g, workspace.name);
+        const body = renderWorkspaceName(value);
+        const signature = signatureText
+          ? renderWorkspaceName(signatureText).trim()
+          : '';
+        return signature ? `${body}\n\n${signature}` : body;
+      };
       await transaction.eventNotificationTemplate.createMany({
         data: [
           {
@@ -136,18 +175,32 @@ export class EventsService {
             workspaceId: principal.workspaceId,
             eventId: event.id,
             kind: EventReminderKind.EVENT_REMINDER_24H,
-            subject: "Reminder: {{event_title}} starts tomorrow",
-            bodyText:
-              "Hi {{attendee_name}},\n\n{{event_title}} starts in 24 hours.\n\nTime: {{event_time}} ({{event_timezone}})\n\nWe look forward to seeing you.",
+            enabled: reminder24?.enabled ?? true,
+            subject: eventTemplateText(
+              reminder24?.subject ??
+                "Reminder: {{event_title}} starts tomorrow",
+            ),
+            bodyText: eventTemplateText(
+              reminder24?.bodyText ??
+                "Hi {{attendee_name}},\n\n{{event_title}} starts in 24 hours.\n\nTime: {{event_time}} ({{event_timezone}})\n\nWe look forward to seeing you.",
+              reminder24?.signatureText,
+            ),
           },
           {
             organizationId: principal.organizationId,
             workspaceId: principal.workspaceId,
             eventId: event.id,
             kind: EventReminderKind.EVENT_REMINDER_1H,
-            subject: "Reminder: {{event_title}} starts in 1 hour",
-            bodyText:
-              "Hi {{attendee_name}},\n\n{{event_title}} starts in 1 hour.\n\nTime: {{event_time}} ({{event_timezone}})\n\nYour event is coming up soon.",
+            enabled: reminder1?.enabled ?? true,
+            subject: eventTemplateText(
+              reminder1?.subject ??
+                "Reminder: {{event_title}} starts in 1 hour",
+            ),
+            bodyText: eventTemplateText(
+              reminder1?.bodyText ??
+                "Hi {{attendee_name}},\n\n{{event_title}} starts in 1 hour.\n\nTime: {{event_time}} ({{event_timezone}})\n\nYour event is coming up soon.",
+              reminder1?.signatureText,
+            ),
           },
         ],
       });

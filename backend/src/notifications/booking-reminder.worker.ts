@@ -6,10 +6,15 @@ import {
   NotificationKind,
   NotificationStatus,
   Prisma,
+  WorkspaceEmailTemplateKind,
 } from '@prisma/client';
 import { WorkerPrismaService } from '../database/worker-prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { EmailDeliveryProvider } from './email-delivery.provider';
+import {
+  DEFAULT_WORKSPACE_EMAIL_TEMPLATES,
+  renderWorkspaceEmailTemplate,
+} from './workspace-email-template';
 
 const REMINDERS = [
   {
@@ -67,6 +72,7 @@ export class BookingReminderWorker {
         organizationId: true,
         workspaceId: true,
         email: true,
+        name: true,
         startsAt: true,
       },
       take: 250,
@@ -190,6 +196,7 @@ export class BookingReminderWorker {
         bookingReservation: {
           include: {
             bookingPage: { select: { title: true, timezone: true } },
+            workspace: { select: { name: true } },
             session: { select: { title: true } },
           },
         },
@@ -237,14 +244,52 @@ export class BookingReminderWorker {
         const title =
           delivery.bookingReservation.session?.title ??
           delivery.bookingReservation.bookingPage.title;
+        const templateKind =
+          delivery.kind === NotificationKind.BOOKING_REMINDER_24H
+            ? WorkspaceEmailTemplateKind.BOOKING_REMINDER_24H
+            : WorkspaceEmailTemplateKind.BOOKING_REMINDER_1H;
+        const customTemplate = await this.prisma.workspaceEmailTemplate.findUnique({
+          where: {
+            workspaceId_kind: {
+              workspaceId: delivery.workspaceId,
+              kind: templateKind,
+            },
+          },
+        });
+        if (customTemplate && !customTemplate.enabled) {
+          await this.prisma.notificationDelivery.update({
+            where: { id: delivery.id },
+            data: {
+              status: NotificationStatus.CANCELLED,
+              nextAttemptAt: null,
+              lastError: 'workspace_template_disabled',
+            },
+          });
+          continue;
+        }
+        const fallback = DEFAULT_WORKSPACE_EMAIL_TEMPLATES[templateKind];
+        const variables = {
+          attendee_name: delivery.bookingReservation.name,
+          booking_title: title,
+          booking_time: startsAt,
+          booking_timezone: delivery.bookingReservation.bookingPage.timezone,
+          workspace_name: delivery.bookingReservation.workspace.name,
+        };
+        const subject = renderWorkspaceEmailTemplate(
+          customTemplate?.subject ?? fallback.subject,
+          variables,
+        ).slice(0, 240);
+        const renderedBody = renderWorkspaceEmailTemplate(
+          customTemplate?.bodyText ?? fallback.bodyText,
+          variables,
+        );
+        const signature = customTemplate?.signatureText
+          ? renderWorkspaceEmailTemplate(customTemplate.signatureText, variables)
+          : '';
         const result = await this.provider.send({
           to: delivery.recipientEmail,
-          subject: `Reminder: ${title} starts in ${definition.label}`,
-          text: [
-            `Your scheduled session "${title}" starts in ${definition.label}.`,
-            `Time: ${startsAt} (${delivery.bookingReservation.bookingPage.timezone})`,
-            'Open your Sessions booking confirmation to manage or cancel this meeting.',
-          ].join('\n\n'),
+          subject,
+          text: signature ? `${renderedBody}\n\n${signature}` : renderedBody,
           idempotencyKey: `booking-reminder:${delivery.id}`,
         });
 

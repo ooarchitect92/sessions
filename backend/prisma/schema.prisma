@@ -214,6 +214,13 @@ enum WorkspaceDomainStatus {
   VERIFIED
 }
 
+enum WorkspaceEmailTemplateKind {
+  BOOKING_REMINDER_24H
+  BOOKING_REMINDER_1H
+  EVENT_REMINDER_24H
+  EVENT_REMINDER_1H
+}
+
 model Organization {
   id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name                String                @db.VarChar(160)
@@ -260,6 +267,7 @@ model Organization {
   calendarOAuthStates CalendarOAuthState[]
   aiExternalActions    AiExternalAction[]
   workspaceDomains     WorkspaceDomain[]
+  workspaceEmailTemplates WorkspaceEmailTemplate[]
 
   @@map("organizations")
 }
@@ -314,6 +322,7 @@ model Workspace {
   calendarOAuthStates CalendarOAuthState[]
   aiExternalActions    AiExternalAction[]
   domains              WorkspaceDomain[]
+  emailTemplates       WorkspaceEmailTemplate[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -335,6 +344,26 @@ model WorkspaceDomain {
 
   @@index([organizationId, workspaceId, status])
   @@map("workspace_domains")
+}
+
+model WorkspaceEmailTemplate {
+  id             String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String                     @map("organization_id") @db.Uuid
+  workspaceId    String                     @map("workspace_id") @db.Uuid
+  kind           WorkspaceEmailTemplateKind
+  enabled        Boolean                    @default(true)
+  subject        String                     @db.VarChar(240)
+  bodyText       String                     @map("body_text") @db.Text
+  signatureText  String?                    @map("signature_text") @db.Text
+  version        Int                        @default(1)
+  createdAt      DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      Workspace                  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, kind])
+  @@index([organizationId, workspaceId, kind])
+  @@map("workspace_email_templates")
 }
 
 model User {
