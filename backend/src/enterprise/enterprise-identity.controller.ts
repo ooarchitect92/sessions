@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Headers, Param, ParseUUIDPipe, Post, Put } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, Param, ParseUUIDPipe, Patch, Post, Put } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { IsArray, IsBoolean, IsIn, IsOptional, IsString, IsUrl, IsUUID, Length } from 'class-validator';
 import { WorkspaceRole } from '@prisma/client';
@@ -46,6 +46,5 @@ export class ScimController {
   constructor(private readonly enterprise: EnterpriseIdentityService) {}
   @Get('Users') users(@Headers('authorization') authorization?: string) { return this.enterprise.scimListUsers(authorization); }
   @Post('Users') create(@Headers('authorization') authorization: string | undefined, @Body() body: ScimCreateUserDto) { return this.enterprise.scimCreateUser(authorization, body); }
-  @Put('Users/:id') replace(@Headers('authorization') authorization: string | undefined, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Body() body: ScimPatchUserDto) { return this.enterprise.scimPatchUser(authorization, id, body); }
-  @Post('Users/:id') patchCompat(@Headers('authorization') authorization: string | undefined, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Body() body: ScimPatchUserDto) { return this.enterprise.scimPatchUser(authorization, id, body); }
+  @Patch('Users/:id') patch(@Headers('authorization') authorization: string | undefined, @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, @Body() body: ScimPatchUserDto) { return this.enterprise.scimPatchUser(authorization, id, body); }
 }
