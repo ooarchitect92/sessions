@@ -1294,3 +1294,60 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+.meeting-connection-banner {
+  position: absolute;
+  z-index: 18;
+  top: 12px;
+  right: 12px;
+  left: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(237, 196, 112, 0.28);
+  border-radius: 11px;
+  background: rgba(59, 47, 24, 0.92);
+  color: #f5ead1;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(10px);
+}
+
+.meeting-connection-banner strong,
+.meeting-connection-banner span {
+  display: block;
+}
+
+.meeting-connection-banner strong {
+  font-size: 9px;
+}
+
+.meeting-connection-banner span {
+  margin-top: 2px;
+  color: #cfc2a6;
+  font-size: 8px;
+  line-height: 1.4;
+}
+
+.meeting-connection-banner button {
+  min-height: 29px;
+  flex: 0 0 auto;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  padding: 0 9px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff4dc;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.meeting-connection-banner.state-disconnected {
+  border-color: rgba(225, 100, 85, 0.3);
+  background: rgba(74, 29, 25, 0.93);
+}
+
+.meeting-connection-banner.state-disconnected span {
+  color: #dfb0a8;
+}
