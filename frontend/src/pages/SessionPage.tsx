@@ -5,6 +5,7 @@ import { FormEvent, useState, type CSSProperties } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api, type MediaToken } from '../api/client';
 import { AgendaContentStage } from '../components/AgendaContentStage';
+import { DevicePreflight, type DevicePreferences } from '../components/DevicePreflight';
 import { SessionCollaborationPanel } from '../components/SessionCollaborationPanel';
 import { WhiteboardStage } from '../components/WhiteboardStage';
 import { useSessionRealtime } from '../hooks/use-session-realtime';
@@ -20,6 +21,13 @@ export function SessionPage() {
   const { sessionId = '' } = useParams();
   const queryClient = useQueryClient();
   const [media, setMedia] = useState<MediaToken | null>(null);
+  const [preflightOpen, setPreflightOpen] = useState(false);
+  const [devicePreferences, setDevicePreferences] = useState<DevicePreferences>({
+    cameraDeviceId: null,
+    microphoneDeviceId: null,
+    cameraEnabled: true,
+    microphoneEnabled: true,
+  });
   const [agendaEditorOpen, setAgendaEditorOpen] = useState(false);
   const [agendaAiPrompt, setAgendaAiPrompt] = useState('');
   const [templateName, setTemplateName] = useState('');
@@ -103,6 +111,7 @@ export function SessionPage() {
     onSuccess: (token) => {
       setStageMode('media');
       setMedia(token);
+      setPreflightOpen(false);
     },
   });
 
@@ -327,6 +336,16 @@ export function SessionPage() {
 
   return (
     <div className="session-workspace workspace-branded-meeting" style={themeStyle}>
+      <DevicePreflight
+        open={preflightOpen}
+        initial={devicePreferences}
+        joining={join.isPending}
+        onCancel={() => setPreflightOpen(false)}
+        onJoin={(preferences) => {
+          setDevicePreferences(preferences);
+          join.mutate(undefined);
+        }}
+      />
       <header className="session-header">
         <div className="session-header-title">
           <Link to="/" className="back-link" aria-label="Back to overview">
@@ -369,7 +388,7 @@ export function SessionPage() {
           ) : null}
           <button
             className="button primary"
-            onClick={() => join.mutate(undefined)}
+            onClick={() => setPreflightOpen(true)}
             disabled={join.isPending || !consentGranted}
           >
             {!consentGranted
@@ -858,8 +877,24 @@ export function SessionPage() {
               token={media.token}
               serverUrl={media.url}
               connect
-              audio
-              video
+              audio={
+                devicePreferences.microphoneEnabled
+                  ? {
+                      deviceId: devicePreferences.microphoneDeviceId ?? undefined,
+                      echoCancellation: true,
+                      noiseSuppression: true,
+                      autoGainControl: true,
+                    }
+                  : false
+              }
+              video={
+                devicePreferences.cameraEnabled
+                  ? {
+                      deviceId: devicePreferences.cameraDeviceId ?? undefined,
+                      resolution: { width: 1280, height: 720 },
+                    }
+                  : false
+              }
               data-lk-theme="default"
               onDisconnected={() => setMedia(null)}
             >
@@ -899,7 +934,7 @@ export function SessionPage() {
               ) : null}
               <button
                 className="button primary large"
-                onClick={() => join.mutate(undefined)}
+                onClick={() => setPreflightOpen(true)}
                 disabled={join.isPending || !consentGranted}
               >
                 {!consentGranted
