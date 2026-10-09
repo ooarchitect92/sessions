@@ -145,6 +145,36 @@ export function SessionPage() {
     },
   });
 
+  const importAgendaTemplate = useMutation({
+    mutationFn: async (file: File) => {
+      const parsed = JSON.parse(await file.text()) as {
+        name?: unknown;
+        description?: unknown;
+        items?: unknown;
+      };
+      if (
+        typeof parsed.name !== 'string' ||
+        !parsed.name.trim() ||
+        !Array.isArray(parsed.items)
+      ) {
+        throw new Error('Template JSON must contain a name and items array');
+      }
+      return api.createAgendaTemplate({
+        name: parsed.name.trim(),
+        ...(typeof parsed.description === 'string'
+          ? { description: parsed.description }
+          : {}),
+        items: parsed.items as Awaited<
+          ReturnType<typeof api.listAgendaTemplates>
+        >[number]['items'],
+      });
+    },
+    onSuccess: async (template) => {
+      setSelectedTemplateId(template.id);
+      await queryClient.invalidateQueries({ queryKey: ['agenda-templates'] });
+    },
+  });
+
   const generateAgendaDraft = useMutation({
     mutationFn: () => api.generateAgendaDraft(sessionId, agendaAiPrompt),
     onSuccess: (draft) => setAgendaDraft(draft),
@@ -488,11 +518,48 @@ export function SessionPage() {
                   </button>
                 </div>
                 {selectedTemplateId ? (
-                  <button
-                    type="button"
-                    className="button danger full-width"
-                    disabled={deleteAgendaTemplate.isPending}
-                    onClick={() => {
+                  <div className="agenda-draft-actions">
+                    <button
+                      type="button"
+                      className="button secondary"
+                      onClick={() => {
+                        const selected = agendaTemplates.data?.find(
+                          (template) => template.id === selectedTemplateId,
+                        );
+                        if (!selected) return;
+                        const blob = new Blob(
+                          [
+                            JSON.stringify(
+                              {
+                                name: selected.name,
+                                description: selected.description,
+                                items: selected.items,
+                              },
+                              null,
+                              2,
+                            ),
+                          ],
+                          { type: 'application/json;charset=utf-8' },
+                        );
+                        const url = URL.createObjectURL(blob);
+                        const anchor = document.createElement('a');
+                        anchor.href = url;
+                        anchor.download = `${selected.name
+                          .toLowerCase()
+                          .replace(/[^a-z0-9]+/g, '-')}-agenda-template.json`;
+                        document.body.appendChild(anchor);
+                        anchor.click();
+                        anchor.remove();
+                        URL.revokeObjectURL(url);
+                      }}
+                    >
+                      Export selected
+                    </button>
+                    <button
+                      type="button"
+                      className="button danger"
+                      disabled={deleteAgendaTemplate.isPending}
+                      onClick={() => {
                       const selected = agendaTemplates.data?.find(
                         (template) => template.id === selectedTemplateId,
                       );
@@ -501,12 +568,27 @@ export function SessionPage() {
                         window.confirm(`Delete agenda template "${selected.name}"?`)
                       ) {
                         deleteAgendaTemplate.mutate(selectedTemplateId);
-                      }
-                    }}
-                  >
-                    Delete selected template
-                  </button>
+                        }
+                      }}
+                    >
+                      Delete selected template
+                    </button>
+                  </div>
                 ) : null}
+                <label>
+                  Import template JSON
+                  <input
+                    type="file"
+                    accept="application/json,.json"
+                    disabled={importAgendaTemplate.isPending}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) importAgendaTemplate.mutate(file);
+                      event.currentTarget.value = '';
+                    }}
+                  />
+                  <small>Imported templates are validated again by the backend before they are saved.</small>
+                </label>
                 {agendaTemplates.error ? (
                   <div className="error-banner">{agendaTemplates.error.message}</div>
                 ) : null}
@@ -518,6 +600,9 @@ export function SessionPage() {
                 ) : null}
                 {deleteAgendaTemplate.error ? (
                   <div className="error-banner">{deleteAgendaTemplate.error.message}</div>
+                ) : null}
+                {importAgendaTemplate.error ? (
+                  <div className="error-banner">{importAgendaTemplate.error.message}</div>
                 ) : null}
               </section>
 
