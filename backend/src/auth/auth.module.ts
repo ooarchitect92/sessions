@@ -2,6 +2,7 @@ import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { AuditModule } from '../audit/audit.module';
+import { BillingModule } from '../billing/billing.module';
 import { OutboxModule } from '../outbox/outbox.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -21,6 +22,7 @@ import { SecurityService } from './security.service';
       }),
     }),
     AuditModule,
+    BillingModule,
     OutboxModule,
   ],
   controllers: [AuthController],
