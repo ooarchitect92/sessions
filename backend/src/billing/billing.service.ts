@@ -79,6 +79,14 @@ export class BillingService {
       )
       ON CONFLICT (workspace_id) DO NOTHING
     `;
+    await client.$executeRaw`
+      UPDATE workspace_subscriptions
+      SET current_period_start = date_trunc('month', NOW()),
+          current_period_end = date_trunc('month', NOW()) + INTERVAL '1 month',
+          updated_at = NOW()
+      WHERE workspace_id = ${principal.workspaceId}::uuid
+        AND current_period_end <= NOW()
+    `;
     const rows = await client.$queryRaw<SubscriptionRow[]>`
       SELECT
         s.id, s.plan_code, s.status, s.seat_quantity,
@@ -98,6 +106,7 @@ export class BillingService {
 
   async assertCanCreateSession(client: BillingClient, principal: Principal): Promise<void> {
     const subscription = await this.ensureSubscription(client, principal);
+    this.assertSubscriptionActive(subscription);
     const limit = subscription.limits.sessionsPerMonth;
     if (limit < 0) return;
     const used = await client.session.count({
@@ -115,6 +124,7 @@ export class BillingService {
     requestedCapacity?: number | null,
   ): Promise<void> {
     const subscription = await this.ensureSubscription(client, principal);
+    this.assertSubscriptionActive(subscription);
     const monthlyLimit = subscription.limits.eventsPerMonth;
     if (monthlyLimit >= 0) {
       const used = await client.event.count({
@@ -134,6 +144,7 @@ export class BillingService {
 
   async assertCanCreateBookingPage(client: BillingClient, principal: Principal): Promise<void> {
     const subscription = await this.ensureSubscription(client, principal);
+    this.assertSubscriptionActive(subscription);
     const limit = subscription.limits.bookingPages;
     if (limit < 0) return;
     const used = await client.bookingPage.count({ where: { workspaceId: principal.workspaceId } });
@@ -142,6 +153,7 @@ export class BillingService {
 
   async assertSeatAvailable(client: BillingClient, principal: Principal): Promise<void> {
     const subscription = await this.ensureSubscription(client, principal);
+    this.assertSubscriptionActive(subscription);
     const limit = subscription.limits.seats;
     if (limit < 0) return;
     const [members, pendingInvites] = await Promise.all([
@@ -231,6 +243,13 @@ export class BillingService {
     };
   }
 
+  private assertSubscriptionActive(subscription: SubscriptionRow): void {
+    if (!['ACTIVE', 'TRIALING'].includes(subscription.status)) {
+      throw new ForbiddenException(
+        `Subscription is ${subscription.status.toLowerCase()}; new billable resources are blocked`,
+      );
+    }
+  }
   private assertWithin(label: string, used: number, limit: number): void {
     if (used >= limit) {
       throw new ForbiddenException(`Plan limit exceeded: ${label} ${used}/${limit}`);
