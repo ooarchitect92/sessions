@@ -1267,3 +1267,30 @@
   font-size: 8px;
   font-weight: 800;
 }
+
+
+.participant-moderation-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.participant-publishing-action,
+.participant-moderation-actions .participant-remove {
+  min-height: 29px;
+  border-radius: 8px;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.participant-publishing-action {
+  border: 1px solid rgba(100, 158, 139, 0.24);
+  background: rgba(73, 131, 112, 0.12);
+  color: #a9d0c2;
+}
+
+@media (max-width: 420px) {
+  .participant-moderation-actions {
+    grid-template-columns: 1fr;
+  }
+}
