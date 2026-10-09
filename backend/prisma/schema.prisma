@@ -53,6 +53,7 @@ enum AgendaItemType {
   BREAKOUT
   QA
   SCREEN_SHARE
+  COBROWSE
 }
 
 enum EventStatus {
@@ -1107,6 +1108,23 @@ model WhiteboardOperation {
   @@unique([whiteboardId, sequence])
   @@index([organizationId, workspaceId, sessionId, sequence])
   @@map("whiteboard_operations")
+}
+
+model CobrowseState {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String   @map("organization_id") @db.Uuid
+  workspaceId      String   @map("workspace_id") @db.Uuid
+  sessionId        String   @unique @map("session_id") @db.Uuid
+  url              String?  @db.Text
+  active           Boolean  @default(false)
+  controllerUserId String?  @map("controller_user_id") @db.Uuid
+  startedById      String?  @map("started_by_id") @db.Uuid
+  version          Int      @default(1)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([organizationId, workspaceId, sessionId])
+  @@map("cobrowse_states")
 }
 
 model BreakoutRoom {
