@@ -19,6 +19,7 @@ import { PrismaModule } from "./database/prisma.module";
 import { EventsModule } from "./events/events.module";
 import { HealthModule } from "./health/health.module";
 import { InfrastructureModule } from "./infrastructure/infrastructure.module";
+import { IntegrationsModule } from "./integrations/integrations.module";
 import { MediaModule } from "./media/media.module";
 import { MemoryModule } from "./memory/memory.module";
 import { NotificationsModule } from "./notifications/notifications.module";
@@ -42,6 +43,7 @@ import { WorkspacesModule } from "./workspaces/workspaces.module";
     ScheduleModule.forRoot(),
     PrismaModule,
     InfrastructureModule,
+    IntegrationsModule,
     AnalyticsModule,
     AiModule,
     AuthModule,

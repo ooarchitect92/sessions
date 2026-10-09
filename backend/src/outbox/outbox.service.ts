@@ -93,8 +93,37 @@ export class OutboxService {
     `;
   }
 
+  private async materializeWebhookDeliveries(event: ClaimedOutboxEvent): Promise<void> {
+    const subscriptions = await this.prisma.webhookSubscription.findMany({
+      where: {
+        organizationId: event.organization_id,
+        workspaceId: event.workspace_id,
+        active: true,
+        OR: [
+          { eventTypes: { has: event.event_type } },
+          { eventTypes: { has: '*' } },
+        ],
+      },
+      select: { id: true },
+    });
+    if (subscriptions.length === 0) return;
+
+    await this.prisma.webhookDelivery.createMany({
+      data: subscriptions.map((subscription) => ({
+        organizationId: event.organization_id,
+        workspaceId: event.workspace_id,
+        subscriptionId: subscription.id,
+        outboxEventId: event.id,
+        eventType: event.event_type,
+        payload: event.payload as Prisma.InputJsonValue,
+      })),
+      skipDuplicates: true,
+    });
+  }
+
   private async publish(event: ClaimedOutboxEvent): Promise<void> {
     try {
+      await this.materializeWebhookDeliveries(event);
       await this.redis.xadd(
         'sessions.events',
         'MAXLEN',

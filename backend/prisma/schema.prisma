@@ -201,6 +201,14 @@ enum AiExternalActionStatus {
   CANCELLED
 }
 
+enum WebhookDeliveryStatus {
+  PENDING
+  DELIVERING
+  DELIVERED
+  FAILED
+  DEAD_LETTER
+}
+
 model Organization {
   id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name                String                @db.VarChar(160)
@@ -1278,6 +1286,69 @@ model OutboxEvent {
   @@index([publishedAt, deadLetteredAt, availableAt])
   @@index([workspaceId, createdAt])
   @@map("outbox_events")
+}
+
+model ApiKey {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  workspaceId    String    @map("workspace_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  name           String    @db.VarChar(120)
+  prefix         String    @db.VarChar(32)
+  keyHash        String    @unique @map("key_hash") @db.VarChar(64)
+  scopes         String[]  @default([])
+  expiresAt      DateTime? @map("expires_at") @db.Timestamptz(6)
+  revokedAt      DateTime? @map("revoked_at") @db.Timestamptz(6)
+  lastUsedAt     DateTime? @map("last_used_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([organizationId, workspaceId, createdAt])
+  @@index([workspaceId, revokedAt, expiresAt])
+  @@map("api_keys")
+}
+
+model WebhookSubscription {
+  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String            @map("organization_id") @db.Uuid
+  workspaceId     String            @map("workspace_id") @db.Uuid
+  name            String            @db.VarChar(120)
+  url             String            @db.Text
+  encryptedSecret String            @map("encrypted_secret") @db.Text
+  eventTypes      String[]          @map("event_types")
+  active          Boolean           @default(true)
+  version         Int               @default(1)
+  createdAt       DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deliveries      WebhookDelivery[]
+
+  @@unique([workspaceId, name])
+  @@index([organizationId, workspaceId, active])
+  @@map("webhook_subscriptions")
+}
+
+model WebhookDelivery {
+  id              String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String                @map("organization_id") @db.Uuid
+  workspaceId     String                @map("workspace_id") @db.Uuid
+  subscriptionId  String                @map("subscription_id") @db.Uuid
+  outboxEventId   String                @map("outbox_event_id") @db.Uuid
+  eventType       String                @map("event_type") @db.VarChar(160)
+  payload         Json
+  status          WebhookDeliveryStatus @default(PENDING)
+  attempts        Int                   @default(0)
+  availableAt     DateTime              @default(now()) @map("available_at") @db.Timestamptz(6)
+  lockedAt        DateTime?             @map("locked_at") @db.Timestamptz(6)
+  lockedBy        String?               @map("locked_by") @db.VarChar(160)
+  responseStatus  Int?                  @map("response_status")
+  lastError       String?               @map("last_error") @db.Text
+  deliveredAt     DateTime?             @map("delivered_at") @db.Timestamptz(6)
+  createdAt       DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  subscription    WebhookSubscription   @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@unique([subscriptionId, outboxEventId])
+  @@index([organizationId, workspaceId, createdAt])
+  @@index([status, availableAt, lockedAt])
+  @@map("webhook_deliveries")
 }
 
 model AuditEvent {
