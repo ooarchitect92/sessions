@@ -330,3 +330,15 @@ External AI actions are never sent or written automatically. A host first create
 - `POST /v1/memory/{sessionId}/follow-ups/{actionId}/cancel` cancels a draft, approved, or failed action before successful execution.
 
 Email execution reuses the qualified email delivery adapter with an action-specific idempotency key. CRM writes use a separately configured controlled HTTP adapter (`CRM_WRITE_PROVIDER=http`) and also carry an idempotency key. Local mock providers exercise the pipeline but are forbidden in production.
+
+
+### Transcript quality metadata
+
+Transcript responses now expose normalization and diarization qualification metadata alongside the existing language/provider/version fields:
+
+- `normalized` and `normalizedMimeType` show whether the source recording was transformed before STT.
+- `diarized` is true only when every stored provider segment has a non-empty speaker label.
+- `speakerCount` is the number of distinct provider speaker labels.
+- `qualityMetadata` includes labeled-segment ratio, timestamp-order validation, overlap count and normalization details.
+
+These fields describe pipeline evidence, not a guarantee of speaker-identification accuracy. Provider-level diarization quality must still be qualified externally.
