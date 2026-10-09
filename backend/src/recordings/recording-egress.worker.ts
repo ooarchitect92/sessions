@@ -267,17 +267,24 @@ export class RecordingEgressWorker {
   }
 
   private async expireRetention(): Promise<void> {
-    await this.prisma.recording.updateMany({
-      where: {
-        status: ArtifactStatus.READY,
-        retentionUntil: { lte: new Date() },
-      },
-      data: {
-        status: ArtifactStatus.DELETING,
-        deletionRequestedAt: new Date(),
-        version: { increment: 1 },
-      },
-    });
+    await this.prisma.$executeRaw`
+      UPDATE recordings AS recording
+      SET
+        status = 'DELETING',
+        deletion_requested_at = NOW(),
+        version = version + 1,
+        updated_at = NOW()
+      WHERE recording.status = 'READY'
+        AND recording.retention_until IS NOT NULL
+        AND recording.retention_until <= NOW()
+        AND NOT EXISTS (
+          SELECT 1
+          FROM workspace_retention_policies AS policy
+          WHERE policy.workspace_id = recording.workspace_id
+            AND policy.organization_id = recording.organization_id
+            AND (policy.legal_hold = TRUE OR policy.delete_on_expiry = FALSE)
+        )
+    `;
   }
 
   private async deleteRequestedRecordings(): Promise<void> {
