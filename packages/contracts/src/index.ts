@@ -31,6 +31,7 @@ export const AgendaItemTypeSchema = z.enum([
   'BREAKOUT',
   'QA',
   'SCREEN_SHARE',
+  'COBROWSE',
 ]);
 
 export const EventStatusSchema = z.enum(['DRAFT', 'PUBLISHED', 'LIVE', 'ENDED', 'CANCELLED']);
