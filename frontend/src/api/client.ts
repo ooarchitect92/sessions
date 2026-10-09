@@ -208,6 +208,23 @@ export interface WorkspaceInvitation {
   developmentInvitationToken?: string;
 }
 
+export interface PrivacyExportPackage {
+  requestId: string;
+  exportedAt: string;
+  formatVersion: number;
+  profile: Record<string, unknown>;
+  memberships: Array<Record<string, unknown>>;
+  authoredContent: Record<string, unknown>;
+  activity: Record<string, unknown>;
+  integrations: Record<string, unknown>;
+}
+
+export interface PrivacyErasureResult {
+  requestId?: string;
+  erased: true;
+  strategy?: string;
+  signedOut?: boolean;
+}
 export interface LoginSession {
   id: string;
   workspace: { id: string; name: string; organization: string };
@@ -1059,6 +1076,16 @@ export const api = {
     });
   },
 
+  exportMyPrivacyData(): Promise<PrivacyExportPackage> {
+    return request<PrivacyExportPackage>('/privacy/export');
+  },
+
+  eraseMyAccount(): Promise<PrivacyErasureResult> {
+    return request<PrivacyErasureResult>('/privacy/account', {
+      method: 'DELETE',
+      body: JSON.stringify({ confirmation: 'DELETE MY ACCOUNT' }),
+    });
+  },
   listLoginSessions(): Promise<LoginSession[]> {
     return request<LoginSession[]>('/auth/sessions');
   },
