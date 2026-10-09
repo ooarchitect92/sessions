@@ -6,6 +6,7 @@ import { Link, useParams } from 'react-router-dom';
 import { api, type MediaToken } from '../api/client';
 import { AgendaContentStage } from '../components/AgendaContentStage';
 import { AgendaRuntimeBar } from '../components/AgendaRuntimeBar';
+import { CoBrowseStage } from '../components/CoBrowseStage';
 import { DevicePreflight, type DevicePreferences } from '../components/DevicePreflight';
 import { MeetingConnectionStatus } from '../components/MeetingConnectionStatus';
 import { LiveCaptionsPanel } from '../components/LiveCaptionsPanel';
@@ -57,6 +58,7 @@ export function SessionPage() {
     | 'BREAKOUT'
     | 'QA'
     | 'SCREEN_SHARE'
+    | 'COBROWSE'
   >('TEXT');
   useSessionRealtime(sessionId);
 
@@ -306,7 +308,8 @@ export function SessionPage() {
       (typeof activeAgendaItem?.content.uploadId === 'string' &&
         activeAgendaItem.content.uploadId.trim().length > 0));
   const hasWhiteboard = activeAgendaItem?.type === 'WHITEBOARD';
-  const hasSharedStage = hasEmbedContent || hasWhiteboard;
+  const hasCobrowse = activeAgendaItem?.type === 'COBROWSE';
+  const hasSharedStage = hasEmbedContent || hasWhiteboard || hasCobrowse;
   const canStart = ['DRAFT', 'SCHEDULED'].includes(current.status);
   const canEnd = current.status === 'LIVE';
   const canControlAgenda = ['OWNER', 'ADMIN', 'HOST'].includes(
@@ -835,6 +838,7 @@ export function SessionPage() {
                     <option value="BREAKOUT">Breakout</option>
                     <option value="QA">Q&amp;A</option>
                     <option value="SCREEN_SHARE">Screen share</option>
+                    <option value="COBROWSE">Co-browse / product demo</option>
                   </select>
                 </label>
               </div>
@@ -846,7 +850,8 @@ export function SessionPage() {
                 disabled={
                   createAgendaItem.isPending ||
                   !agendaTitle.trim() ||
-                  (agendaType === 'WEBSITE' && !agendaContentUrl.trim()) ||
+                  (['WEBSITE', 'COBROWSE'].includes(agendaType) &&
+                    !agendaContentUrl.trim()) ||
                   (['VIDEO', 'PRESENTATION'].includes(agendaType) &&
                     !agendaContentUrl.trim() &&
                     !agendaUploadFile)
@@ -915,9 +920,13 @@ export function SessionPage() {
                     <button
                       onClick={() => {
                         if (
-                          ['WEBSITE', 'VIDEO', 'PRESENTATION', 'WHITEBOARD'].includes(
-                            item.type,
-                          )
+                          [
+                            'WEBSITE',
+                            'VIDEO',
+                            'PRESENTATION',
+                            'WHITEBOARD',
+                            'COBROWSE',
+                          ].includes(item.type)
                         ) {
                           setStageMode('content');
                         }
@@ -957,7 +966,11 @@ export function SessionPage() {
                 className={stageMode === 'content' ? 'active' : ''}
                 onClick={() => setStageMode('content')}
               >
-                {hasWhiteboard ? 'Whiteboard' : 'Shared content'}
+                {hasWhiteboard
+                  ? 'Whiteboard'
+                  : hasCobrowse
+                    ? 'Co-browse'
+                    : 'Shared content'}
               </button>
               <button
                 type="button"
@@ -972,6 +985,12 @@ export function SessionPage() {
           {hasSharedStage && stageMode === 'content' && activeAgendaItem ? (
             hasWhiteboard ? (
               <WhiteboardStage sessionId={sessionId} title={activeAgendaItem.title} />
+            ) : hasCobrowse ? (
+              <CoBrowseStage
+                sessionId={sessionId}
+                item={activeAgendaItem}
+                sessionLive={current.status === 'LIVE'}
+              />
             ) : (
               <AgendaContentStage item={activeAgendaItem} />
             )
@@ -1062,7 +1081,11 @@ export function SessionPage() {
                   className="button secondary large"
                   onClick={() => setStageMode('content')}
                 >
-                  {hasWhiteboard ? 'Open whiteboard' : 'Show shared content'}
+                  {hasWhiteboard
+                    ? 'Open whiteboard'
+                    : hasCobrowse
+                      ? 'Open co-browse'
+                      : 'Show shared content'}
                 </button>
               ) : null}
               <button
