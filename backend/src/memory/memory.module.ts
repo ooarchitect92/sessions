@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AiModule } from '../ai/ai.module';
 import { AuditModule } from '../audit/audit.module';
+import { BillingModule } from '../billing/billing.module';
 import { IntegrationsModule } from '../integrations/integrations.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { OutboxModule } from '../outbox/outbox.module';
@@ -16,6 +17,7 @@ import { MemoryService } from './memory.service';
   imports: [
     AiModule,
     AuditModule,
+    BillingModule,
     IntegrationsModule,
     NotificationsModule,
     OutboxModule,
