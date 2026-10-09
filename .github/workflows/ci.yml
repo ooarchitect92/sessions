@@ -67,8 +67,8 @@ jobs:
           sudo systemctl start postgresql.service
           rm -rf /tmp/pgvector
           git clone --depth 1 --branch v0.8.7 https://github.com/pgvector/pgvector.git /tmp/pgvector
-          make -C /tmp/pgvector OPTFLAGS=""
-          sudo make -C /tmp/pgvector install
+          make -C /tmp/pgvector OPTFLAGS="" with_llvm=no
+          sudo make -C /tmp/pgvector install with_llvm=no
           sudo -u postgres psql -v ON_ERROR_STOP=1 <<'SQL'
           DO $
           BEGIN
