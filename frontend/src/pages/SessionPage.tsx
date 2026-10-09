@@ -8,6 +8,7 @@ import { AgendaContentStage } from '../components/AgendaContentStage';
 import { AgendaRuntimeBar } from '../components/AgendaRuntimeBar';
 import { DevicePreflight, type DevicePreferences } from '../components/DevicePreflight';
 import { MeetingConnectionStatus } from '../components/MeetingConnectionStatus';
+import { LiveCaptionsPanel } from '../components/LiveCaptionsPanel';
 import { SessionCollaborationPanel } from '../components/SessionCollaborationPanel';
 import { SpotlightVideoConference } from '../components/SpotlightVideoConference';
 import { WhiteboardStage } from '../components/WhiteboardStage';
@@ -942,6 +943,13 @@ export function SessionPage() {
         </aside>
 
         <section className="meeting-stage">
+          {current.transcriptionEnabled ? (
+            <LiveCaptionsPanel
+              sessionId={sessionId}
+              canPublish={current.status === 'LIVE' && Boolean(media)}
+            />
+          ) : null}
+
           {hasSharedStage ? (
             <div className="stage-mode-switch" role="tablist" aria-label="Meeting stage mode">
               <button
