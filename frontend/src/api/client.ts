@@ -513,6 +513,39 @@ export interface BillingPlanRecord {
   limits: BillingCurrentRecord['plan']['limits'];
   features: Record<string, boolean>;
 }
+export interface EnterpriseIdentityConnectionRecord {
+  id: string;
+  protocol: 'OIDC' | 'SAML';
+  enabled: boolean;
+  enforceSso: boolean;
+  issuerUrl: string | null;
+  clientId: string | null;
+  hasClientSecret: boolean;
+  authorizationEndpoint: string | null;
+  tokenEndpoint: string | null;
+  userinfoEndpoint: string | null;
+  jwksUri: string | null;
+  scopes: string[];
+  emailDomains: string[];
+  roleAttribute: string | null;
+  defaultRole: WorkspaceRole;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ScimTokenRecord {
+  id: string;
+  name: string;
+  key_prefix?: string;
+  keyPrefix?: string;
+  last_used_at?: string | null;
+  expires_at?: string | null;
+  revoked_at?: string | null;
+  created_at?: string;
+  token?: string;
+  expiresAt?: string | null;
+  createdAt?: string;
+}
 export interface WorkspaceAnalyticsRecord {
   range: { from: string; to: string };
   overview: {
@@ -1459,6 +1492,43 @@ export const api = {
     );
   },
 
+  getEnterpriseIdentity(): Promise<EnterpriseIdentityConnectionRecord | null> {
+    return request<EnterpriseIdentityConnectionRecord | null>('/enterprise/identity');
+  },
+
+  saveEnterpriseIdentity(input: {
+    protocol: 'OIDC' | 'SAML';
+    enabled?: boolean;
+    enforceSso?: boolean;
+    issuerUrl?: string;
+    clientId?: string;
+    clientSecret?: string;
+    authorizationEndpoint?: string;
+    tokenEndpoint?: string;
+    userinfoEndpoint?: string;
+    jwksUri?: string;
+    scopes?: string[];
+    emailDomains?: string[];
+    roleAttribute?: string;
+    defaultRole?: Exclude<WorkspaceRole, 'OWNER'>;
+  }): Promise<EnterpriseIdentityConnectionRecord> {
+    return request<EnterpriseIdentityConnectionRecord>('/enterprise/identity', {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    });
+  },
+
+  listScimTokens(): Promise<ScimTokenRecord[]> {
+    return request<ScimTokenRecord[]>('/enterprise/scim/tokens');
+  },
+
+  createScimToken(input: { name: string; expiresAt?: string }): Promise<ScimTokenRecord> {
+    return request<ScimTokenRecord>('/enterprise/scim/tokens', { method: 'POST', body: JSON.stringify(input) });
+  },
+
+  revokeScimToken(id: string): Promise<{ id: string; revoked: boolean }> {
+    return request<{ id: string; revoked: boolean }>(`/enterprise/scim/tokens/${id}`, { method: 'DELETE' });
+  },
   getBillingCurrent(): Promise<BillingCurrentRecord> {
     return request<BillingCurrentRecord>('/billing/current');
   },
