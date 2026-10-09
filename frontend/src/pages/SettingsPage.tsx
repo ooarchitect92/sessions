@@ -5,7 +5,7 @@ import { useSearchParams } from 'react-router-dom';
 import { api, type ApiKeyRecord, type WebhookSubscriptionRecord, type WorkspaceEmailTemplateKind, type WorkspaceMember } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 
-const TABS = ['workspace', 'members', 'workspaces', 'billing', 'domains', 'emails', 'integrations', 'security'] as const;
+const TABS = ['workspace', 'members', 'workspaces', 'billing', 'domains', 'emails', 'integrations', 'enterprise', 'security'] as const;
 type SettingsTab = (typeof TABS)[number];
 
 const MEMBER_ROLES: WorkspaceRole[] = ['ADMIN', 'HOST', 'MEMBER', 'ANALYST', 'GUEST'];
@@ -71,7 +71,9 @@ export function SettingsPage() {
                           ? '✉'
                           : item === 'integrations'
                             ? '⛓'
-                            : '⌾'}
+                            : item === 'enterprise'
+                              ? '◆'
+                              : '⌾'}
               </span>
               {item === 'workspace'
                 ? 'Workspace profile'
@@ -87,7 +89,9 @@ export function SettingsPage() {
                         ? 'Emails'
                         : item === 'integrations'
                           ? 'Integrations'
-                          : 'Security'}
+                          : item === 'enterprise'
+                            ? 'Enterprise'
+                            : 'Security'}
             </button>
           ))}
         </nav>
@@ -99,6 +103,7 @@ export function SettingsPage() {
           {tab === 'domains' ? <DomainSettings /> : null}
           {tab === 'emails' ? <EmailTemplateSettings /> : null}
           {tab === 'integrations' ? <IntegrationsSettings /> : null}
+          {tab === 'enterprise' ? <EnterpriseSettings /> : null}
           {tab === 'security' ? <SecuritySettings /> : null}
         </section>
       </div>
@@ -842,6 +847,87 @@ function EmailTemplateSettings() {
             <div className="settings-actions"><button className="button primary" disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Save template'}</button></div>
           </form>
         ) : null}
+      </section>
+    </div>
+  );
+}
+function EnterpriseSettings() {
+  const auth = useAuth();
+  const queryClient = useQueryClient();
+  const canManage = auth.me?.principal.roles.some((role) => ['OWNER', 'ADMIN'].includes(role)) ?? false;
+  const identity = useQuery({ queryKey: ['enterprise-identity'], queryFn: () => api.getEnterpriseIdentity(), enabled: canManage });
+  const tokens = useQuery({ queryKey: ['scim-tokens'], queryFn: () => api.listScimTokens(), enabled: canManage });
+  const [enabled, setEnabled] = useState(false);
+  const [enforceSso, setEnforceSso] = useState(false);
+  const [issuerUrl, setIssuerUrl] = useState('');
+  const [clientId, setClientId] = useState('');
+  const [clientSecret, setClientSecret] = useState('');
+  const [authorizationEndpoint, setAuthorizationEndpoint] = useState('');
+  const [tokenEndpoint, setTokenEndpoint] = useState('');
+  const [userinfoEndpoint, setUserinfoEndpoint] = useState('');
+  const [jwksUri, setJwksUri] = useState('');
+  const [domains, setDomains] = useState('');
+  const [scimName, setScimName] = useState('Provisioning token');
+  const [issuedToken, setIssuedToken] = useState('');
+
+  useEffect(() => {
+    if (!identity.data) return;
+    setEnabled(identity.data.enabled);
+    setEnforceSso(identity.data.enforceSso);
+    setIssuerUrl(identity.data.issuerUrl ?? '');
+    setClientId(identity.data.clientId ?? '');
+    setAuthorizationEndpoint(identity.data.authorizationEndpoint ?? '');
+    setTokenEndpoint(identity.data.tokenEndpoint ?? '');
+    setUserinfoEndpoint(identity.data.userinfoEndpoint ?? '');
+    setJwksUri(identity.data.jwksUri ?? '');
+    setDomains(identity.data.emailDomains.join(', '));
+  }, [identity.data]);
+
+  const save = useMutation({
+    mutationFn: () => api.saveEnterpriseIdentity({
+      protocol: 'OIDC', enabled, enforceSso, issuerUrl, clientId, ...(clientSecret ? { clientSecret } : {}),
+      authorizationEndpoint, tokenEndpoint, userinfoEndpoint, jwksUri, scopes: ['openid','profile','email'],
+      emailDomains: domains.split(',').map((item) => item.trim()).filter(Boolean), defaultRole: 'MEMBER',
+    }),
+    onSuccess: async () => { setClientSecret(''); await queryClient.invalidateQueries({ queryKey: ['enterprise-identity'] }); },
+  });
+  const createToken = useMutation({
+    mutationFn: () => api.createScimToken({ name: scimName }),
+    onSuccess: async (result) => { setIssuedToken(result.token ?? ''); await queryClient.invalidateQueries({ queryKey: ['scim-tokens'] }); },
+  });
+  const revoke = useMutation({
+    mutationFn: (id: string) => api.revokeScimToken(id),
+    onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['scim-tokens'] }),
+  });
+
+  if (!canManage) return <SettingsError message="Owner or admin access is required to manage enterprise identity." />;
+  return (
+    <div className="settings-stack">
+      <section className="panel settings-panel">
+        <div className="settings-panel-heading"><div><span className="eyebrow">Enterprise identity</span><h2>OIDC single sign-on policy</h2><p>Persist IdP configuration, allowed domains, secret material, and enforcement policy. Provider callback qualification remains a separate release gate.</p></div></div>
+        <form className="settings-form" onSubmit={(event) => { event.preventDefault(); save.mutate(); }}>
+          <label className="settings-toggle-row"><input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} /><span><strong>Enable OIDC</strong><small>Activates this workspace identity-provider configuration.</small></span></label>
+          <label className="settings-toggle-row"><input type="checkbox" checked={enforceSso} onChange={(event) => setEnforceSso(event.target.checked)} /><span><strong>Enforce SSO policy</strong><small>Marks the workspace for SSO-only enforcement once provider login is qualified.</small></span></label>
+          <div className="settings-form-grid">
+            <label className="settings-grid-span">Issuer URL<input type="url" value={issuerUrl} onChange={(event) => setIssuerUrl(event.target.value)} placeholder="https://idp.example.com" /></label>
+            <label>Client ID<input value={clientId} onChange={(event) => setClientId(event.target.value)} /></label>
+            <label>Client secret<input type="password" value={clientSecret} onChange={(event) => setClientSecret(event.target.value)} placeholder={identity.data?.hasClientSecret ? 'Secret already stored' : 'Enter client secret'} /></label>
+            <label>Authorization endpoint<input type="url" value={authorizationEndpoint} onChange={(event) => setAuthorizationEndpoint(event.target.value)} /></label>
+            <label>Token endpoint<input type="url" value={tokenEndpoint} onChange={(event) => setTokenEndpoint(event.target.value)} /></label>
+            <label>UserInfo endpoint<input type="url" value={userinfoEndpoint} onChange={(event) => setUserinfoEndpoint(event.target.value)} /></label>
+            <label>JWKS URI<input type="url" value={jwksUri} onChange={(event) => setJwksUri(event.target.value)} /></label>
+            <label className="settings-grid-span">Allowed email domains<input value={domains} onChange={(event) => setDomains(event.target.value)} placeholder="example.com, subsidiary.example.com" /></label>
+          </div>
+          {save.error ? <div className="error-banner">{save.error.message}</div> : null}
+          {save.isSuccess ? <div className="success-banner">Enterprise identity policy saved.</div> : null}
+          <div className="settings-actions"><button className="button primary" disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Save identity policy'}</button></div>
+        </form>
+      </section>
+      <section className="panel settings-panel">
+        <div className="settings-panel-heading"><div><span className="eyebrow">SCIM 2.0</span><h2>Provisioning tokens</h2><p>Create bearer tokens for enterprise directory provisioning. Tokens are shown once and stored only as hashes.</p></div></div>
+        <div className="invite-row"><label>Token name<input value={scimName} onChange={(event) => setScimName(event.target.value)} /></label><span /><button className="button primary" type="button" disabled={createToken.isPending} onClick={() => createToken.mutate()}>Create token</button></div>
+        {issuedToken ? <div className="development-token-box"><strong>Copy this token now</strong><code>{issuedToken}</code></div> : null}
+        <div className="settings-list">{tokens.data?.map((token) => <article key={token.id} className="settings-list-row"><div><strong>{token.name}</strong><small>{token.key_prefix ?? token.keyPrefix} · last used {formatDate(token.last_used_at ?? null)}</small></div><button className="button secondary" type="button" disabled={Boolean(token.revoked_at) || revoke.isPending} onClick={() => revoke.mutate(token.id)}>{token.revoked_at ? 'Revoked' : 'Revoke'}</button></article>)}</div>
       </section>
     </div>
   );
