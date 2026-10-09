@@ -77,7 +77,9 @@
 - [x] SSRF-safe pinned HTTPS webhook egress boundary with redirect blocking, timeout and bounded responses
 - [x] tenant-scoped email/CRM provider connection vault with encrypted rotation, lifecycle, health evidence and SSRF-safe runtime egress
 - [ ] OAuth connector consolidation and real-provider qualification
-- [ ] branding, email templates, custom domains and automated TLS
+- [x] tenant-scoped branding profile, white-label settings and DNS-verified custom-domain control plane
+- [x] TLS provisioning request handoff with explicit pending/active/error state
+- [ ] automated TLS issuance/renewal and edge-router reconciliation
 - [ ] analytics aggregation and governed exports
 - [ ] plans, subscriptions, entitlements, seats, quota ledger and reconciliation
 - [ ] SAML/OIDC enterprise SSO, SCIM, audit exports and retention policies
