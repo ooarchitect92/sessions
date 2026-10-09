@@ -18,6 +18,7 @@ import {
 } from "@prisma/client";
 import { createHash, randomUUID } from "node:crypto";
 import { AuditService } from "../audit/audit.service";
+import { BillingService } from "../billing/billing.service";
 import {
   HOST_ROLES,
   hasAnyRole,
@@ -54,6 +55,7 @@ export class EventsService {
     private readonly publicDatabase: WorkerPrismaService,
     private readonly audit: AuditService,
     private readonly outbox: OutboxService,
+    private readonly billing: BillingService,
   ) {}
 
   async create(
@@ -87,6 +89,8 @@ export class EventsService {
         }
         return existing.response as Prisma.JsonObject;
       }
+
+      await this.billing.assertCanCreateEvent(transaction, principal, input.capacity);
 
       const duplicate = await transaction.event.findUnique({
         where: {
@@ -174,6 +178,7 @@ export class EventsService {
           ),
         ],
       });
+      await this.billing.recordUsage(transaction, principal, 'event.created', 'event', event.id, 1, { capacity: event.capacity ?? null });
       const response = this.toJson(event);
       await this.audit.record(transaction, principal, {
         action: "event.created",
