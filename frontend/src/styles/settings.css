@@ -1013,3 +1013,38 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+.email-template-toggle {
+  margin-top: 0;
+  align-self: end;
+}
+
+.email-variable-hint {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid #dce1dc;
+  border-radius: 11px;
+  background: #f7faf7;
+}
+
+.email-variable-hint strong {
+  color: #4f625c;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.email-variable-hint code {
+  overflow-wrap: anywhere;
+  color: #285448;
+  font-size: 9px;
+}
+
+.settings-muted {
+  display: block;
+  margin-top: 10px;
+  color: #7d8884;
+  font-size: 9px;
+}
