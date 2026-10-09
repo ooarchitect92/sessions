@@ -680,3 +680,52 @@
     padding: 20px;
   }
 }
+
+
+.workspace-themed-public {
+  --workspace-primary: #183f38;
+  --workspace-accent: #dcefe8;
+}
+
+.workspace-themed-public .public-wordmark span {
+  overflow: hidden;
+  background: var(--workspace-primary);
+}
+
+.workspace-themed-public .public-wordmark span img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #fff;
+}
+
+.workspace-themed-public .public-live-label,
+.workspace-themed-public .public-success-state > span,
+.workspace-themed-public .selected-slot-summary,
+.workspace-themed-public .no-slots {
+  background: color-mix(in srgb, var(--workspace-accent) 72%, white);
+}
+
+.workspace-themed-public .public-live-label,
+.workspace-themed-public .public-success-state > span,
+.workspace-themed-public .public-kicker,
+.workspace-themed-public .public-secondary-link {
+  color: var(--workspace-primary);
+}
+
+.workspace-themed-public .public-form button,
+.workspace-themed-public .booking-management-actions button {
+  background: var(--workspace-primary);
+}
+
+.workspace-themed-public .slot-grid button:hover,
+.workspace-themed-public .slot-grid button.selected {
+  border-color: var(--workspace-primary);
+  background: color-mix(in srgb, var(--workspace-accent) 70%, white);
+}
+
+.workspace-themed-public .booking-facts span,
+.workspace-themed-public .public-action-card,
+.workspace-themed-public .slot-panel {
+  border-color: color-mix(in srgb, var(--workspace-primary) 18%, #d8d5cc);
+}
