@@ -1383,3 +1383,132 @@
   font-size: 8px;
   font-weight: 800;
 }
+
+
+.agenda-runtime {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(160px, 0.7fr) auto;
+  align-items: center;
+  gap: 16px;
+  margin: 0 18px 14px;
+  padding: 11px 13px;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 12px;
+  background: rgba(16, 31, 27, 0.92);
+  color: #edf4f1;
+}
+
+.agenda-runtime-copy strong,
+.agenda-runtime-copy small {
+  display: block;
+}
+
+.agenda-runtime-copy strong {
+  margin-top: 3px;
+  overflow: hidden;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agenda-runtime-copy small {
+  margin-top: 3px;
+  color: #83978f;
+  font-size: 8px;
+}
+
+.agenda-runtime-meter {
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.agenda-runtime-meter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--meeting-brand-primary, #2f6b5c);
+  transition: width 240ms linear;
+}
+
+.agenda-runtime.overtime {
+  border-color: rgba(220, 113, 91, 0.28);
+}
+
+.agenda-runtime.overtime .agenda-runtime-copy small {
+  color: #e4a397;
+}
+
+.agenda-runtime.overtime .agenda-runtime-meter span {
+  background: #c96a59;
+}
+
+.agenda-runtime-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.agenda-runtime-actions button {
+  min-height: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+  padding: 0 9px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #c9d5d1;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.agenda-runtime-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.agenda-reorder-hint {
+  display: block;
+  margin-top: 5px;
+  color: #6f867e;
+  font-size: 8px;
+  line-height: 1.4;
+}
+
+.agenda-item.draggable {
+  cursor: grab;
+}
+
+.agenda-item.draggable:active {
+  cursor: grabbing;
+}
+
+.agenda-item.dragging {
+  opacity: 0.45;
+}
+
+.agenda-item.draggable:not(.dragging) {
+  transition:
+    transform 120ms ease,
+    opacity 120ms ease;
+}
+
+@media (max-width: 900px) {
+  .agenda-runtime {
+    grid-template-columns: 1fr;
+  }
+
+  .agenda-runtime-actions {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 560px) {
+  .agenda-runtime {
+    margin-right: 10px;
+    margin-left: 10px;
+  }
+
+  .agenda-runtime-actions {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
