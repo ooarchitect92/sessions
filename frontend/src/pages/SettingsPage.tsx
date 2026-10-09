@@ -2,10 +2,21 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { WorkspaceRole } from '@sessions/contracts';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { api, type WorkspaceMember } from '../api/client';
+import {
+  api,
+  type WorkspaceDomainRecord,
+  type WorkspaceMember,
+} from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 
-const TABS = ['workspace', 'members', 'workspaces', 'integrations', 'security'] as const;
+const TABS = [
+  'workspace',
+  'branding',
+  'members',
+  'workspaces',
+  'integrations',
+  'security',
+] as const;
 type SettingsTab = (typeof TABS)[number];
 
 const MEMBER_ROLES: WorkspaceRole[] = ['ADMIN', 'HOST', 'MEMBER', 'ANALYST', 'GUEST'];
@@ -59,9 +70,11 @@ export function SettingsPage() {
               <span>
                 {item === 'workspace'
                   ? '◇'
-                  : item === 'members'
-                    ? '◎'
-                    : item === 'workspaces'
+                  : item === 'branding'
+                    ? '✦'
+                    : item === 'members'
+                      ? '◎'
+                      : item === 'workspaces'
                       ? '▦'
                       : item === 'integrations'
                         ? '⛓'
@@ -69,9 +82,11 @@ export function SettingsPage() {
               </span>
               {item === 'workspace'
                 ? 'Workspace profile'
-                : item === 'members'
-                  ? 'Members and invites'
-                  : item === 'workspaces'
+                : item === 'branding'
+                  ? 'Branding and domains'
+                  : item === 'members'
+                    ? 'Members and invites'
+                    : item === 'workspaces'
                     ? 'Your workspaces'
                     : item === 'integrations'
                       ? 'Integrations'
@@ -81,6 +96,7 @@ export function SettingsPage() {
         </nav>
         <section className="settings-content">
           {tab === 'workspace' ? <WorkspaceProfile /> : null}
+          {tab === 'branding' ? <BrandingAndDomains /> : null}
           {tab === 'members' ? <MembersAndInvitations /> : null}
           {tab === 'workspaces' ? <WorkspaceDirectory /> : null}
           {tab === 'integrations' ? <IntegrationsSettings /> : null}
@@ -218,6 +234,250 @@ function WorkspaceProfile() {
           label="Audience workflows"
           value={workspace.data._count.events + workspace.data._count.bookingPages}
         />
+      </section>
+    </div>
+  );
+}
+
+function BrandingAndDomains() {
+  const queryClient = useQueryClient();
+  const workspace = useQuery({
+    queryKey: ['workspace-current'],
+    queryFn: () => api.getCurrentWorkspace(),
+  });
+  const domains = useQuery({
+    queryKey: ['workspace-domains'],
+    queryFn: () => api.listWorkspaceDomains(),
+  });
+  const [logoUrl, setLogoUrl] = useState('');
+  const [primaryColor, setPrimaryColor] = useState('#4f46e5');
+  const [accentColor, setAccentColor] = useState('#7c3aed');
+  const [fontFamily, setFontFamily] = useState('Inter');
+  const [hostname, setHostname] = useState('');
+  const canManage = ['OWNER', 'ADMIN'].includes(
+    workspace.data?.currentRole ?? 'GUEST',
+  );
+
+  useEffect(() => {
+    if (!workspace.data) return;
+    const branding =
+      workspace.data.settings.branding &&
+      typeof workspace.data.settings.branding === 'object'
+        ? (workspace.data.settings.branding as Record<string, unknown>)
+        : {};
+    setLogoUrl(typeof branding.logoUrl === 'string' ? branding.logoUrl : '');
+    setPrimaryColor(
+      typeof branding.primaryColor === 'string'
+        ? branding.primaryColor
+        : '#4f46e5',
+    );
+    setAccentColor(
+      typeof branding.accentColor === 'string'
+        ? branding.accentColor
+        : '#7c3aed',
+    );
+    setFontFamily(
+      typeof branding.fontFamily === 'string' ? branding.fontFamily : 'Inter',
+    );
+  }, [workspace.data]);
+
+  const saveBranding = useMutation({
+    mutationFn: () => {
+      if (!workspace.data) throw new Error('Workspace is unavailable');
+      return api.updateCurrentWorkspace(workspace.data.version, {
+        settings: {
+          branding: {
+            logoUrl: logoUrl.trim() || null,
+            primaryColor,
+            accentColor,
+            fontFamily: fontFamily.trim(),
+          },
+        },
+      });
+    },
+    onSuccess: async () =>
+      queryClient.invalidateQueries({ queryKey: ['workspace-current'] }),
+  });
+
+  const createDomain = useMutation({
+    mutationFn: () => api.createWorkspaceDomain(hostname.trim().toLowerCase()),
+    onSuccess: async () => {
+      setHostname('');
+      await queryClient.invalidateQueries({ queryKey: ['workspace-domains'] });
+    },
+  });
+  const verifyDomain = useMutation({
+    mutationFn: (domain: WorkspaceDomainRecord) =>
+      api.verifyWorkspaceDomain(domain.id),
+    onSuccess: async () =>
+      queryClient.invalidateQueries({ queryKey: ['workspace-domains'] }),
+  });
+  const removeDomain = useMutation({
+    mutationFn: (domain: WorkspaceDomainRecord) =>
+      api.removeWorkspaceDomain(domain.id),
+    onSuccess: async () =>
+      queryClient.invalidateQueries({ queryKey: ['workspace-domains'] }),
+  });
+
+  return (
+    <div className="settings-stack">
+      <section className="panel settings-panel">
+        <div className="settings-panel-heading">
+          <div>
+            <span className="eyebrow">Workspace identity</span>
+            <h2>Brand system</h2>
+            <p>
+              Configure the visual identity inherited by public meeting, booking,
+              and event experiences.
+            </p>
+          </div>
+        </div>
+        <form
+          className="settings-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            saveBranding.mutate();
+          }}
+        >
+          <div className="settings-form-grid">
+            <label className="settings-grid-span">
+              Logo URL
+              <input
+                disabled={!canManage}
+                type="url"
+                value={logoUrl}
+                onChange={(event) => setLogoUrl(event.target.value)}
+                placeholder="https://cdn.example.com/logo.svg"
+              />
+            </label>
+            <label>
+              Primary color
+              <input
+                disabled={!canManage}
+                type="color"
+                value={primaryColor}
+                onChange={(event) => setPrimaryColor(event.target.value)}
+              />
+            </label>
+            <label>
+              Accent color
+              <input
+                disabled={!canManage}
+                type="color"
+                value={accentColor}
+                onChange={(event) => setAccentColor(event.target.value)}
+              />
+            </label>
+            <label className="settings-grid-span">
+              Font family
+              <input
+                disabled={!canManage}
+                value={fontFamily}
+                onChange={(event) => setFontFamily(event.target.value)}
+                maxLength={100}
+              />
+            </label>
+          </div>
+          {saveBranding.error ? (
+            <div className="error-banner">{saveBranding.error.message}</div>
+          ) : null}
+          {saveBranding.isSuccess ? (
+            <div className="success-banner">Workspace branding saved.</div>
+          ) : null}
+          <div className="settings-actions">
+            <button
+              className="button primary"
+              disabled={!canManage || saveBranding.isPending}
+            >
+              {saveBranding.isPending ? 'Saving…' : 'Save branding'}
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <section className="panel settings-panel">
+        <div className="settings-panel-heading">
+          <div>
+            <span className="eyebrow">Branded public URLs</span>
+            <h2>Custom domains</h2>
+            <p>
+              Claim a hostname, publish the generated DNS TXT challenge, then
+              verify ownership before routing production traffic to it.
+            </p>
+          </div>
+        </div>
+        <form
+          className="invite-row"
+          onSubmit={(event) => {
+            event.preventDefault();
+            createDomain.mutate();
+          }}
+        >
+          <input
+            disabled={!canManage}
+            required
+            value={hostname}
+            onChange={(event) => setHostname(event.target.value)}
+            placeholder="meet.example.com"
+          />
+          <button
+            className="button primary"
+            disabled={!canManage || createDomain.isPending || !hostname.trim()}
+          >
+            {createDomain.isPending ? 'Adding…' : 'Add domain'}
+          </button>
+        </form>
+        {createDomain.error ? (
+          <div className="error-banner">{createDomain.error.message}</div>
+        ) : null}
+        {verifyDomain.error ? (
+          <div className="error-banner">{verifyDomain.error.message}</div>
+        ) : null}
+        <div className="settings-table">
+          {domains.data?.map((domain) => (
+            <div className="settings-table-row" key={domain.id}>
+              <div className="member-copy">
+                <strong>{domain.hostname}</strong>
+                <span>{domain.status.toLowerCase()}</span>
+                {domain.status === 'PENDING' ? (
+                  <small>
+                    TXT _sessions-verification.{domain.hostname} ={' '}
+                    sessions-verification={domain.verificationToken}
+                  </small>
+                ) : (
+                  <small>Verified {formatDate(domain.verifiedAt)}</small>
+                )}
+              </div>
+              {domain.status === 'PENDING' ? (
+                <button
+                  type="button"
+                  className="button secondary"
+                  disabled={!canManage || verifyDomain.isPending}
+                  onClick={() => verifyDomain.mutate(domain)}
+                >
+                  Verify DNS
+                </button>
+              ) : (
+                <span className="success-banner">Verified</span>
+              )}
+              <button
+                type="button"
+                className="settings-row-action danger-text"
+                disabled={!canManage || removeDomain.isPending}
+                onClick={() => {
+                  if (window.confirm(`Remove ${domain.hostname}?`)) {
+                    removeDomain.mutate(domain);
+                  }
+                }}
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+          {domains.data?.length === 0 ? (
+            <div className="settings-empty-row">No custom domains configured.</div>
+          ) : null}
+        </div>
       </section>
     </div>
   );

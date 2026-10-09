@@ -12,7 +12,8 @@ import {
   WorkspaceRole,
   type Workspace,
 } from '@prisma/client';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { resolveTxt } from 'node:dns/promises';
 import { AuditService } from '../audit/audit.service';
 import { SecurityService } from '../auth/security.service';
 import {
@@ -278,6 +279,147 @@ export class WorkspacesService {
         payload: this.toJson(workspace),
       });
       return workspace;
+    });
+  }
+
+  async listDomains(principal: Principal) {
+    await this.requireCurrentMembership(principal);
+    return this.prisma.workspaceDomain.findMany({
+      where: {
+        organizationId: principal.organizationId,
+        workspaceId: principal.workspaceId,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async createDomain(principal: Principal, hostnameValue: string) {
+    this.assertAdmin(principal);
+    const hostname = hostnameValue.trim().toLowerCase();
+    const verificationToken = randomBytes(24).toString('base64url');
+
+    return this.prisma.$transaction(async (transaction) => {
+      await this.requireCurrentMembership(principal, transaction);
+      const existing = await transaction.workspaceDomain.findUnique({
+        where: { hostname },
+        select: { id: true, workspaceId: true },
+      });
+      if (existing) {
+        throw new ConflictException(
+          existing.workspaceId === principal.workspaceId
+            ? 'This domain is already attached to the workspace'
+            : 'This domain is already claimed by another workspace',
+        );
+      }
+
+      const domain = await transaction.workspaceDomain.create({
+        data: {
+          organizationId: principal.organizationId,
+          workspaceId: principal.workspaceId,
+          hostname,
+          verificationToken,
+        },
+      });
+      await this.audit.record(transaction, principal, {
+        action: 'workspace.domain.created',
+        resourceType: 'workspace_domain',
+        resourceId: domain.id,
+        metadata: { hostname },
+      });
+      await this.outbox.enqueue(transaction, principal, {
+        aggregateType: 'workspace_domain',
+        aggregateId: domain.id,
+        eventType: 'workspace.domain.created',
+        payload: {
+          id: domain.id,
+          hostname: domain.hostname,
+          status: domain.status,
+        },
+      });
+      return domain;
+    });
+  }
+
+  async verifyDomain(principal: Principal, domainId: string) {
+    this.assertAdmin(principal);
+    const domain = await this.prisma.workspaceDomain.findFirst({
+      where: {
+        id: domainId,
+        organizationId: principal.organizationId,
+        workspaceId: principal.workspaceId,
+      },
+    });
+    if (!domain) throw new NotFoundException('Workspace domain not found');
+    if (domain.status === 'VERIFIED') return domain;
+
+    const recordName = `_sessions-verification.${domain.hostname}`;
+    let txtRecords: string[][] = [];
+    try {
+      txtRecords = await resolveTxt(recordName);
+    } catch {
+      throw new BadRequestException(
+        `DNS verification failed. Add TXT ${recordName} with value sessions-verification=${domain.verificationToken}`,
+      );
+    }
+    const expected = `sessions-verification=${domain.verificationToken}`;
+    const verified = txtRecords.some((parts) => parts.join('') === expected);
+    if (!verified) {
+      throw new BadRequestException(
+        `Verification TXT record not found. Expected ${expected}`,
+      );
+    }
+
+    return this.prisma.$transaction(async (transaction) => {
+      const updated = await transaction.workspaceDomain.update({
+        where: { id: domain.id },
+        data: { status: 'VERIFIED', verifiedAt: new Date() },
+      });
+      await this.audit.record(transaction, principal, {
+        action: 'workspace.domain.verified',
+        resourceType: 'workspace_domain',
+        resourceId: updated.id,
+        metadata: { hostname: updated.hostname },
+      });
+      await this.outbox.enqueue(transaction, principal, {
+        aggregateType: 'workspace_domain',
+        aggregateId: updated.id,
+        eventType: 'workspace.domain.verified',
+        payload: {
+          id: updated.id,
+          hostname: updated.hostname,
+          status: updated.status,
+        },
+      });
+      return updated;
+    });
+  }
+
+  async removeDomain(principal: Principal, domainId: string) {
+    this.assertAdmin(principal);
+    return this.prisma.$transaction(async (transaction) => {
+      await this.requireCurrentMembership(principal, transaction);
+      const domain = await transaction.workspaceDomain.findFirst({
+        where: {
+          id: domainId,
+          organizationId: principal.organizationId,
+          workspaceId: principal.workspaceId,
+        },
+      });
+      if (!domain) throw new NotFoundException('Workspace domain not found');
+      await transaction.workspaceDomain.delete({ where: { id: domain.id } });
+      await this.audit.record(transaction, principal, {
+        action: 'workspace.domain.removed',
+        resourceType: 'workspace_domain',
+        resourceId: domain.id,
+        metadata: { hostname: domain.hostname },
+      });
+      await this.outbox.enqueue(transaction, principal, {
+        aggregateType: 'workspace_domain',
+        aggregateId: domain.id,
+        eventType: 'workspace.domain.removed',
+        payload: { id: domain.id, hostname: domain.hostname },
+      });
+      return { id: domain.id, removed: true };
     });
   }
 
