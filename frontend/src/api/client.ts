@@ -877,12 +877,13 @@ export type WhiteboardOperationKind =
   | 'SHAPE_ADD'
   | 'NOTE_ADD'
   | 'TEXT_ADD'
+  | 'IMAGE_ADD'
   | 'OBJECT_REMOVE'
   | 'CLEAR';
 
 export interface WhiteboardObjectRecord {
   id: string;
-  type: 'stroke' | 'shape' | 'note' | 'text';
+  type: 'stroke' | 'shape' | 'note' | 'text' | 'image';
   [key: string]: unknown;
 }
 
