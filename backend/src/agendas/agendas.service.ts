@@ -321,7 +321,7 @@ export class AgendasService {
     type: string;
     content: Record<string, unknown>;
   }): void {
-    if (!['WEBSITE', 'VIDEO', 'PRESENTATION'].includes(input.type)) return;
+    if (!['WEBSITE', 'VIDEO', 'PRESENTATION', 'COBROWSE'].includes(input.type)) return;
     const url = input.content.url;
     if (url === undefined) return;
     if (typeof url !== 'string' || !url.trim()) {
