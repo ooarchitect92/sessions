@@ -33,6 +33,8 @@
 - [x] moderated Q&A with voting and answers
 - [x] reactions and private direct-message channels with targeted realtime delivery
 - [x] collaborative whiteboard with persisted operations, snapshots and automatic compaction
+- [x] whiteboard collaborator cursors with authenticated ephemeral realtime presence and disconnect cleanup
+- [x] secure whiteboard image assets through the existing quarantine, malware-scan and signed-download pipeline
 - [x] breakout assignment, assignment-aware media-room transition and host broadcast
 - [x] HTTPS agenda content blocks, provider normalization and sandboxed embed resolver
 - [x] upload quarantine, malware scan and signed downloads
