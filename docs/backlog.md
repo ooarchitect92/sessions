@@ -55,7 +55,8 @@
 - [x] workspace memory list, detail page and database text search
 - [x] transcript segment model with speaker/timestamp fields
 - [x] reviewed summary, decision, action-item and citation model
-- [ ] streaming captions
+- [x] live caption transport, final-segment persistence, realtime fan-out and in-meeting CC UI
+- [ ] production streaming STT media-source/provider qualification
 - [x] ffmpeg media normalization, diarization-capable STT adapter, persisted quality metadata and optional diarization enforcement
 - [ ] production diarization provider qualification evidence
 - [x] transcript correction, revision history and language policy
