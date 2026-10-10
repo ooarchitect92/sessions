@@ -17,6 +17,7 @@ import type { Subscription } from "rxjs";
 import { z } from "zod";
 import { AgendasService } from "../agendas/agendas.service";
 import { AnalyticsService } from "../analytics/analytics.service";
+import { CaptionsService } from "../captions/captions.service";
 import { AuthService } from "../auth/auth.service";
 import type { AccessTokenClaims, Principal } from "../common/auth/principal";
 import { RealtimeEventsService } from "../infrastructure/realtime-events.service";
@@ -35,6 +36,17 @@ const principalSchema = z.object({
 });
 
 const joinSchema = z.object({ sessionId: z.string().uuid() });
+const captionSchema = z.object({
+  sessionId: z.string().uuid(),
+  sequence: z.number().int().min(0).max(2_000_000_000),
+  text: z.string().min(1).max(4000),
+  isFinal: z.boolean(),
+  startMs: z.number().int().min(0).max(86_400_000).optional(),
+  endMs: z.number().int().min(0).max(86_400_000).optional(),
+  speakerLabel: z.string().min(1).max(160).optional(),
+  language: z.string().min(2).max(32).optional(),
+  source: z.string().min(1).max(80).optional(),
+});
 const activateSchema = z.object({
   sessionId: z.string().uuid(),
   agendaItemId: z.string().uuid(),
@@ -76,6 +88,7 @@ export class RealtimeGateway
     private readonly config: ConfigService,
     private readonly auth: AuthService,
     private readonly analytics: AnalyticsService,
+    private readonly captions: CaptionsService,
     private readonly sessions: SessionsService,
     private readonly agendas: AgendasService,
     private readonly realtimeEvents: RealtimeEventsService,
@@ -169,6 +182,17 @@ export class RealtimeGateway
       occurredAt: new Date().toISOString(),
     });
     return { ok: true, sessionId };
+  }
+
+  @SubscribeMessage("caption.publish")
+  async publishCaption(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() payload: unknown,
+  ) {
+    const principal = this.requirePrincipal(client);
+    const parsed = captionSchema.parse(payload);
+    const { sessionId, ...body } = parsed;
+    return this.captions.publish(principal, sessionId, body);
   }
 
   @SubscribeMessage("agenda.activate")
