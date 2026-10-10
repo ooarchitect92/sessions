@@ -24,7 +24,10 @@ export class HealthController {
     try {
       await this.prisma.$queryRaw`SELECT 1`;
       const redis = await this.redis.ping();
-      return { status: 'ok', dependencies: { postgres: 'ok', redis: redis.toLowerCase() } };
+      if (redis.trim().toUpperCase() !== 'PONG') {
+        throw new Error('Redis did not acknowledge the readiness probe');
+      }
+      return { status: 'ok', dependencies: { postgres: 'ok', redis: 'ok' } };
     } catch {
       throw new ServiceUnavailableException('A required dependency is unavailable');
     }
