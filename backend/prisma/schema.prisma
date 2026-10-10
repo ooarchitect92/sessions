@@ -246,6 +246,7 @@ model Organization {
   calendarConnections CalendarConnection[]
   calendarOAuthStates CalendarOAuthState[]
   aiExternalActions    AiExternalAction[]
+  liveCaptionSegments LiveCaptionSegment[]
 
   @@map("organizations")
 }
@@ -299,6 +300,7 @@ model Workspace {
   calendarConnections CalendarConnection[]
   calendarOAuthStates CalendarOAuthState[]
   aiExternalActions    AiExternalAction[]
+  liveCaptionSegments LiveCaptionSegment[]
 
   @@unique([organizationId, slug])
   @@index([organizationId])
@@ -432,10 +434,33 @@ model Session {
   attendanceIntervals  AttendanceInterval[]
   engagementEvents     EngagementEvent[]
   aiExternalActions     AiExternalAction[]
+  liveCaptionSegments  LiveCaptionSegment[]
 
   @@index([organizationId, workspaceId, startsAt])
   @@index([workspaceId, status, startsAt])
   @@map("sessions")
+}
+
+model LiveCaptionSegment {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  workspaceId    String       @map("workspace_id") @db.Uuid
+  sessionId      String       @map("session_id") @db.Uuid
+  sequence       Int
+  startMs        Int?         @map("start_ms")
+  endMs          Int?         @map("end_ms")
+  speakerLabel   String?      @map("speaker_label") @db.VarChar(160)
+  language       String?      @db.VarChar(32)
+  text           String       @db.Text
+  source         String       @default("host_bridge") @db.VarChar(80)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  session        Session      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, sequence])
+  @@index([organizationId, workspaceId, sessionId, sequence])
+  @@map("live_caption_segments")
 }
 
 model AgendaItem {
