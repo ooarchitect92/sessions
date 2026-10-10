@@ -1,6 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { io, type Socket } from 'socket.io-client';
+import type { LiveCaptionSegment } from '../api/client';
 import { bootstrapAuthentication } from '../auth/dev-auth';
 
 function realtimeUrl(): string {
@@ -67,6 +68,17 @@ export function useSessionRealtime(sessionId: string): void {
           void queryClient.invalidateQueries({ queryKey: ['questions', sessionId] });
         });
       }
+      socket.on('caption.segment', (caption: LiveCaptionSegment) => {
+        queryClient.setQueryData<LiveCaptionSegment[]>(
+          ['live-captions', sessionId],
+          (current = []) => {
+            const next = current.filter((item) => item.sequence !== caption.sequence);
+            next.push(caption);
+            next.sort((left, right) => left.sequence - right.sequence);
+            return next.slice(-100);
+          },
+        );
+      });
       socket.on('memory.updated', () => {
         void queryClient.invalidateQueries({ queryKey: ['memory'] });
         void queryClient.invalidateQueries({
