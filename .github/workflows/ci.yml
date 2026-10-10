@@ -22,9 +22,8 @@ jobs:
         with:
           node-version: 22
       - run: cp .env.example .env
-      - run: npm install --no-audit --no-fund
+      - run: npm ci --no-audit --no-fund
       - run: npm run db:generate
-      - run: npm run format
       - run: npm run format:check
       - run: npm run lint
       - run: npm run typecheck
@@ -76,6 +75,6 @@ jobs:
             sudo -u postgres createdb -O sessions sessions
           fi
       - run: cp .env.example .env
-      - run: npm install --no-audit --no-fund
+      - run: npm ci --no-audit --no-fund
       - run: npm run db:generate
       - run: npm run db:migrate
