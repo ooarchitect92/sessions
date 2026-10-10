@@ -21,6 +21,7 @@ import { EventsModule } from "./events/events.module";
 import { HealthModule } from "./health/health.module";
 import { InfrastructureModule } from "./infrastructure/infrastructure.module";
 import { MediaModule } from "./media/media.module";
+import { MarketingModule } from "./marketing/marketing.module";
 import { MemoryModule } from "./memory/memory.module";
 import { NotificationsModule } from "./notifications/notifications.module";
 import { OutboxModule } from "./outbox/outbox.module";
@@ -65,6 +66,7 @@ import { WorkspacesModule } from "./workspaces/workspaces.module";
     CollaborationModule,
     ContentModule,
     MediaModule,
+    MarketingModule,
     RealtimeModule,
     WhiteboardsModule,
   ],

@@ -1435,3 +1435,24 @@ model WorkspaceInvitation {
   @@index([workspaceId, email, acceptedAt, revokedAt])
   @@map("workspace_invitations")
 }
+
+
+model MarketingLead {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  submissionKey String   @unique @map("submission_key") @db.Uuid
+  requestHash   String   @map("request_hash") @db.VarChar(64)
+  kind          String   @db.VarChar(40)
+  name       String?  @db.VarChar(160)
+  email      String   @db.Citext
+  company    String?  @db.VarChar(160)
+  teamSize   String?  @map("team_size") @db.VarChar(40)
+  message    String?  @db.Text
+  sourcePath String?  @map("source_path") @db.VarChar(500)
+  consent    Boolean  @default(false)
+  metadata   Json     @default("{}")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([kind, createdAt])
+  @@index([email, createdAt])
+  @@map("marketing_leads")
+}
