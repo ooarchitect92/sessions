@@ -191,8 +191,18 @@ export class RealtimeGateway
   ) {
     const principal = this.requirePrincipal(client);
     const parsed = captionSchema.parse(payload);
-    const { sessionId, ...body } = parsed;
-    return this.captions.publish(principal, sessionId, body);
+    return this.captions.publish(principal, parsed.sessionId, {
+      sequence: parsed.sequence,
+      text: parsed.text,
+      isFinal: parsed.isFinal,
+      ...(parsed.startMs !== undefined ? { startMs: parsed.startMs } : {}),
+      ...(parsed.endMs !== undefined ? { endMs: parsed.endMs } : {}),
+      ...(parsed.speakerLabel !== undefined
+        ? { speakerLabel: parsed.speakerLabel }
+        : {}),
+      ...(parsed.language !== undefined ? { language: parsed.language } : {}),
+      ...(parsed.source !== undefined ? { source: parsed.source } : {}),
+    });
   }
 
   @SubscribeMessage("agenda.activate")
