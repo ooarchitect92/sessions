@@ -22,10 +22,21 @@ jobs:
         with:
           node-version: 22
       - run: cp .env.example .env
-      - run: npm install --no-audit --no-fund
+      - run: npm ci --no-audit --no-fund
       - run: npm run db:generate
-      - run: npm run format
-      - run: npm run format:check
+      # Existing files still require a separate repository-wide formatting migration.
+      # Reject new formatting violations without rewriting unrelated legacy files.
+      - name: Check formatting on changed files
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch --no-tags --depth=1 origin "${{ github.event.pull_request.base.sha }}"
+          mapfile -d '' changed < <(git diff --name-only --diff-filter=ACMR -z "${{ github.event.pull_request.base.sha }}" HEAD)
+          if (( ${#changed[@]} )); then
+            npx prettier --check --ignore-unknown "${changed[@]}"
+          fi
+      - name: Report repository formatting debt
+        if: github.event_name != 'pull_request'
+        run: npm run format:check
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run test
@@ -76,6 +87,6 @@ jobs:
             sudo -u postgres createdb -O sessions sessions
           fi
       - run: cp .env.example .env
-      - run: npm install --no-audit --no-fund
+      - run: npm ci --no-audit --no-fund
       - run: npm run db:generate
       - run: npm run db:migrate
