@@ -183,6 +183,21 @@ export interface SessionDetail extends Session {
   agendaItems: AgendaItem[];
 }
 
+export interface LiveCaptionSegment {
+  id?: string;
+  sessionId: string;
+  sequence: number;
+  text: string;
+  isFinal?: boolean;
+  startMs: number | null;
+  endMs: number | null;
+  speakerLabel: string | null;
+  language: string | null;
+  source: string;
+  occurredAt?: string;
+  createdAt?: string;
+}
+
 export interface ResolvedEmbed {
   provider:
     | 'youtube'
@@ -1008,6 +1023,29 @@ export const api = {
     return request<Session>(`/sessions/${sessionId}/${action}`, {
       method: "POST",
       headers: { "if-match": String(version) },
+    });
+  },
+
+  listLiveCaptions(sessionId: string): Promise<LiveCaptionSegment[]> {
+    return request<LiveCaptionSegment[]>(`/sessions/${sessionId}/captions`);
+  },
+
+  publishLiveCaption(
+    sessionId: string,
+    input: {
+      sequence: number;
+      text: string;
+      isFinal: boolean;
+      startMs?: number;
+      endMs?: number;
+      speakerLabel?: string;
+      language?: string;
+      source?: string;
+    },
+  ): Promise<LiveCaptionSegment> {
+    return request<LiveCaptionSegment>(`/sessions/${sessionId}/captions`, {
+      method: 'POST',
+      body: JSON.stringify(input),
     });
   },
 

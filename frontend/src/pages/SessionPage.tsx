@@ -31,6 +31,7 @@ export function SessionPage() {
   const [agendaUploadProgress, setAgendaUploadProgress] = useState('');
   const [agendaDuration, setAgendaDuration] = useState(10);
   const [stageMode, setStageMode] = useState<'media' | 'content'>('media');
+  const [captionsVisible, setCaptionsVisible] = useState(true);
   const [agendaType, setAgendaType] = useState<
     | 'TEXT'
     | 'PRESENTATION'
@@ -48,6 +49,12 @@ export function SessionPage() {
     queryKey: ['session', sessionId],
     queryFn: () => api.getSession(sessionId),
     enabled: Boolean(sessionId),
+  });
+
+  const liveCaptions = useQuery({
+    queryKey: ['live-captions', sessionId],
+    queryFn: () => api.listLiveCaptions(sessionId),
+    enabled: Boolean(sessionId && session.data?.transcriptionEnabled),
   });
 
   const recordingConsent = useQuery({
@@ -571,6 +578,17 @@ export function SessionPage() {
             </div>
           ) : null}
 
+          {current.transcriptionEnabled ? (
+            <button
+              type="button"
+              className="live-caption-toggle"
+              onClick={() => setCaptionsVisible((value) => !value)}
+              aria-pressed={captionsVisible}
+            >
+              CC {captionsVisible ? 'On' : 'Off'}
+            </button>
+          ) : null}
+
           {hasSharedStage && stageMode === 'content' && activeAgendaItem ? (
             hasWhiteboard ? (
               <WhiteboardStage sessionId={sessionId} title={activeAgendaItem.title} />
@@ -627,6 +645,21 @@ export function SessionPage() {
               ) : null}
             </div>
           )}
+
+          {current.transcriptionEnabled && captionsVisible ? (
+            <div className="live-caption-overlay" aria-live="polite" aria-label="Live captions">
+              {liveCaptions.data?.length ? (
+                liveCaptions.data.slice(-3).map((caption) => (
+                  <div className="live-caption-line" key={caption.sequence}>
+                    {caption.speakerLabel ? <strong>{caption.speakerLabel}</strong> : null}
+                    <span>{caption.text}</span>
+                  </div>
+                ))
+              ) : (
+                <div className="live-caption-idle">Live captions are enabled. Waiting for speech…</div>
+              )}
+            </div>
+          ) : null}
         </section>
 
         <SessionCollaborationPanel

@@ -342,3 +342,15 @@ Transcript responses now expose normalization and diarization qualification meta
 - `qualityMetadata` includes labeled-segment ratio, timestamp-order validation, overlap count and normalization details.
 
 These fields describe pipeline evidence, not a guarantee of speaker-identification accuracy. Provider-level diarization quality must still be qualified externally.
+
+
+### Live captions
+
+Live-caption transport is session-scoped and requires the session to be LIVE with transcription enabled. Hosts or a trusted host-context bridge can publish partial and final caption segments through HTTP or the authenticated realtime namespace.
+
+- `GET /v1/sessions/{sessionId}/captions` returns the latest durable final caption segments for the current tenant.
+- `POST /v1/sessions/{sessionId}/captions` publishes a caption segment. Final segments are upserted by `(sessionId, sequence)`; partial segments are realtime-only.
+- Socket.IO event `caption.publish` accepts the same segment payload plus `sessionId`.
+- Session subscribers receive `caption.segment` immediately.
+
+Each segment can carry a sequence number, speaker label, BCP-47-style language tag, start/end milliseconds and source identifier. The API rejects caption publication for non-live sessions, sessions with transcription disabled, non-host callers, invalid timing ranges or oversized text.

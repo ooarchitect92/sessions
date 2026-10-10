@@ -43,3 +43,8 @@ Real-provider qualification is separate from the deterministic CI gate. Configur
 ## Transcription qualification
 
 Post-session STT qualification now records whether provider output passed the platform's speaker-label and timestamp checks. The worker measures labeled-segment ratio, unique speaker count, timestamp ordering and segment overlap. Production deployments may set `STT_REQUIRE_DIARIZATION=true` so unlabeled provider output fails closed rather than silently appearing speaker-qualified. Provider qualification should include multi-speaker recordings with known reference speakers, accents, interruptions and overlapping speech; the repository's deterministic tests validate the contract and quality calculations but are not a substitute for real-provider accuracy evidence.
+
+
+## Live caption qualification
+
+Live-caption tests must cover host-only publication, tenant isolation, transcription-disabled rejection, non-LIVE session rejection, duplicate final sequence upserts, partial-segment non-persistence, reconnect history, realtime ordering and accessible caption rendering. Provider qualification must additionally measure partial/final latency, word error rate, speaker-label accuracy, reconnect behavior and long-session stability using representative LiveKit audio; transport tests alone are not evidence of STT-provider production readiness.
